@@ -376,6 +376,37 @@ export const WARDEN: PixelSprite = {
   palette: { k: OUTLINE, n: "#4a1d1d", o: "#ff6a00", y: "#ffe14d", w: "#ffffff" },
 };
 
+// Godzilla, the boss of the Boss Room (drawn facing right, shown at about 2x).
+export const GODZILLA: PixelSprite = {
+  grid: [
+    ".............kkkkk......",
+    "....k.......kgggggk.....",
+    "...kpk.....kggggggGk....",
+    "...kpk.k...kgggyggggk...",
+    "..kppkpk...kggggggggwk..",
+    "..kppkppk..kgggggkwkwk..",
+    ".kppkppk..kGgggggggkk...",
+    ".kpkppkpk.kGggggggk.....",
+    "..kpkppkkkGgggggbk......",
+    "..kkpkkgggggggggbbk.....",
+    "...kkggggggggggbbbgk....",
+    "...kgggggggggggbbbggk...",
+    "..kGgggggggggggbbbgggk..",
+    "..kGggggggggggbbbggkgk..",
+    ".kGGgggggggggbbbbgk.kk..",
+    ".kGgggggggggggbbbgk.....",
+    "kGGggggggggggggbgk......",
+    "kGgggkkGggggggggk.......",
+    "kGgk..kGgggkGgggk.......",
+    "kGk...kGggk.kGggk.......",
+    "kk....kGggk.kGggk.......",
+    "......kGGgk.kGGgk.......",
+    "......kkkkk.kkkkk.......",
+    "........................",
+  ],
+  palette: { k: "#0f1412", g: "#3f5a4a", G: "#2a3d32", b: "#6f8a6a", p: "#a8d8ff", y: "#ffe14d", w: "#f4f4f4" },
+};
+
 export const ENEMY_SHOT: PixelSprite = {
   grid: [".rrr.", "royor", "ryyyr", "royor", ".rrr."],
   palette: { r: "#c4361f", o: "#f07a22", y: "#ffd23f" },

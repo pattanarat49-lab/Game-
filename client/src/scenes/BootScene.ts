@@ -5,6 +5,7 @@ import {
   CALCIFER,
   CASTER,
   CINDERLING,
+  GODZILLA,
   ENEMY_SHOT,
   HERO_SPRITES,
   MAGIC_ORB,
@@ -28,6 +29,35 @@ function seeded(seed: number) {
   };
 }
 
+/** Colours for each stage's floor. */
+interface GroundTheme {
+  seed: number;
+  shades: string[];
+  pebbles: [string, string];
+  cracks: [string, string];
+  crackChance: number;
+  pillar: [string, string, string, string]; // outline, body, highlight, glow
+}
+
+const LAVA_THEME: GroundTheme = {
+  seed: 1337,
+  shades: ["#2b2026", "#30242a", "#33262c", "#2e2228"],
+  pebbles: ["#3d2e35", "#241a1f"],
+  cracks: ["#ffb347", "#d9531e"],
+  crackChance: 0.08,
+  pillar: ["#1c1418", "#4a3a42", "#62505a", "#ff7b1c"],
+};
+
+// A ruined city plaza at night: cracked concrete and broken pillars.
+const BOSS_THEME: GroundTheme = {
+  seed: 2024,
+  shades: ["#2a2f36", "#2e343c", "#31373f", "#2b3138"],
+  pebbles: ["#3e4650", "#1f242a"],
+  cracks: ["#171b20", "#4a5562"],
+  crackChance: 0.14,
+  pillar: ["#15191e", "#4d5661", "#6b7682", "#7fd0ff"],
+};
+
 export class BootScene extends Phaser.Scene {
   constructor() {
     super("Boot");
@@ -47,7 +77,9 @@ export class BootScene extends Phaser.Scene {
     this.addCanvas("warden", renderPixelSprite(WARDEN));
     this.addCanvas("eshot", renderPixelSprite(ENEMY_SHOT));
     this.addCanvas("spark", renderPixelSprite(SPARK));
-    this.addCanvas("ground", this.drawGround());
+    this.addCanvas("ground_lava", this.drawGround(LAVA_THEME));
+    this.addCanvas("ground_boss", this.drawGround(BOSS_THEME));
+    this.addCanvas("godzilla", renderPixelSprite(GODZILLA));
     this.addCanvas("lava", this.drawLavaTiles());
 
     this.scene.start("Game");
@@ -58,14 +90,14 @@ export class BootScene extends Phaser.Scene {
     this.textures.addCanvas(key, canvas);
   }
 
-  /** Emberfall ground: dark volcanic rock with glowing cracks and basalt pillars. */
-  private drawGround(): HTMLCanvasElement {
-    const rand = seeded(1337);
+  /** A stage floor: tiles with pebbles, occasional cracks, and the pillars from ROCKS. */
+  private drawGround(theme: GroundTheme): HTMLCanvasElement {
+    const rand = seeded(theme.seed);
     const canvas = document.createElement("canvas");
     canvas.width = WORLD_W;
     canvas.height = WORLD_H;
     const ctx = canvas.getContext("2d")!;
-    const shades = ["#2b2026", "#30242a", "#33262c", "#2e2228"];
+    const shades = theme.shades;
 
     for (let ty = 0; ty < MAP_ROWS; ty++) {
       for (let tx = 0; tx < MAP_COLS; tx++) {
@@ -75,7 +107,7 @@ export class BootScene extends Phaser.Scene {
         ctx.fillRect(x0, y0, TILE, TILE);
         // pebbles
         for (let i = 0; i < 4; i++) {
-          ctx.fillStyle = rand() < 0.5 ? "#3d2e35" : "#241a1f";
+          ctx.fillStyle = theme.pebbles[rand() < 0.5 ? 0 : 1];
           ctx.fillRect(x0 + Math.floor(rand() * TILE), y0 + Math.floor(rand() * TILE), 1, 1);
         }
         // tile edge shading for a subtle grid
@@ -83,11 +115,11 @@ export class BootScene extends Phaser.Scene {
         ctx.fillRect(x0, y0 + TILE - 1, TILE, 1);
         ctx.fillRect(x0 + TILE - 1, y0, 1, TILE);
         // occasional glowing crack
-        if (rand() < 0.08) {
+        if (rand() < theme.crackChance) {
           let cx = x0 + 3 + Math.floor(rand() * 10);
           let cy = y0 + 3 + Math.floor(rand() * 10);
           for (let i = 0; i < 6; i++) {
-            ctx.fillStyle = i % 3 === 0 ? "#ffb347" : "#d9531e";
+            ctx.fillStyle = theme.cracks[i % 3 === 0 ? 0 : 1];
             ctx.fillRect(cx, cy, 1, 1);
             cx += Math.floor(rand() * 3) - 1;
             cy += 1;
@@ -101,13 +133,13 @@ export class BootScene extends Phaser.Scene {
       ctx.fillStyle = "rgba(0,0,0,0.35)";
       this.pixelCircle(ctx, rock.x + 3, rock.y + 4, rock.r);
       // body and highlight
-      ctx.fillStyle = "#1c1418";
+      ctx.fillStyle = theme.pillar[0];
       this.pixelCircle(ctx, rock.x, rock.y, rock.r);
-      ctx.fillStyle = "#4a3a42";
+      ctx.fillStyle = theme.pillar[1];
       this.pixelCircle(ctx, rock.x, rock.y, rock.r - 2);
-      ctx.fillStyle = "#62505a";
+      ctx.fillStyle = theme.pillar[2];
       this.pixelCircle(ctx, rock.x - rock.r / 4, rock.y - rock.r / 4, rock.r / 2);
-      ctx.fillStyle = "#ff7b1c";
+      ctx.fillStyle = theme.pillar[3];
       ctx.fillRect(Math.round(rock.x), Math.round(rock.y - 2), 1, 5);
     }
     return canvas;

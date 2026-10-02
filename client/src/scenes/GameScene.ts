@@ -14,7 +14,10 @@ import {
   TILE,
   WORLD_H,
   WORLD_W,
+  BEAM_LENGTH,
+  BEAM_WIDTH,
   HEROES,
+  stageOf,
   heroOf,
   inLava,
   inputDirection,
@@ -57,7 +60,7 @@ interface EnemyView {
   y: number;
 }
 
-const ENEMY_SCALE: Record<EnemyKind, number> = { cinderling: 1, brute: 1.3, caster: 1, warden: 2.4 };
+const ENEMY_SCALE: Record<EnemyKind, number> = { cinderling: 1, brute: 1.3, caster: 1, warden: 2.4, godzilla: 2.4 };
 
 export function serverUrl(): string {
   const env = import.meta.env.VITE_SERVER_URL as string | undefined;
@@ -85,13 +88,15 @@ export class GameScene extends Phaser.Scene {
   private effects: Effect[] = [];
   private fx!: Phaser.GameObjects.Graphics;
   private aimGuide!: Phaser.GameObjects.Graphics;
+  private beams!: Phaser.GameObjects.Graphics;
 
   constructor() {
     super("Game");
   }
 
   async create() {
-    this.add.image(0, 0, "ground").setOrigin(0).setDepth(-10);
+    const stage = stageOf(this.registry.get("stage"));
+    this.add.image(0, 0, `ground_${stage}`).setOrigin(0).setDepth(-10);
 
     const map = this.make.tilemap({ tileWidth: TILE, tileHeight: TILE, width: MAP_COLS, height: MAP_ROWS });
     const tiles = map.addTilesetImage("lava", "lava", TILE, TILE, 0, 0)!;
@@ -107,6 +112,7 @@ export class GameScene extends Phaser.Scene {
     this.sparks.setDepth(50);
     this.fx = this.add.graphics().setDepth(950);
     this.aimGuide = this.add.graphics().setDepth(-1);
+    this.beams = this.add.graphics().setDepth(940);
 
     this.keys = this.input.keyboard!.addKeys("W,A,S,D,UP,DOWN,LEFT,RIGHT,SPACE,Q,E,ONE") as Record<
       string,
@@ -122,13 +128,13 @@ export class GameScene extends Phaser.Scene {
     cam.setRoundPixels(true);
 
     if (this.registry.get("solo")) {
-      this.room = new LocalRoom(this.registry.get("playerName"), this.registry.get("hero"));
+      this.room = new LocalRoom(this.registry.get("playerName"), this.registry.get("hero"), stage);
       this.scene.launch("Hud");
       return;
     }
     try {
       const client = new Client(serverUrl());
-      this.room = await client.joinOrCreate(ROOM_NAME, { name: this.registry.get("playerName"), hero: this.registry.get("hero") });
+      this.room = await client.joinOrCreate(ROOM_NAME, { name: this.registry.get("playerName"), hero: this.registry.get("hero"), stage });
     } catch (err) {
       console.error(err);
       this.game.events.emit("connection-error", err);
@@ -448,6 +454,7 @@ export class GameScene extends Phaser.Scene {
 
   private syncEnemies(state: any) {
     const seen = new Set<string>();
+    this.beams.clear();
     state.enemies.forEach((e: any, id: string) => {
       seen.add(id);
       let view = this.enemies.get(id);
@@ -464,7 +471,12 @@ export class GameScene extends Phaser.Scene {
       s.setPosition(nx, s.y + (e.y - s.y) * 0.3);
       s.setDepth(s.y);
       if (e.hitFlash > 0) s.setTintFill(0xffffff);
+      else if (e.beamState === 1 && Math.floor(this.time.now / 80) % 2 === 0) s.setTint(0x9fd8ff);
       else s.clearTint();
+      if (e.beamState > 0) {
+        s.setFlipX(Math.cos(e.beamAngle) < 0);
+        this.drawBeam(s.x, s.y - 14, e.beamAngle, e.beamState);
+      }
       view.x = e.x;
       view.y = e.y;
 
@@ -486,6 +498,24 @@ export class GameScene extends Phaser.Scene {
       view.bar.destroy();
       this.enemies.delete(id);
     }
+  }
+
+  /** Godzilla's atomic beam: a flickering warning line, then a thick glowing beam. */
+  private drawBeam(x: number, y: number, angle: number, state: number) {
+    const g = this.beams;
+    const ex = x + Math.cos(angle) * BEAM_LENGTH;
+    const ey = y + Math.sin(angle) * BEAM_LENGTH;
+    if (state === 1) {
+      g.lineStyle(2, 0xff4040, 0.4 + 0.4 * Math.sin(this.time.now / 40));
+      g.lineBetween(x, y, ex, ey);
+      return;
+    }
+    const flicker = 0.85 + 0.15 * Math.sin(this.time.now / 25);
+    g.lineStyle(BEAM_WIDTH + 8, 0x2a7fff, 0.35 * flicker).lineBetween(x, y, ex, ey);
+    g.lineStyle(BEAM_WIDTH, 0x7fd0ff, 0.85 * flicker).lineBetween(x, y, ex, ey);
+    g.lineStyle(BEAM_WIDTH / 3, 0xffffff, flicker).lineBetween(x, y, ex, ey);
+    g.fillStyle(0xbfe8ff, 0.9).fillCircle(x, y, BEAM_WIDTH * 0.8 * flicker);
+    if (Math.random() < 0.3) this.cameras.main.shake(60, 0.003);
   }
 
   // ------------------------------------------------------------- bullets

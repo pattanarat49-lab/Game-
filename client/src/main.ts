@@ -3,8 +3,8 @@ import { BootScene } from "./scenes/BootScene";
 import { GameScene } from "./scenes/GameScene";
 import { HudScene } from "./scenes/HudScene";
 import { isTouchDevice } from "./touch";
-import { HEROES, HERO_IDS, HeroId } from "../../shared/game";
-import { HERO_SPRITES, renderPixelSprite } from "./art";
+import { HEROES, HERO_IDS, HeroId, STAGES, STAGE_IDS, StageId } from "../../shared/game";
+import { GODZILLA, HERO_SPRITES, WARDEN, renderPixelSprite } from "./art";
 
 const menu = document.getElementById("menu")!;
 const form = document.getElementById("join-form") as HTMLFormElement;
@@ -16,7 +16,51 @@ nameInput.value = localStorageGet("riftborn-name") ?? `Rift${Math.floor(100 + Ma
 let game: Phaser.Game | undefined;
 let selectedHero: HeroId = (localStorageGet("riftborn-hero") as HeroId) ?? "superman";
 if (!HERO_IDS.includes(selectedHero)) selectedHero = "superman";
+let selectedStage: StageId = (localStorageGet("riftborn-stage") as StageId) ?? "lava";
+if (!STAGE_IDS.includes(selectedStage)) selectedStage = "lava";
+buildStagePicker();
 buildHeroPicker();
+
+/** Stage cards: a tiny preview of the floor with that stage's boss on it. */
+function buildStagePicker() {
+  const container = document.getElementById("stages")!;
+  const previews: Record<StageId, { floor: string[]; boss: HTMLCanvasElement }> = {
+    lava: { floor: ["#2b2026", "#e5501b", "#ff8a1f"], boss: renderPixelSprite(WARDEN) },
+    boss: { floor: ["#2a2f36", "#31373f", "#4a5562"], boss: renderPixelSprite(GODZILLA) },
+  };
+  for (const id of STAGE_IDS) {
+    const stage = STAGES[id];
+    const card = document.createElement("button");
+    card.type = "button";
+    card.className = "stage";
+    card.id = `stage-${id}`;
+    card.setAttribute("aria-pressed", String(id === selectedStage));
+    card.innerHTML = `<span class="name">${stage.name}</span><span class="blurb">${stage.blurb}</span>`;
+
+    const preview = document.createElement("canvas");
+    preview.width = 48;
+    preview.height = 32;
+    const ctx = preview.getContext("2d")!;
+    const { floor, boss } = previews[id];
+    for (let y = 0; y < 32; y += 4) {
+      for (let x = 0; x < 48; x += 4) {
+        // Lava creeps in from the edges; the boss room is plain concrete.
+        const edge = id === "lava" && (x < 8 || x > 36 || y < 4 || y > 24);
+        ctx.fillStyle = edge ? floor[1 + ((x + y) % 8 === 0 ? 1 : 0)] : floor[(x * 7 + y * 3) % 3 === 0 && id === "boss" ? 1 : 0];
+        ctx.fillRect(x, y, 4, 4);
+      }
+    }
+    ctx.drawImage(boss, (48 - boss.width) / 2, 30 - boss.height);
+    card.prepend(preview);
+
+    card.addEventListener("click", () => {
+      selectedStage = id;
+      localStorageSet("riftborn-stage", id);
+      container.querySelectorAll(".stage").forEach((c) => c.setAttribute("aria-pressed", String(c === card)));
+    });
+    container.append(card);
+  }
+}
 
 /** The character select cards, built from the hero list in shared/game.ts. */
 function buildHeroPicker() {
@@ -86,6 +130,7 @@ form.addEventListener("submit", async (event) => {
   game.registry.set("playerName", name);
   game.registry.set("solo", solo);
   game.registry.set("hero", selectedHero);
+  game.registry.set("stage", selectedStage);
   game.events.on("connection-error", (err: Error) => {
     errorText.textContent = `Could not reach the rift: ${err?.message ?? err}. Is the server running?`;
     menu.classList.remove("hidden");

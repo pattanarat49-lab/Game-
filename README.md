@@ -6,6 +6,10 @@ Design doc: see `docs/game-design-foundation.md`.
 
 ## What's in the prototype
 
+- **Stage select:**
+  - **Lava Stage:** four waves while lava creeps in from the edges, then the Pyre Warden boss.
+  - **Boss Room:** no waves. Fight Godzilla straight away. It fires an atomic beam after a red warning line, so move out of the line. Between beams it spits fans of fireballs.
+
 - **Emberfall**, a volcanic arena with basalt pillars
 - **Rule twist:** lava creeps in from the edges during each wave and burns anyone standing in it. It cools between waves.
 - **Character select** with six heroes:
@@ -79,6 +83,7 @@ client/index.html         Title screen
 
 - **Balance:** every number (speeds, damage, cooldowns, waves, lava speed) is at the top of `shared/game.ts`. Each hero's stats are in the `HEROES` list there.
 - **Waves:** the `WAVES` list in `shared/game.ts`.
+- **Stages and Godzilla's beam:** `STAGES` and the `BEAM_*` numbers at the bottom of `shared/game.ts`.
 - **Pixel art:** change the letter grids in `client/src/art.ts`. Each letter is a color from the palette below the grid, and `.` is transparent. The hero sprites are in `HERO_SPRITES`.
 - **Map pillars:** the `ROCKS` list in `shared/game.ts`.
 

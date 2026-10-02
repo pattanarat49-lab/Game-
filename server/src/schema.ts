@@ -26,6 +26,8 @@ export class Enemy extends Schema {
   @type("number") hp = 0;
   @type("number") maxHp = 0;
   @type("number") hitFlash = 0;
+  @type("uint8") beamState = 0;
+  @type("number") beamAngle = 0;
 }
 
 export class Bullet extends Schema {
@@ -40,6 +42,7 @@ export class Bullet extends Schema {
 export type Phase = "intermission" | "fight" | "victory";
 
 export class RiftState extends Schema {
+  @type("string") stage = "lava";
   @type({ map: Player }) players = new MapSchema<Player>();
   @type({ map: Enemy }) enemies = new MapSchema<Enemy>();
   @type({ map: Bullet }) bullets = new MapSchema<Bullet>();

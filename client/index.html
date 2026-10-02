@@ -89,6 +89,57 @@
         transform: translate(2px, 2px);
         box-shadow: 2px 2px 0 #1a0f14;
       }
+      .step {
+        font-size: 10px;
+        color: #ffd23f;
+        letter-spacing: 2px;
+        margin-bottom: -8px;
+      }
+      #stages {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 14px;
+      }
+      .stage {
+        width: 300px;
+        padding: 10px;
+        background: #241a20;
+        border: 3px solid #1a0f14;
+        box-shadow: 4px 4px 0 #1a0f14;
+        color: #fff;
+        font-family: inherit;
+        text-align: left;
+        cursor: pointer;
+        display: grid;
+        grid-template-columns: 96px 1fr;
+        gap: 4px 12px;
+        align-items: center;
+      }
+      .stage:hover {
+        background: #2e2128;
+      }
+      .stage[aria-pressed="true"] {
+        border-color: #ffd23f;
+        background: #3a2418;
+        outline: 3px solid #f07a22;
+        outline-offset: 2px;
+      }
+      .stage canvas {
+        grid-row: span 2;
+        width: 96px;
+        height: 64px;
+        image-rendering: pixelated;
+      }
+      .stage .name {
+        font-size: 11px;
+        color: #ffd23f;
+      }
+      .stage .blurb {
+        font-size: 7px;
+        line-height: 1.7;
+        color: #e6dbe0;
+      }
       #heroes {
         display: flex;
         flex-wrap: wrap;
@@ -184,6 +235,15 @@
         .hero .blurb {
           display: none;
         }
+        .stage {
+          width: 260px;
+          padding: 6px;
+          grid-template-columns: 60px 1fr;
+        }
+        .stage canvas {
+          width: 60px;
+          height: 40px;
+        }
       }
       #rotate {
         display: none;
@@ -224,7 +284,10 @@
     <div id="game"></div>
     <div id="menu">
       <h1>RIFTBORN</h1>
-      <p id="intro">The multiverse is collapsing. Hold the rift in Emberfall.<br />Survive 4 waves and slay the Pyre Warden. Mind the lava.</p>
+      <p id="intro">The multiverse is collapsing. Pick a stage and a hero.</p>
+      <p class="step">CHOOSE A STAGE</p>
+      <div id="stages" role="group" aria-label="Choose a stage"></div>
+      <p class="step">CHOOSE A HERO</p>
       <div id="heroes" role="group" aria-label="Choose your hero"></div>
       <form id="join-form">
         <input id="name" maxlength="16" placeholder="Your name" autocomplete="off" />

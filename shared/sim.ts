@@ -20,6 +20,15 @@ import {
   LAVA_MIN_RADIUS,
   LAVA_SHRINK_PER_SEC,
   LAVA_START_RADIUS,
+  BEAM_CHARGE,
+  BEAM_DAMAGE,
+  BEAM_EVERY,
+  BEAM_FIRE,
+  BEAM_LENGTH,
+  BEAM_TURN_SPEED,
+  BEAM_WIDTH,
+  BOSS_INTRO_TIME,
+  StageId,
   PLAYER_RADIUS,
   PlayerInput,
   RESPAWN_TIME,
@@ -68,6 +77,9 @@ export interface SimEnemy {
   hp: number;
   maxHp: number;
   hitFlash: number;
+  /** Godzilla's beam: 0 = idle, 1 = charging (warning line), 2 = firing. */
+  beamState: number;
+  beamAngle: number;
 }
 
 export type BulletKind = "snipe" | "wave" | "magic" | "fireball" | "enemy";
@@ -92,6 +104,7 @@ export interface SimCollection<T> {
 }
 
 export interface SimState<P extends SimPlayer, E extends SimEnemy, B extends SimBullet> {
+  stage: string;
   players: SimCollection<P>;
   enemies: SimCollection<E>;
   bullets: SimCollection<B>;
@@ -122,6 +135,7 @@ interface PlayerBrain {
 interface EnemyBrain {
   shootTimer: number;
   burstAngle: number;
+  beamTimer: number; // counts down to the next beam phase
 }
 
 interface BulletBrain {
@@ -142,7 +156,9 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
   constructor(
     readonly state: SimState<P, E, B>,
     private make: SimFactory<P, E, B>,
+    stage: StageId = "lava",
   ) {
+    state.stage = stage;
     this.startIntermission(0);
   }
 
@@ -194,7 +210,8 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
   update(dt: number) {
     const s = this.state;
 
-    if (s.phase === "intermission") {
+    if (s.stage === "boss") this.updateBossRoom(dt);
+    else if (s.phase === "intermission") {
       s.phaseTimer -= dt;
       s.lavaRadius = Math.min(LAVA_START_RADIUS, s.lavaRadius + LAVA_SHRINK_PER_SEC * 6 * dt);
       if (s.phaseTimer <= 0) this.startWave(s.wave + 1);
@@ -223,10 +240,40 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
   }
 
   private startIntermission(wave: number) {
-    this.state.phase = "intermission";
-    this.state.wave = wave;
-    this.state.phaseTimer = INTERMISSION_TIME;
-    if (wave === 0) this.state.lavaRadius = LAVA_START_RADIUS;
+    const s = this.state;
+    s.phase = "intermission";
+    s.wave = wave;
+    if (s.stage === "boss") {
+      // No lava and no waves in the boss room.
+      s.phaseTimer = BOSS_INTRO_TIME;
+      s.lavaRadius = 5000;
+      return;
+    }
+    s.phaseTimer = INTERMISSION_TIME;
+    if (wave === 0) s.lavaRadius = LAVA_START_RADIUS;
+  }
+
+  /** Boss room: a short intro, then Godzilla; beat it to win. */
+  private updateBossRoom(dt: number) {
+    const s = this.state;
+    if (s.phase === "intermission") {
+      s.phaseTimer -= dt;
+      if (s.phaseTimer <= 0) {
+        s.phase = "fight";
+        this.spawnEnemy("godzilla");
+      }
+    } else if (s.phase === "fight" && s.enemies.size === 0) {
+      s.phase = "victory";
+      s.phaseTimer = 12;
+    } else if (s.phase === "victory") {
+      s.phaseTimer -= dt;
+      if (s.phaseTimer <= 0) {
+        s.players.forEach((p) => {
+          if (!p.dead) p.hp = p.maxHp;
+        });
+        this.startIntermission(0);
+      }
+    }
   }
 
   private startWave(wave: number) {
@@ -402,9 +449,9 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
     e.kind = kind;
     e.hp = def.hp * this.hpScale();
     e.maxHp = e.hp;
-    if (kind === "warden") {
+    if (kind === "warden" || kind === "godzilla") {
       e.x = CENTER_X;
-      e.y = CENTER_Y - 160;
+      e.y = CENTER_Y - 170;
     } else {
       for (let tries = 0; tries < 20; tries++) {
         const a = Math.random() * Math.PI * 2;
@@ -416,7 +463,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
     }
     const id = `e${this.nextId++}`;
     this.state.enemies.set(id, e);
-    this.enemyBrains.set(id, { shootTimer: (def.shootEvery ?? 0) * Math.random() + 1, burstAngle: 0 });
+    this.enemyBrains.set(id, { shootTimer: (def.shootEvery ?? 0) * Math.random() + 1, burstAngle: 0, beamTimer: 3 });
   }
 
   private damageEnemy(eid: string, damage: number, owner?: string) {
@@ -463,6 +510,11 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       const dy = p.y - e.y;
       const dist = Math.hypot(dx, dy) || 1;
 
+      if (e.kind === "godzilla" && this.updateBeam(e, brain, dx, dy, dt)) {
+        if (dist < def.radius + PLAYER_RADIUS) this.damagePlayer(targetId, def.touchDamage);
+        return;
+      }
+
       // Casters keep their distance; everyone else charges.
       let dirX = dx / dist;
       let dirY = dy / dist;
@@ -482,7 +534,10 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
           brain.shootTimer = def.shootEvery;
           const aim = Math.atan2(dy, dx);
           const shot = { damage: ENEMY_SHOT_DAMAGE, pierce: 0, life: 6 };
-          if (e.kind === "warden") {
+          if (e.kind === "godzilla") {
+            // A fan of atomic fireballs between beams.
+            for (let i = -2; i <= 2; i++) this.spawnBullet("enemy", e.x, e.y, aim + i * 0.22, ENEMY_SHOT_SPEED * 1.1, shot);
+          } else if (e.kind === "warden") {
             // Rotating ring of fire plus a shot aimed at the target.
             brain.burstAngle += 0.25;
             for (let i = 0; i < 14; i++) {
@@ -495,6 +550,48 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
         }
       }
     });
+  }
+
+  /**
+   * Godzilla's atomic beam. Returns true while the beam is busy (Godzilla stands still).
+   * Idle -> charging (a warning line locks on) -> firing (the beam slowly turns toward its target).
+   */
+  private updateBeam(e: E, brain: EnemyBrain, dx: number, dy: number, dt: number): boolean {
+    const toTarget = Math.atan2(dy, dx);
+    brain.beamTimer -= dt;
+    if (e.beamState === 0) {
+      if (brain.beamTimer > 0) return false;
+      e.beamState = 1;
+      e.beamAngle = toTarget;
+      brain.beamTimer = BEAM_CHARGE;
+      return true;
+    }
+    if (e.beamState === 1) {
+      if (brain.beamTimer <= 0) {
+        e.beamState = 2;
+        brain.beamTimer = BEAM_FIRE;
+      }
+      return true;
+    }
+    // Firing: turn toward the target, slowly enough to outrun.
+    let diff = toTarget - e.beamAngle;
+    diff = Math.atan2(Math.sin(diff), Math.cos(diff));
+    const turn = BEAM_TURN_SPEED * dt;
+    e.beamAngle += Math.max(-turn, Math.min(turn, diff));
+    const cos = Math.cos(e.beamAngle);
+    const sin = Math.sin(e.beamAngle);
+    this.state.players.forEach((p, pid) => {
+      // Distance from the player to the beam's line segment.
+      const along = (p.x - e.x) * cos + (p.y - e.y) * sin;
+      if (along < 0 || along > BEAM_LENGTH) return;
+      const across = Math.abs(-(p.x - e.x) * sin + (p.y - e.y) * cos);
+      if (across < BEAM_WIDTH / 2 + PLAYER_RADIUS) this.damagePlayer(pid, BEAM_DAMAGE);
+    });
+    if (brain.beamTimer <= 0) {
+      e.beamState = 0;
+      brain.beamTimer = BEAM_EVERY;
+    }
+    return true;
   }
 
   // ------------------------------------------------------------- bullets

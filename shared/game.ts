@@ -163,7 +163,7 @@ export const LAVA_DPS = 25;
 export const WAVE_COUNT = 5; // last wave is the boss
 export const INTERMISSION_TIME = 6;
 
-export type EnemyKind = "cinderling" | "brute" | "caster" | "warden";
+export type EnemyKind = "cinderling" | "brute" | "caster" | "warden" | "godzilla";
 
 export interface EnemyDef {
   hp: number;
@@ -179,6 +179,7 @@ export const ENEMIES: Record<EnemyKind, EnemyDef> = {
   brute: { hp: 90, speed: 38, radius: 9, touchDamage: 20, score: 30 },
   caster: { hp: 35, speed: 45, radius: 6, touchDamage: 6, score: 20, shootEvery: 2.2 },
   warden: { hp: 1400, speed: 30, radius: 18, touchDamage: 30, score: 500, shootEvery: 1.6 },
+  godzilla: { hp: 3500, speed: 24, radius: 22, touchDamage: 35, score: 2000, shootEvery: 3 },
 };
 
 export const ENEMY_SHOT_SPEED = 140;
@@ -269,3 +270,32 @@ export function hitsRock(x: number, y: number): boolean {
 export function inLava(x: number, y: number, lavaRadius: number): boolean {
   return Math.hypot(x - CENTER_X, y - CENTER_Y) > lavaRadius;
 }
+
+// Stages
+export type StageId = "lava" | "boss";
+
+export interface StageDef {
+  name: string;
+  blurb: string;
+}
+
+export const STAGES: Record<StageId, StageDef> = {
+  lava: { name: "Lava Stage", blurb: "Survive 4 waves while lava creeps in, then slay the Pyre Warden." },
+  boss: { name: "Boss Room", blurb: "No waves. Fight Godzilla straight away. Dodge the atomic beam!" },
+};
+
+export const STAGE_IDS = Object.keys(STAGES) as StageId[];
+
+export function stageOf(id: string): StageId {
+  return id in STAGES ? (id as StageId) : "lava";
+}
+
+// Godzilla's atomic beam: a warning line, then a long beam that slowly turns toward its target.
+export const BEAM_EVERY = 6; // seconds between beams
+export const BEAM_CHARGE = 1.1; // warning time before it fires
+export const BEAM_FIRE = 1.6; // how long the beam lasts
+export const BEAM_LENGTH = 520;
+export const BEAM_WIDTH = 16;
+export const BEAM_TURN_SPEED = 0.45; // radians per second while firing
+export const BEAM_DAMAGE = 20; // per hit; players get a short invulnerability after each hit
+export const BOSS_INTRO_TIME = 4;
