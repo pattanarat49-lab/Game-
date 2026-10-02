@@ -13,8 +13,13 @@ nameInput.value = localStorageGet("riftborn-name") ?? `Rift${Math.floor(100 + Ma
 
 let game: Phaser.Game | undefined;
 
+const soloOnly = import.meta.env.VITE_SOLO_ONLY === "1";
+if (soloOnly) document.getElementById("join-online")?.remove();
+
 form.addEventListener("submit", async (event) => {
   event.preventDefault();
+  const submitter = (event as SubmitEvent).submitter as HTMLButtonElement | null;
+  const solo = soloOnly || submitter?.id === "join-solo";
   const name = nameInput.value.trim().slice(0, 16) || "Riftborn";
   localStorageSet("riftborn-name", name);
   errorText.textContent = "";
@@ -40,6 +45,7 @@ form.addEventListener("submit", async (event) => {
     scene: [BootScene, GameScene, HudScene],
   });
   game.registry.set("playerName", name);
+  game.registry.set("solo", solo);
   game.events.on("connection-error", (err: Error) => {
     errorText.textContent = `Could not reach the rift: ${err?.message ?? err}. Is the server running?`;
     menu.classList.remove("hidden");

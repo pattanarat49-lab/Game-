@@ -13,6 +13,14 @@ Design doc: see `docs/game-design-foundation.md`.
 - **Co-op for up to 4 players.** Enemies get tougher with more players. Fallen players respawn after 5 seconds.
 - **Server-authoritative multiplayer:** the server decides movement, hits and damage. The client predicts your own movement so it feels instant.
 
+## Play it now
+
+**Solo mode** runs entirely in the browser, with no server needed. There's a hosted copy here: https://claude.ai/artifact/M88J4EWiuZrhVHFQ6WtePQ
+
+To make your own copy, run `npm run build:solo --prefix client`. It writes one self-contained file, `client/dist-solo/riftborn.html`, that you can open directly or upload to any static host (GitHub Pages, itch.io, Netlify).
+
+**Online co-op** needs the game server running, as described below.
+
 ## Run it
 
 You need [Node.js](https://nodejs.org/) 20 or newer.
@@ -49,10 +57,12 @@ Set `PORT` to change the port. If the client is hosted somewhere else, build it 
 
 ```
 shared/game.ts            Game rules and tuning numbers used by both client and server
-server/src/RiftRoom.ts    The authoritative game loop: players, waves, enemies, bullets, lava
+shared/sim.ts             The game simulation; runs on the server and in the browser for solo mode
+server/src/RiftRoom.ts    Multiplayer room that runs the simulation for connected players
 server/src/schema.ts      State that is synced to every player
 server/src/index.ts       Server entry point (Colyseus + Express)
 client/src/art.ts         All pixel art, drawn as editable text grids
+client/src/localRoom.ts   Solo mode: runs the simulation inside the browser
 client/src/touch.ts       Touch controls for phones (joysticks and buttons)
 client/src/scenes/        Phaser scenes: Boot (textures), Game (world), Hud (UI)
 client/index.html         Title screen

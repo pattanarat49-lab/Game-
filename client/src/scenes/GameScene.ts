@@ -20,6 +20,7 @@ import {
   moveCircle,
 } from "../../../shared/game";
 import type { HudScene } from "./HudScene";
+import { LocalRoom } from "../localRoom";
 
 interface PlayerView {
   body: Phaser.GameObjects.Image;
@@ -48,7 +49,7 @@ export function serverUrl(): string {
 }
 
 export class GameScene extends Phaser.Scene {
-  room?: Room<any>;
+  room?: Room<any> | LocalRoom;
   private players = new Map<string, PlayerView>();
   private enemies = new Map<string, EnemyView>();
   private bullets = new Map<string, Phaser.GameObjects.Image>();
@@ -96,6 +97,11 @@ export class GameScene extends Phaser.Scene {
     cam.startFollow(this.cameraTarget, true, 0.15, 0.15);
     cam.setRoundPixels(true);
 
+    if (this.registry.get("solo")) {
+      this.room = new LocalRoom(this.registry.get("playerName"));
+      this.scene.launch("Hud");
+      return;
+    }
     try {
       const client = new Client(serverUrl());
       this.room = await client.joinOrCreate(ROOM_NAME, { name: this.registry.get("playerName") });
