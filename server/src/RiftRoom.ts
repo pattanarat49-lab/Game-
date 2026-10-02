@@ -15,7 +15,12 @@ export class RiftRoom extends Room<RiftState> {
       bullet: () => new Bullet(),
     }, stageOf(String(options?.stage ?? "")));
     this.onMessage("input", (client, input: Partial<PlayerInput>) => this.sim.setInput(client.sessionId, input));
-    this.setSimulationInterval((deltaMs) => this.sim.update(Math.min(deltaMs, 100) / 1000), TICK_MS);
+    // ~30 updates a second so other players and enemies move smoothly.
+    this.setPatchRate(TICK_MS);
+    this.setSimulationInterval((deltaMs) => {
+      this.sim.update(Math.min(deltaMs, 100) / 1000);
+      this.state.time = this.clock.elapsedTime;
+    }, TICK_MS);
   }
 
   onJoin(client: Client, options: { name?: string; hero?: string }) {

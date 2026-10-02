@@ -71,6 +71,10 @@ export interface SimPlayer {
   attackSeq: number;
   /** Goes up by one every time the skill is used. */
   skillSeq: number;
+  /** Goes up whenever the server teleports the player (spawn), so the client snaps instead of sliding. */
+  warp: number;
+  /** The owner's clock (ms) when they were at x, y, for smooth playback on other screens. */
+  mt: number;
 }
 
 export interface SimEnemy {
@@ -135,6 +139,9 @@ interface PlayerBrain {
   hurtTimer: number;
   burstLeft: number;
   burstTimer: number;
+  /** Position the client says it moved to (client-side movement), and how far the server lets it go. */
+  target?: { x: number; y: number; t: number };
+  moveBudget: number;
 }
 
 interface EnemyBrain {
@@ -186,6 +193,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       hurtTimer: 0,
       burstLeft: 0,
       burstTimer: 0,
+      moveBudget: 0,
     });
     return player;
   }
@@ -208,6 +216,10 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       dash: !!input.dash,
       skill: !!input.skill,
     };
+    const p = this.state.players.get(id);
+    if (p && Number.isFinite(input.x) && Number.isFinite(input.y) && input.warp === p.warp) {
+      brain.target = { x: Number(input.x), y: Number(input.y), t: Number(input.t) || 0 };
+    }
   }
 
   // ---------------------------------------------------------------- loop
@@ -270,11 +282,13 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       s.phaseTimer -= dt;
       if (s.phaseTimer <= 0) {
         // New round: reset kills and put everyone back at full health.
-        s.players.forEach((p) => {
+        s.players.forEach((p, id) => {
           p.score = 0;
           p.dead = false;
           p.hp = p.maxHp;
           this.placeAtSpawn(p);
+          const brain = this.brains.get(id);
+          if (brain) brain.target = undefined;
         });
         this.startIntermission(0);
       }
@@ -335,6 +349,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
           p.dead = false;
           p.hp = Math.round(p.maxHp / 2);
           this.placeAtSpawn(p);
+          brain.target = undefined;
           brain.hurtTimer = 1.5;
         }
         return;
@@ -353,8 +368,22 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       }
 
       let moved;
-      if (brain.dashTimer > 0) {
-        brain.dashTimer -= dt;
+      const dashingNow = brain.dashTimer > 0;
+      if (dashingNow) brain.dashTimer -= dt;
+      if (brain.target) {
+        // The client moves its own hero (no rubber-banding); the server follows, but never
+        // faster than the hero could run. The budget absorbs messages arriving in bursts.
+        const speed = dashingNow ? DASH_SPEED : hero.speed;
+        const cap = hero.speed * 0.5 + DASH_SPEED * DASH_TIME;
+        brain.moveBudget = Math.min(cap, brain.moveBudget + speed * 1.25 * dt);
+        const dx = brain.target.x - p.x;
+        const dy = brain.target.y - p.y;
+        const dist = Math.hypot(dx, dy);
+        const step = Math.min(dist, brain.moveBudget);
+        moved = dist > 0 ? moveCircle(p.x, p.y, (dx / dist) * step, (dy / dist) * step, PLAYER_RADIUS) : { x: p.x, y: p.y };
+        brain.moveBudget -= Math.hypot(moved.x - p.x, moved.y - p.y);
+        if (step === dist && Math.hypot(moved.x - brain.target.x, moved.y - brain.target.y) < 0.5) p.mt = brain.target.t;
+      } else if (dashingNow) {
         moved = moveCircle(p.x, p.y, brain.dashX * DASH_SPEED * dt, brain.dashY * DASH_SPEED * dt, PLAYER_RADIUS);
       } else {
         moved = moveCircle(p.x, p.y, dir.x * hero.speed * dt, dir.y * hero.speed * dt, PLAYER_RADIUS);
@@ -497,6 +526,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
     const spot = moveCircle(CENTER_X + Math.cos(a) * r, CENTER_Y + Math.sin(a) * r, 0, 0, PLAYER_RADIUS);
     p.x = spot.x;
     p.y = spot.y;
+    p.warp = (p.warp + 1) % 256;
   }
 
   // ------------------------------------------------------------- enemies

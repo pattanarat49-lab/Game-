@@ -148,6 +148,7 @@ form.addEventListener("submit", async (event) => {
     scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH },
     scene: [BootScene, GameScene, HudScene],
   });
+  (window as unknown as { riftGame?: Phaser.Game }).riftGame = game; // handy for debugging and tests
   game.registry.set("playerName", name);
   game.registry.set("solo", solo);
   game.registry.set("hero", selectedHero);

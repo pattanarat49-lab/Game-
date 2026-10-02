@@ -221,6 +221,13 @@ export interface PlayerInput {
   shoot: boolean;
   dash: boolean;
   skill: boolean;
+  /** Where the client has moved its own hero. The server follows it, within the hero's speed. */
+  x?: number;
+  y?: number;
+  /** The player's `warp` count the client has seen; positions sent before a teleport are ignored. */
+  warp?: number;
+  /** The sender's clock (ms) when it was at x, y; other players use it to replay the path evenly. */
+  t?: number;
 }
 
 export const EMPTY_INPUT: PlayerInput = {

@@ -23,7 +23,7 @@ Design doc: see `docs/game-design-foundation.md`.
 - Controls: attack with left mouse, aim with the mouse, dash with Space, and use your skill with Q, E or right mouse
 - **Enemies:** Cinderlings (fast), Magma Brutes (tanky), Ash Casters (ranged), and the **Pyre Warden** boss on wave 5
 - **Co-op for up to 4 players.** Enemies get tougher with more players. Fallen players respawn after 5 seconds.
-- **Server-authoritative multiplayer:** the server decides movement, hits and damage. The client predicts your own movement so it feels instant.
+- **Smooth multiplayer:** your own hero moves on your device at full frame rate and the server follows it (never faster than the hero can run), so there is no rubber-banding. The server still decides hits, damage and spawns. Other players and enemies are drawn ~60-150 ms in the past, blended between timestamped updates (30 a second), so they glide even when the network is jittery.
 
 ## Play it now
 

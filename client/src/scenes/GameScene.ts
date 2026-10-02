@@ -17,6 +17,9 @@ import {
   BEAM_LENGTH,
   BEAM_WIDTH,
   HEROES,
+  DASH_COOLDOWN,
+  DASH_SPEED,
+  DASH_TIME,
   stageOf,
   heroOf,
   inLava,
@@ -60,6 +63,55 @@ interface EnemyView {
   y: number;
 }
 
+/** A position, stamped with the time it was true (on our clock). */
+interface Sample {
+  t: number;
+  x: number;
+  y: number;
+}
+
+/**
+ * Recent positions of one entity, drawn slightly in the past so there is always an update on
+ * either side to blend between. Each update carries the clock time it was true on the machine
+ * that produced it; we map that onto our clock using the smallest delay seen so far, so updates
+ * that arrive late or in bunches still play back evenly spaced.
+ */
+class Track {
+  list: Sample[] = [];
+  warp = -1;
+  private offset?: number;
+  private lastStamp = 0;
+  private gap = 33; // ms between updates
+  private late = 20; // how far behind the fastest update they typically arrive
+
+  add(now: number, stamp: number, x: number, y: number) {
+    if (stamp <= this.lastStamp) return;
+    const offset = now - stamp;
+    if (this.offset === undefined || offset < this.offset) this.offset = offset;
+    else this.offset += (offset - this.offset) * 0.002; // follow slow clock drift
+    if (this.lastStamp) this.gap += (Math.min(250, stamp - this.lastStamp) - this.gap) * 0.1;
+    this.lastStamp = stamp;
+    const t = stamp + this.offset;
+    this.late += (now - t - this.late) * 0.05;
+    this.list.push({ t, x, y });
+    if (this.list.length > 30) this.list.shift();
+  }
+
+  at(now: number): { x: number; y: number } | undefined {
+    const list = this.list;
+    if (list.length === 0) return undefined;
+    const t = now - Math.min(300, Math.max(50, this.gap * 1.5 + this.late * 2 + 10));
+    while (list.length > 2 && list[1].t <= t) list.shift();
+    const [a, b] = list;
+    if (!b || t <= a.t) return { x: a.x, y: a.y };
+    if (t >= b.t) return { x: b.x, y: b.y };
+    // A jump (respawn) is drawn as a jump, not a slide across the map.
+    if (Math.hypot(b.x - a.x, b.y - a.y) > 120) return { x: b.x, y: b.y };
+    const f = (t - a.t) / (b.t - a.t);
+    return { x: a.x + (b.x - a.x) * f, y: a.y + (b.y - a.y) * f };
+  }
+}
+
 const ENEMY_SCALE: Record<EnemyKind, number> = { cinderling: 1, brute: 1.3, caster: 1, warden: 2.4, godzilla: 2.4 };
 
 export function serverUrl(): string {
@@ -81,8 +133,16 @@ export class GameScene extends Phaser.Scene {
   private sparks!: Phaser.GameObjects.Particles.ParticleEmitter;
   private keys!: Record<string, Phaser.Input.Keyboard.Key>;
   private predicted = { x: CENTER_X, y: CENTER_Y };
+  private warp = -1;
+  private dashTimer = 0;
+  private dashCooldown = 0;
+  private dashDir = { x: 0, y: 0 };
+  private driftTime = 0;
   private sendTimer = 0;
-  private lastSent = "";
+  private lastButtons = "";
+  private lastSentPos = "";
+  /** Recent positions of other players and enemies, for smooth interpolation online. */
+  private tracks = new Map<string, Track>();
   private cameraTarget!: Phaser.GameObjects.Zone;
   private aim = 0;
   private effects: Effect[] = [];
@@ -124,7 +184,8 @@ export class GameScene extends Phaser.Scene {
     const cam = this.cameras.main;
     cam.setBounds(0, 0, WORLD_W, WORLD_H);
     cam.setZoom(2);
-    cam.startFollow(this.cameraTarget, true, 0.15, 0.15);
+    // Lock the camera to our hero; smoothing on top of rounded pixels makes sprites shimmer.
+    cam.startFollow(this.cameraTarget, true, 1, 1);
     cam.setRoundPixels(true);
 
     if (this.registry.get("solo")) {
@@ -141,14 +202,16 @@ export class GameScene extends Phaser.Scene {
       return;
     }
     this.room.onLeave(() => this.game.events.emit("connection-error", new Error("Disconnected from server")));
+    this.room.onStateChange((state: any) => this.recordSnapshot(state));
     this.scene.launch("Hud");
   }
 
   update(_time: number, deltaMs: number) {
     const room = this.room;
     if (!room?.state?.players) return;
-    const dt = deltaMs / 1000;
+    const dt = Math.min(deltaMs, 100) / 1000;
     const state = room.state;
+    if (room instanceof LocalRoom) room.step(dt);
 
     const input = this.readInput();
     this.predictLocal(input, dt);
@@ -202,32 +265,96 @@ export class GameScene extends Phaser.Scene {
 
   private sendInput(input: PlayerInput, dt: number) {
     this.sendTimer -= dt;
-    const encoded = JSON.stringify(input);
-    if (encoded !== this.lastSent || this.sendTimer <= 0) {
-      this.room!.send("input", input);
-      this.lastSent = encoded;
-      this.sendTimer = 0.1;
+    const me = this.room!.state.players.get(this.room!.sessionId);
+    const buttons = JSON.stringify({ ...input, aim: 0 });
+    const pos = `${Math.round(this.predicted.x * 10)},${Math.round(this.predicted.y * 10)},${input.aim}`;
+    // Button presses go out at once; movement and aim about 30 times a second; a heartbeat otherwise.
+    const due = buttons !== this.lastButtons || (this.sendTimer <= 0 && pos !== this.lastSentPos) || this.sendTimer <= -0.1;
+    if (!due) return;
+    const msg: PlayerInput = { ...input };
+    if (me && !me.dead) {
+      msg.x = Math.round(this.predicted.x * 10) / 10;
+      msg.y = Math.round(this.predicted.y * 10) / 10;
+      msg.warp = me.warp;
+      msg.t = Math.round(performance.now());
     }
+    this.room!.send("input", msg);
+    this.lastButtons = buttons;
+    this.lastSentPos = pos;
+    this.sendTimer = 1 / 30;
   }
 
-  /** Move our own character immediately, then gently correct toward the server. */
+  /**
+   * Our own hero moves on this device, right away and at full frame rate (dash included).
+   * The server follows the position we send and only overrides it on spawns or if we drift far off.
+   */
   private predictLocal(input: PlayerInput, dt: number) {
     const me = this.room!.state.players.get(this.room!.sessionId);
     if (!me) return;
-    const dir = inputDirection(input);
-    const moving = dir.x !== 0 || dir.y !== 0;
-    if (me.dead || me.dashing) {
-      this.predicted.x += (me.x - this.predicted.x) * 0.5;
-      this.predicted.y += (me.y - this.predicted.y) * 0.5;
+    this.dashCooldown = Math.max(0, this.dashCooldown - dt);
+    if (me.dead || me.warp !== this.warp) {
+      this.warp = me.warp;
+      this.predicted = { x: me.x, y: me.y };
+      this.dashTimer = 0;
     } else {
-      const speed = heroOf(me.hero).speed;
-      const p = moveCircle(this.predicted.x, this.predicted.y, dir.x * speed * dt, dir.y * speed * dt, PLAYER_RADIUS);
-      const err = Math.hypot(me.x - p.x, me.y - p.y);
-      const k = err > 40 ? 1 : moving ? 0.03 : 0.2;
-      this.predicted.x = p.x + (me.x - p.x) * k;
-      this.predicted.y = p.y + (me.y - p.y) * k;
+      const dir = inputDirection(input);
+      if (input.dash && this.dashTimer <= 0 && this.dashCooldown <= 0 && me.dashCooldown <= 0) {
+        this.dashDir = dir.x || dir.y ? dir : { x: Math.cos(input.aim), y: Math.sin(input.aim) };
+        this.dashTimer = DASH_TIME;
+        this.dashCooldown = DASH_COOLDOWN;
+      }
+      let vx = dir.x * heroOf(me.hero).speed;
+      let vy = dir.y * heroOf(me.hero).speed;
+      if (this.dashTimer > 0) {
+        this.dashTimer -= dt;
+        vx = this.dashDir.x * DASH_SPEED;
+        vy = this.dashDir.y * DASH_SPEED;
+      }
+      this.predicted = moveCircle(this.predicted.x, this.predicted.y, vx * dt, vy * dt, PLAYER_RADIUS);
+
+      // Safety net: if the server keeps us somewhere else, ease back to it.
+      const err = Math.hypot(me.x - this.predicted.x, me.y - this.predicted.y);
+      const allowed = heroOf(me.hero).speed * 0.5 + 40;
+      this.driftTime = err > allowed ? this.driftTime + dt : 0;
+      if (this.driftTime > 0.4) {
+        const k = 1 - Math.exp(-8 * dt);
+        this.predicted.x += (me.x - this.predicted.x) * k;
+        this.predicted.y += (me.y - this.predicted.y) * k;
+      }
     }
     this.cameraTarget.setPosition(this.predicted.x, this.predicted.y);
+  }
+
+  // ------------------------------------------------------- interpolation
+
+  /** Store where the server says everyone is after each update. */
+  private recordSnapshot(state: any) {
+    const now = performance.now();
+    // Enemies are stamped with the server's clock; other players with the clock of the device
+    // that moved them. Either way network jitter does not turn into uneven movement.
+    state.players?.forEach((p: any, id: string) => {
+      if (id === this.room?.sessionId) return;
+      const track = this.track(`p${id}`);
+      if (track.warp !== p.warp) {
+        track.warp = p.warp;
+        track.list.length = 0;
+      }
+      track.add(now, p.mt > 0 ? p.mt : now, p.x, p.y);
+    });
+    state.enemies?.forEach((e: any, id: string) => this.track(`e${id}`).add(now, state.time > 0 ? state.time : now, e.x, e.y));
+  }
+
+  private track(key: string): Track {
+    let track = this.tracks.get(key);
+    if (!track) this.tracks.set(key, (track = new Track()));
+    return track;
+  }
+
+  /** Where to draw an entity: a little in the past, blended between the updates around that moment. */
+  private smoothed(key: string, x: number, y: number): { x: number; y: number } {
+    const track = this.tracks.get(key);
+    if (this.room instanceof LocalRoom || !track) return { x, y };
+    return track.at(performance.now()) ?? { x, y };
   }
 
   // ------------------------------------------------------------- players
@@ -260,11 +387,12 @@ export class GameScene extends Phaser.Scene {
       }
 
       const isMe = id === this.room!.sessionId;
-      const tx = isMe ? this.predicted.x : p.x;
-      const ty = isMe ? this.predicted.y : p.y;
       const body = view.body;
-      if (isMe) body.setPosition(tx, ty);
-      else body.setPosition(body.x + (tx - body.x) * 0.3, body.y + (ty - body.y) * 0.3);
+      if (isMe) body.setPosition(this.predicted.x, this.predicted.y);
+      else {
+        const at = this.smoothed(`p${id}`, p.x, p.y);
+        body.setPosition(at.x, at.y);
+      }
 
       // Walk bob and facing
       const aim = isMe ? this.aim : p.aim;
@@ -311,6 +439,7 @@ export class GameScene extends Phaser.Scene {
       view.label.destroy();
       view.bar.destroy();
       this.players.delete(id);
+      this.tracks.delete(`p${id}`);
     }
   }
 
@@ -466,9 +595,9 @@ export class GameScene extends Phaser.Scene {
         this.enemies.set(id, view);
       }
       const s = view.sprite;
-      const nx = s.x + (e.x - s.x) * 0.3;
-      if (Math.abs(nx - s.x) > 0.05) s.setFlipX(nx < s.x);
-      s.setPosition(nx, s.y + (e.y - s.y) * 0.3);
+      const at = this.smoothed(`e${id}`, e.x, e.y);
+      if (Math.abs(at.x - s.x) > 0.05) s.setFlipX(at.x < s.x);
+      s.setPosition(at.x, at.y);
       s.setDepth(s.y);
       if (e.hitFlash > 0) s.setTintFill(0xffffff);
       else if (e.beamState === 1 && Math.floor(this.time.now / 80) % 2 === 0) s.setTint(0x9fd8ff);
@@ -497,6 +626,7 @@ export class GameScene extends Phaser.Scene {
       view.sprite.destroy();
       view.bar.destroy();
       this.enemies.delete(id);
+      this.tracks.delete(`e${id}`);
     }
   }
 
