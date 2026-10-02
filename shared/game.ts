@@ -12,19 +12,91 @@ export const SERVER_PORT = 2567;
 export const ROOM_NAME = "emberfall";
 export const MAX_PLAYERS = 4;
 
-// Player (Gunslinger)
+// Players
 export const PLAYER_RADIUS = 6;
-export const PLAYER_SPEED = 110;
-export const PLAYER_MAX_HP = 100;
 export const DASH_SPEED = 340;
 export const DASH_TIME = 0.15;
 export const DASH_COOLDOWN = 1.2;
-export const SHOT_COOLDOWN = 0.18;
-export const SHOT_SPEED = 360;
-export const SHOT_DAMAGE = 10;
-export const VOLLEY_COOLDOWN = 4;
-export const VOLLEY_COUNT = 7;
-export const VOLLEY_SPREAD = 0.6; // radians, total
+
+// Heroes. Every number here is safe to tweak for balance.
+export type HeroId = "superman" | "isekai" | "simo";
+export type AttackStyle = "punch" | "sword" | "rifle";
+
+export interface HeroDef {
+  name: string;
+  role: string;
+  blurb: string;
+  maxHp: number;
+  speed: number;
+  attack: AttackStyle;
+  attackCooldown: number; // seconds between basic attacks
+  damage: number;
+  range: number; // reach for punch/sword, bullet travel for rifle
+  arc: number; // radians covered by a punch or sword swing
+  shotSpeed: number;
+  pierce: number; // how many enemies one bullet can pass through
+  skill: {
+    name: string;
+    cooldown: number;
+    damage: number;
+    radius: number; // smash radius, or wave reach
+  };
+}
+
+export const HEROES: Record<HeroId, HeroDef> = {
+  superman: {
+    name: "Superman",
+    role: "Melee bruiser",
+    blurb: "Hits hardest up close and has three times the HP.",
+    maxHp: 300,
+    speed: 100,
+    attack: "punch",
+    attackCooldown: 0.45,
+    damage: 40,
+    range: 22,
+    arc: 1.6,
+    shotSpeed: 0,
+    pierce: 0,
+    skill: { name: "SMASH", cooldown: 5, damage: 60, radius: 70 },
+  },
+  isekai: {
+    name: "Isekai Hero",
+    role: "Sword fighter",
+    blurb: "Mid-range sword sweeps that hit every enemy in the arc.",
+    maxHp: 120,
+    speed: 110,
+    attack: "sword",
+    attackCooldown: 0.4,
+    damage: 25,
+    range: 42,
+    arc: 2.4,
+    shotSpeed: 0,
+    pierce: 0,
+    skill: { name: "SKY SLASH", cooldown: 4, damage: 40, radius: 230 },
+  },
+  simo: {
+    name: "Simo Hayha",
+    role: "Sniper",
+    blurb: "Very long range and huge damage, but slow to reload. Shots pierce.",
+    maxHp: 90,
+    speed: 105,
+    attack: "rifle",
+    attackCooldown: 1.0,
+    damage: 85,
+    range: 900,
+    arc: 0,
+    shotSpeed: 720,
+    pierce: 3,
+    skill: { name: "WHITE DEATH", cooldown: 6, damage: 85, radius: 0 },
+  },
+};
+
+export const HERO_IDS = Object.keys(HEROES) as HeroId[];
+
+export function heroOf(id: string): HeroDef {
+  return HEROES[id as HeroId] ?? HEROES.superman;
+}
+
 export const RESPAWN_TIME = 5;
 
 // Emberfall rule twist: lava creeps in from the edges during a wave.
@@ -92,7 +164,7 @@ export interface PlayerInput {
   aim: number; // radians
   shoot: boolean;
   dash: boolean;
-  volley: boolean;
+  skill: boolean;
 }
 
 export const EMPTY_INPUT: PlayerInput = {
@@ -103,7 +175,7 @@ export const EMPTY_INPUT: PlayerInput = {
   aim: 0,
   shoot: false,
   dash: false,
-  volley: false,
+  skill: false,
 };
 
 /** Normalised movement direction from input keys. */

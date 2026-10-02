@@ -9,7 +9,7 @@ export interface PixelSprite {
 
 const OUTLINE = "#1a0f14";
 
-// Coat colours for players 1-4.
+// Marker colours for players 1-4 (shown under each hero's feet).
 export const PLAYER_COATS = [
   ["#3b7dd8", "#24508f"],
   ["#d84b3b", "#8f2a24"],
@@ -17,43 +17,159 @@ export const PLAYER_COATS = [
   ["#c93bd8", "#7d248f"],
 ];
 
-export function gunslinger(color: number): PixelSprite {
-  const [coat, coatDark] = PLAYER_COATS[color % PLAYER_COATS.length];
-  return {
+// Hero sprites, drawn in the style of the reference pictures (chibi, big heads, bold outline).
+export const HERO_SPRITES: Record<string, PixelSprite> = {
+  superman: {
     grid: [
-      "...kkkkkk...",
-      "..khhhhhhk..",
-      ".kkhhhhhhkk.",
-      "khhhhhhhhhhk",
-      ".kkkkkkkkkk.",
-      "..ksessesk..",
-      "..kssssssk..",
-      "..kkggggkk..",
-      ".kccggggcck.",
-      "kccccccccddk",
-      "kscccccccdsk",
-      ".kccccccddk.",
-      ".kccccccddk.",
-      "..kddkkddk..",
-      "..kbbk.kbbk.",
-      "..kkkk.kkkk.",
+      "...kkkkkkk......",
+      "..khhhHHhhk.....",
+      ".khhhhhhhhhk....",
+      ".khhssshhhhk....",
+      ".kssssssshhk....",
+      ".ksesssesshk....",
+      ".kssssssssk.....",
+      ".kSssmmsssk.....",
+      "..kSssssskk.....",
+      ".kRrbbbbbrRk....",
+      "kRkbrbybrbkRk...",
+      "kRkbbrrrbbkRRk..",
+      "ksbbbbbbbbbsRk..",
+      ".kyyoyyyyykRRk..",
+      ".kbbbkkbbbkRRRk.",
+      ".kbbk..kbbkkkk..",
+      ".krrk..krrk.....",
+      ".kkkk..kkkk.....",
     ],
     palette: {
       k: OUTLINE,
-      h: "#6b4226",
-      s: "#f1c27d",
+      h: "#262626",
+      H: "#4a4a4a",
+      s: "#eba57a",
+      S: "#d98d64",
       e: "#1a0f14",
-      g: "#f5c542",
-      c: coat,
-      d: coatDark,
-      b: "#3d2a1e",
+      m: "#7a2a1a",
+      b: "#2f6fd6",
+      r: "#d42020",
+      R: "#9a1414",
+      y: "#ffd400",
+      o: "#f0a020",
     },
-  };
-}
+  },
+  isekai: {
+    grid: [
+      "..k.k..k.k......",
+      ".kykykkykyk.....",
+      ".kyyyyyyyyyk....",
+      "kyyyYyyyyYyyk...",
+      ".kyysssssyyk....",
+      ".kysgsssgsyk....",
+      "..ksssssssk.....",
+      "..kkSsssSkk.....",
+      ".kCwwwowwwCk....",
+      "kCCwwwowwwCCk...",
+      "kCswwwwwwwsCCk..",
+      "kCkWwwwwwWkCCk..",
+      ".kkdooooodkCCCk.",
+      "..kdddkdddkCCk..",
+      "..kddk.kddkkk...",
+      "..knnk.knnk.....",
+      "..knnk.knnk.....",
+      "..kkkk.kkkk.....",
+    ],
+    palette: {
+      k: OUTLINE,
+      y: "#f5d36b",
+      Y: "#c8961e",
+      s: "#f6c9a0",
+      S: "#e0a982",
+      g: "#2fa34f",
+      w: "#f2f2f2",
+      W: "#b9c0cc",
+      o: "#d9a53a",
+      C: "#2a4ea8",
+      d: "#2a2a3a",
+      n: "#6b4226",
+    },
+  },
+  simo: {
+    grid: [
+      ".....kkkkk......",
+      "....kwwwwwk.....",
+      "...kwwwGwwwk....",
+      "..kwwwGGGwwwk...",
+      "..kwwkkkkkwwk...",
+      "..kwkmemmemkwk..",
+      "..kwkmmmmmmkwk..",
+      "..kwWkMMMMkWwk..",
+      ".kwwwWkkkkWwwwk.",
+      "kwwwwwwwwwwwwWk.",
+      "kwWwwwwwwwwwwWk.",
+      "kwwwwwwwwwwwwWk.",
+      ".kwwwWwwwwWwwk..",
+      ".kwwwwwwwwwwwk..",
+      "..kGwwwkwwwGk...",
+      "..kddk...kddk...",
+      "..kwwk...kwwk...",
+      "..kkkk...kkkk...",
+    ],
+    palette: {
+      k: OUTLINE,
+      w: "#f4f6f8",
+      W: "#c9d1d9",
+      G: "#8f9aa6",
+      m: "#5a6b3a",
+      M: "#3e4a28",
+      e: "#1a0f14",
+      d: "#1f2440",
+    },
+  },
+};
 
-export const GUN: PixelSprite = {
-  grid: ["kkkkkkk.", "kmmmmmmk", "kkkmkkk.", "..kk...."],
-  palette: { k: OUTLINE, m: "#9aa3ad" },
+export const SWORD: PixelSprite = {
+  grid: [
+    "kk..kkkkkkkkkkkk..",
+    "kokkwwwwwwwwwwwwkk",
+    "kooobbbbbbbbbbbbbk",
+    "kokkwwwwwwwwwwwwkk",
+    "kk..kkkkkkkkkkkk..",
+  ],
+  palette: { k: OUTLINE, o: "#d9a53a", w: "#e8eef7", b: "#3b5bc4" },
+};
+
+export const RIFLE: PixelSprite = {
+  grid: [
+    "....kk..............",
+    "kkkkkkkkkkkkkkkkkkk.",
+    "knnnnnnkGGGGGGGGGGGk",
+    "knnnkkkkkkkkkkkkkkk.",
+    "kkkk................",
+  ],
+  palette: { k: OUTLINE, n: "#7a4a26", G: "#8f9aa6" },
+};
+
+export const SWORD_WAVE: PixelSprite = {
+  grid: [
+    "kk......",
+    ".kbk....",
+    "..kbk...",
+    "..kwbk..",
+    "...kwbk.",
+    "...kwwbk",
+    "...kwwbk",
+    "...kwwbk",
+    "...kwwbk",
+    "...kwbk.",
+    "..kwbk..",
+    "..kbk...",
+    ".kbk....",
+    "kk......",
+  ],
+  palette: { k: "#1f3f8f", b: "#6fa8ff", w: "#ffffff" },
+};
+
+export const SNIPE_SHOT: PixelSprite = {
+  grid: [".ooyyyyww.", "oyyyyywwww", ".ooyyyyww."],
+  palette: { o: "#f07a22", y: "#ffd23f", w: "#ffffff" },
 };
 
 export const CINDERLING: PixelSprite = {
@@ -132,11 +248,6 @@ export const WARDEN: PixelSprite = {
     "....kkk..kkk....",
   ],
   palette: { k: OUTLINE, n: "#4a1d1d", o: "#ff6a00", y: "#ffe14d", w: "#ffffff" },
-};
-
-export const PLAYER_SHOT: PixelSprite = {
-  grid: [".yy.", "ywwy", "ywwy", ".yy."],
-  palette: { y: "#ffd23f", w: "#ffffff" },
 };
 
 export const ENEMY_SHOT: PixelSprite = {

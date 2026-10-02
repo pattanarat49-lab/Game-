@@ -2,6 +2,7 @@ import { MapSchema, Schema, type } from "@colyseus/schema";
 
 export class Player extends Schema {
   @type("string") name = "";
+  @type("string") hero = "superman";
   @type("number") x = 0;
   @type("number") y = 0;
   @type("number") aim = 0;
@@ -10,10 +11,12 @@ export class Player extends Schema {
   @type("boolean") dead = false;
   @type("boolean") dashing = false;
   @type("number") dashCooldown = 0;
-  @type("number") volleyCooldown = 0;
+  @type("number") skillCooldown = 0;
   @type("number") respawnIn = 0;
   @type("number") score = 0;
   @type("uint8") color = 0;
+  @type("number") attackSeq = 0;
+  @type("number") skillSeq = 0;
 }
 
 export class Enemy extends Schema {
@@ -26,6 +29,7 @@ export class Enemy extends Schema {
 }
 
 export class Bullet extends Schema {
+  @type("string") kind = "snipe";
   @type("number") x = 0;
   @type("number") y = 0;
   @type("number") vx = 0;

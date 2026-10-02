@@ -1,5 +1,5 @@
 import Phaser from "phaser";
-import { DASH_COOLDOWN, VOLLEY_COOLDOWN, WAVE_COUNT } from "../../../shared/game";
+import { DASH_COOLDOWN, WAVE_COUNT, heroOf } from "../../../shared/game";
 import { PLAYER_COATS } from "../art";
 import type { GameScene } from "./GameScene";
 import { TouchControls, isTouchDevice } from "../touch";
@@ -28,12 +28,13 @@ export class HudScene extends Phaser.Scene {
       .text(this.scale.width / 2, 120, "", { ...FONT, fontSize: "20px", align: "center", stroke: "#000", strokeThickness: 4 })
       .setOrigin(0.5);
     this.scores = this.add.text(this.scale.width - 20, 16, "", { ...FONT, fontSize: "10px", align: "right", lineSpacing: 6 }).setOrigin(1, 0);
+    const hero = heroOf(this.registry.get("hero"));
     if (isTouchDevice()) {
-      this.touch = new TouchControls(this);
+      this.touch = new TouchControls(this, hero.skill.name);
       return;
     }
     this.add
-      .text(20, this.scale.height - 20, "WASD move  MOUSE aim/shoot  SPACE dash  Q/RMB volley", {
+      .text(20, this.scale.height - 20, `WASD move  MOUSE aim/attack  SPACE dash  Q/RMB ${hero.skill.name}`, {
         ...FONT,
         fontSize: "9px",
         color: "#c9b8c0",
@@ -54,13 +55,14 @@ export class HudScene extends Phaser.Scene {
       this.bars.fillStyle(0x000000, 0.6).fillRect(16, 36, w + 8, 18);
       this.bars.fillStyle(0x7a1f1f, 1).fillRect(20, 40, w, 10);
       this.bars.fillStyle(0x4cd964, 1).fillRect(20, 40, w * Math.max(0, me.hp / me.maxHp), 10);
-      this.hpText.setText(`${me.name}  HP ${Math.ceil(me.hp)}/${me.maxHp}`);
+      this.hpText.setText(`${me.name} (${heroOf(me.hero).name})  HP ${Math.ceil(me.hp)}/${me.maxHp}`);
       const dash = me.dashCooldown > 0 ? `${me.dashCooldown.toFixed(1)}s` : "READY";
-      const volley = me.volleyCooldown > 0 ? `${me.volleyCooldown.toFixed(1)}s` : "READY";
-      this.skills.setText(`DASH   ${dash}\nVOLLEY ${volley}`);
-      this.drawCooldown(150, 68, 1 - me.dashCooldown / DASH_COOLDOWN);
-      this.drawCooldown(150, 84, 1 - me.volleyCooldown / VOLLEY_COOLDOWN);
-      this.touch?.draw(1 - me.volleyCooldown / VOLLEY_COOLDOWN, 1 - me.dashCooldown / DASH_COOLDOWN);
+      const hero = heroOf(me.hero);
+      const skill = me.skillCooldown > 0 ? `${me.skillCooldown.toFixed(1)}s` : "READY";
+      this.skills.setText(`DASH   ${dash}\n${hero.skill.name.padEnd(6)} ${skill}`);
+      this.drawCooldown(220, 68, 1 - me.dashCooldown / DASH_COOLDOWN);
+      this.drawCooldown(220, 84, 1 - me.skillCooldown / hero.skill.cooldown);
+      this.touch?.draw(1 - me.skillCooldown / hero.skill.cooldown, 1 - me.dashCooldown / DASH_COOLDOWN);
     }
 
     const waveLabel = state.wave >= WAVE_COUNT ? "BOSS" : `${state.wave}/${WAVE_COUNT}`;

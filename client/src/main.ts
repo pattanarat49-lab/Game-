@@ -3,6 +3,8 @@ import { BootScene } from "./scenes/BootScene";
 import { GameScene } from "./scenes/GameScene";
 import { HudScene } from "./scenes/HudScene";
 import { isTouchDevice } from "./touch";
+import { HEROES, HERO_IDS, HeroId } from "../../shared/game";
+import { HERO_SPRITES, renderPixelSprite } from "./art";
 
 const menu = document.getElementById("menu")!;
 const form = document.getElementById("join-form") as HTMLFormElement;
@@ -12,6 +14,42 @@ const errorText = document.getElementById("error")!;
 nameInput.value = localStorageGet("riftborn-name") ?? `Rift${Math.floor(100 + Math.random() * 900)}`;
 
 let game: Phaser.Game | undefined;
+let selectedHero: HeroId = (localStorageGet("riftborn-hero") as HeroId) ?? "superman";
+if (!HERO_IDS.includes(selectedHero)) selectedHero = "superman";
+buildHeroPicker();
+
+/** The character select cards, built from the hero list in shared/game.ts. */
+function buildHeroPicker() {
+  const container = document.getElementById("heroes")!;
+  const bars = (value: number) => `<div class="bar"><span style="width:${Math.round(Math.min(1, value) * 100)}%"></span></div>`;
+  for (const id of HERO_IDS) {
+    const hero = HEROES[id];
+    const card = document.createElement("button");
+    card.type = "button";
+    card.className = "hero";
+    card.id = `hero-${id}`;
+    card.setAttribute("aria-pressed", String(id === selectedHero));
+    const reach = hero.attack === "rifle" ? 1 : hero.range / 60;
+    card.innerHTML = `
+      <span class="name">${hero.name}</span>
+      <span class="role">${hero.role}</span>
+      <span class="role">Skill: ${hero.skill.name}</span>
+      <div class="stats">
+        <span>HP</span>${bars(hero.maxHp / 300)}
+        <span>DAMAGE</span>${bars(hero.damage / 90)}
+        <span>RANGE</span>${bars(reach)}
+        <span>SPEED</span>${bars(1 / hero.attackCooldown / 2.5)}
+      </div>
+      <span class="blurb">${hero.blurb}</span>`;
+    card.prepend(renderPixelSprite(HERO_SPRITES[id]));
+    card.addEventListener("click", () => {
+      selectedHero = id;
+      localStorageSet("riftborn-hero", id);
+      container.querySelectorAll(".hero").forEach((c) => c.setAttribute("aria-pressed", String(c === card)));
+    });
+    container.append(card);
+  }
+}
 
 const soloOnly = import.meta.env.VITE_SOLO_ONLY === "1";
 if (soloOnly) document.getElementById("join-online")?.remove();
@@ -46,6 +84,7 @@ form.addEventListener("submit", async (event) => {
   });
   game.registry.set("playerName", name);
   game.registry.set("solo", solo);
+  game.registry.set("hero", selectedHero);
   game.events.on("connection-error", (err: Error) => {
     errorText.textContent = `Could not reach the rift: ${err?.message ?? err}. Is the server running?`;
     menu.classList.remove("hidden");

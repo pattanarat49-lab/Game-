@@ -5,12 +5,13 @@ import {
   CASTER,
   CINDERLING,
   ENEMY_SHOT,
-  GUN,
-  PLAYER_COATS,
-  PLAYER_SHOT,
+  HERO_SPRITES,
+  RIFLE,
+  SNIPE_SHOT,
   SPARK,
+  SWORD,
+  SWORD_WAVE,
   WARDEN,
-  gunslinger,
   renderPixelSprite,
 } from "../art";
 
@@ -31,13 +32,15 @@ export class BootScene extends Phaser.Scene {
   }
 
   create() {
-    PLAYER_COATS.forEach((_, i) => this.addCanvas(`player${i}`, renderPixelSprite(gunslinger(i))));
-    this.addCanvas("gun", renderPixelSprite(GUN));
+    for (const [id, sprite] of Object.entries(HERO_SPRITES)) this.addCanvas(`hero_${id}`, renderPixelSprite(sprite));
+    this.addCanvas("sword", renderPixelSprite(SWORD));
+    this.addCanvas("rifle", renderPixelSprite(RIFLE));
+    this.addCanvas("wave", renderPixelSprite(SWORD_WAVE));
+    this.addCanvas("snipe", renderPixelSprite(SNIPE_SHOT));
     this.addCanvas("cinderling", renderPixelSprite(CINDERLING));
     this.addCanvas("brute", renderPixelSprite(BRUTE));
     this.addCanvas("caster", renderPixelSprite(CASTER));
     this.addCanvas("warden", renderPixelSprite(WARDEN));
-    this.addCanvas("shot", renderPixelSprite(PLAYER_SHOT));
     this.addCanvas("eshot", renderPixelSprite(ENEMY_SHOT));
     this.addCanvas("spark", renderPixelSprite(SPARK));
     this.addCanvas("ground", this.drawGround());

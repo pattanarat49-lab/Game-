@@ -8,13 +8,13 @@ import {
   MAP_COLS,
   MAP_ROWS,
   PLAYER_RADIUS,
-  PLAYER_SPEED,
   PlayerInput,
   ROOM_NAME,
   SERVER_PORT,
   TILE,
   WORLD_H,
   WORLD_W,
+  heroOf,
   inLava,
   inputDirection,
   moveCircle,
@@ -24,12 +24,29 @@ import { LocalRoom } from "../localRoom";
 
 interface PlayerView {
   body: Phaser.GameObjects.Image;
-  gun: Phaser.GameObjects.Image;
+  weapon?: Phaser.GameObjects.Image;
   label: Phaser.GameObjects.Text;
   bar: Phaser.GameObjects.Graphics;
   lastHp: number;
   hurtFlash: number;
+  attackSeq: number;
+  skillSeq: number;
 }
+
+/** A short-lived swing, slash or shockwave drawn on top of the world. */
+interface Effect {
+  kind: "punch" | "sword" | "smash" | "muzzle";
+  x: number;
+  y: number;
+  aim: number;
+  range: number;
+  arc: number;
+  age: number;
+  life: number;
+}
+
+const WEAPON_TEXTURE: Record<string, string | undefined> = { isekai: "sword", simo: "rifle" };
+const PLAYER_MARKERS = [0x3b7dd8, 0xd84b3b, 0x3bd87a, 0xc93bd8];
 
 interface EnemyView {
   sprite: Phaser.GameObjects.Image;
@@ -63,6 +80,9 @@ export class GameScene extends Phaser.Scene {
   private lastSent = "";
   private cameraTarget!: Phaser.GameObjects.Zone;
   private aim = 0;
+  private effects: Effect[] = [];
+  private fx!: Phaser.GameObjects.Graphics;
+  private aimGuide!: Phaser.GameObjects.Graphics;
 
   constructor() {
     super("Game");
@@ -83,8 +103,10 @@ export class GameScene extends Phaser.Scene {
       emitting: false,
     });
     this.sparks.setDepth(50);
+    this.fx = this.add.graphics().setDepth(950);
+    this.aimGuide = this.add.graphics().setDepth(-1);
 
-    this.keys = this.input.keyboard!.addKeys("W,A,S,D,UP,DOWN,LEFT,RIGHT,SPACE,Q,ONE") as Record<
+    this.keys = this.input.keyboard!.addKeys("W,A,S,D,UP,DOWN,LEFT,RIGHT,SPACE,Q,E,ONE") as Record<
       string,
       Phaser.Input.Keyboard.Key
     >;
@@ -98,13 +120,13 @@ export class GameScene extends Phaser.Scene {
     cam.setRoundPixels(true);
 
     if (this.registry.get("solo")) {
-      this.room = new LocalRoom(this.registry.get("playerName"));
+      this.room = new LocalRoom(this.registry.get("playerName"), this.registry.get("hero"));
       this.scene.launch("Hud");
       return;
     }
     try {
       const client = new Client(serverUrl());
-      this.room = await client.joinOrCreate(ROOM_NAME, { name: this.registry.get("playerName") });
+      this.room = await client.joinOrCreate(ROOM_NAME, { name: this.registry.get("playerName"), hero: this.registry.get("hero") });
     } catch (err) {
       console.error(err);
       this.game.events.emit("connection-error", err);
@@ -127,6 +149,8 @@ export class GameScene extends Phaser.Scene {
     this.syncPlayers(state, dt);
     this.syncEnemies(state);
     this.syncBullets(state, dt);
+    this.drawEffects(dt);
+    this.drawAimGuide(state);
     this.drawLava(state.lavaRadius);
   }
 
@@ -148,7 +172,7 @@ export class GameScene extends Phaser.Scene {
         aim: Math.round(this.aim * 1000) / 1000,
         shoot: alive && touch.shooting,
         dash: alive && touch.dashing,
-        volley: alive && touch.volleying,
+        skill: alive && touch.skilling,
       };
     }
 
@@ -164,7 +188,7 @@ export class GameScene extends Phaser.Scene {
       aim: Math.round(this.aim * 1000) / 1000,
       shoot: alive && pointer.leftButtonDown(),
       dash: alive && k.SPACE.isDown,
-      volley: alive && (k.Q.isDown || k.ONE.isDown || pointer.rightButtonDown()),
+      skill: alive && (k.Q.isDown || k.E.isDown || k.ONE.isDown || pointer.rightButtonDown()),
     };
   }
 
@@ -188,7 +212,8 @@ export class GameScene extends Phaser.Scene {
       this.predicted.x += (me.x - this.predicted.x) * 0.5;
       this.predicted.y += (me.y - this.predicted.y) * 0.5;
     } else {
-      const p = moveCircle(this.predicted.x, this.predicted.y, dir.x * PLAYER_SPEED * dt, dir.y * PLAYER_SPEED * dt, PLAYER_RADIUS);
+      const speed = heroOf(me.hero).speed;
+      const p = moveCircle(this.predicted.x, this.predicted.y, dir.x * speed * dt, dir.y * speed * dt, PLAYER_RADIUS);
       const err = Math.hypot(me.x - p.x, me.y - p.y);
       const k = err > 40 ? 1 : moving ? 0.03 : 0.2;
       this.predicted.x = p.x + (me.x - p.x) * k;
@@ -206,8 +231,8 @@ export class GameScene extends Phaser.Scene {
       let view = this.players.get(id);
       if (!view) {
         view = {
-          body: this.add.image(p.x, p.y, `player${p.color}`).setOrigin(0.5, 0.8),
-          gun: this.add.image(p.x, p.y, "gun").setOrigin(0.1, 0.5),
+          body: this.add.image(p.x, p.y, `hero_${p.hero}`).setOrigin(0.5, 0.85),
+          weapon: WEAPON_TEXTURE[p.hero] ? this.add.image(p.x, p.y, WEAPON_TEXTURE[p.hero]!).setOrigin(0.15, 0.5) : undefined,
           label: this.add
             .text(p.x, p.y, p.name, { fontFamily: "monospace", fontSize: "16px", color: "#ffffff" })
             .setScale(0.4)
@@ -216,6 +241,8 @@ export class GameScene extends Phaser.Scene {
           bar: this.add.graphics(),
           lastHp: p.hp,
           hurtFlash: 0,
+          attackSeq: p.attackSeq,
+          skillSeq: p.skillSeq,
         };
         if (id === this.room!.sessionId) {
           this.predicted = { x: p.x, y: p.y };
@@ -238,13 +265,16 @@ export class GameScene extends Phaser.Scene {
       body.setDepth(body.y);
       body.setAlpha(p.dead ? 0.25 : p.dashing ? 0.6 : 1);
 
-      view.gun.setPosition(body.x, body.y - 4 + bob);
-      view.gun.setRotation(aim);
-      view.gun.setFlipY(Math.cos(aim) < 0);
-      view.gun.setDepth(body.y + 0.5);
-      view.gun.setVisible(!p.dead);
+      if (view.weapon) {
+        view.weapon.setPosition(body.x, body.y - 5 + bob);
+        view.weapon.setRotation(aim);
+        view.weapon.setFlipY(Math.cos(aim) < 0);
+        view.weapon.setDepth(body.y + 0.5);
+        view.weapon.setVisible(!p.dead);
+      }
+      this.playAttackEffects(view, p, body.x, body.y - 5, aim);
 
-      view.label.setPosition(body.x, body.y - 16);
+      view.label.setPosition(body.x, body.y - 18);
       view.label.setDepth(1000);
 
       if (p.hp < view.lastHp - 0.5) view.hurtFlash = 0.15;
@@ -255,6 +285,7 @@ export class GameScene extends Phaser.Scene {
 
       view.bar.clear();
       if (!p.dead) {
+        view.bar.fillStyle(PLAYER_MARKERS[p.color % 4], 0.5).fillEllipse(body.x, body.y + 1, 14, 5);
         view.bar.fillStyle(0x000000, 0.7).fillRect(body.x - 8, body.y + 4, 16, 2);
         view.bar.fillStyle(0x4cd964, 1).fillRect(body.x - 8, body.y + 4, 16 * (p.hp / p.maxHp), 2);
       }
@@ -268,10 +299,96 @@ export class GameScene extends Phaser.Scene {
     for (const [id, view] of this.players) {
       if (seen.has(id)) continue;
       view.body.destroy();
-      view.gun.destroy();
+      view.weapon?.destroy();
       view.label.destroy();
       view.bar.destroy();
       this.players.delete(id);
+    }
+  }
+
+  // ------------------------------------------------------------- effects
+
+  /** Spot new attacks and skills (their counters went up) and start an effect for each. */
+  private playAttackEffects(view: PlayerView, p: any, x: number, y: number, aim: number) {
+    const hero = heroOf(p.hero);
+    if (p.attackSeq !== view.attackSeq) {
+      view.attackSeq = p.attackSeq;
+      if (hero.attack === "rifle") {
+        this.effects.push({ kind: "muzzle", x, y, aim, range: 16, arc: 0, age: 0, life: 0.08 });
+        if (p === this.room?.state.players.get(this.room.sessionId)) this.cameras.main.shake(60, 0.004);
+      } else {
+        this.effects.push({ kind: hero.attack, x, y, aim, range: hero.range, arc: hero.arc, age: 0, life: hero.attack === "punch" ? 0.14 : 0.18 });
+      }
+    }
+    if (p.skillSeq !== view.skillSeq) {
+      view.skillSeq = p.skillSeq;
+      if (hero.attack === "punch") {
+        this.effects.push({ kind: "smash", x, y: y + 5, aim, range: hero.skill.radius, arc: Math.PI * 2, age: 0, life: 0.35 });
+        this.cameras.main.shake(200, 0.012);
+        this.sparks.explode(24, x, y + 5);
+      }
+    }
+  }
+
+  private drawEffects(dt: number) {
+    const g = this.fx;
+    g.clear();
+    this.effects = this.effects.filter((e) => (e.age += dt) < e.life);
+    for (const e of this.effects) {
+      const t = e.age / e.life;
+      if (e.kind === "punch") {
+        const r = e.range * (0.6 + 0.4 * t);
+        g.fillStyle(0xffffff, 0.8 * (1 - t));
+        g.fillCircle(e.x + Math.cos(e.aim) * r, e.y + Math.sin(e.aim) * r, 6 * (1 - t) + 2);
+        g.lineStyle(2, 0xffd400, 1 - t);
+        g.beginPath();
+        g.arc(e.x, e.y, r, e.aim - e.arc / 2, e.aim + e.arc / 2);
+        g.strokePath();
+      } else if (e.kind === "sword") {
+        // A crescent that sweeps across the swing.
+        const sweep = e.aim - e.arc / 2 + e.arc * Math.min(1, t * 1.6);
+        g.lineStyle(5, 0xbcd4ff, 0.8 * (1 - t));
+        g.beginPath();
+        g.arc(e.x, e.y, e.range, e.aim - e.arc / 2, sweep);
+        g.strokePath();
+        g.lineStyle(2, 0xffffff, 1 - t);
+        g.beginPath();
+        g.arc(e.x, e.y, e.range - 4, e.aim - e.arc / 2, sweep);
+        g.strokePath();
+      } else if (e.kind === "smash") {
+        g.lineStyle(4, 0xffd400, 1 - t);
+        g.strokeCircle(e.x, e.y, e.range * t);
+        g.lineStyle(2, 0xd42020, 1 - t);
+        g.strokeCircle(e.x, e.y, e.range * t * 0.7);
+      } else if (e.kind === "muzzle") {
+        g.fillStyle(0xffd23f, 1 - t);
+        g.fillCircle(e.x + Math.cos(e.aim) * e.range, e.y + Math.sin(e.aim) * e.range, 4);
+      }
+    }
+  }
+
+  /** A faint guide showing where your attack will land, so aiming with a thumb is easy. */
+  private drawAimGuide(state: any) {
+    const g = this.aimGuide;
+    g.clear();
+    const me = state.players.get(this.room!.sessionId);
+    if (!me || me.dead) return;
+    const hero = heroOf(me.hero);
+    const x = this.predicted.x;
+    const y = this.predicted.y - 5;
+    if (hero.attack === "rifle") {
+      for (let d = 14; d < 150; d += 10) {
+        g.fillStyle(0xffffff, 0.35 * (1 - d / 150));
+        g.fillRect(x + Math.cos(this.aim) * d - 1, y + Math.sin(this.aim) * d - 1, 2, 2);
+      }
+    } else {
+      g.fillStyle(0xffffff, 0.1);
+      g.slice(x, y, hero.range, this.aim - hero.arc / 2, this.aim + hero.arc / 2);
+      g.fillPath();
+      g.lineStyle(1, 0xffffff, 0.3);
+      g.beginPath();
+      g.arc(x, y, hero.range, this.aim - hero.arc / 2, this.aim + hero.arc / 2);
+      g.strokePath();
     }
   }
 
@@ -327,7 +444,9 @@ export class GameScene extends Phaser.Scene {
       seen.add(id);
       let sprite = this.bullets.get(id);
       if (!sprite) {
-        sprite = this.add.image(b.x, b.y, b.hostile ? "eshot" : "shot").setDepth(900);
+        const texture = b.hostile ? "eshot" : b.kind === "wave" ? "wave" : "snipe";
+        sprite = this.add.image(b.x, b.y, texture).setDepth(900).setRotation(Math.atan2(b.vy, b.vx));
+        if (b.kind === "wave") sprite.setScale(1.6);
         this.bullets.set(id, sprite);
       }
       // Bullets fly in straight lines, so extrapolate locally and drift toward the server.

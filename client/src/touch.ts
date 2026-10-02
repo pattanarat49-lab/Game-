@@ -3,8 +3,9 @@ import Phaser from "phaser";
 /**
  * Twin-stick touch controls for phones and tablets.
  * Left half of the screen: floating joystick to move.
- * Right half: floating joystick to aim; the Gunslinger fires while it is held.
- * Two buttons in the bottom-right corner: DASH and VOLLEY.
+ * Right half: floating joystick to aim; your hero attacks in that direction while it is held.
+ * When only the left stick is used, your hero faces (and aims) where you walk.
+ * Two buttons in the bottom-right corner: DASH and the hero's skill.
  */
 
 const STICK_RADIUS = 60;
@@ -30,23 +31,26 @@ export class TouchControls {
   readonly move: Stick = { pointerId: null, baseX: 0, baseY: 0, dx: 0, dy: 0 };
   readonly aim: Stick = { pointerId: null, baseX: 0, baseY: 0, dx: 0, dy: 0 };
   readonly dashButton: Button;
-  readonly volleyButton: Button;
+  readonly skillButton: Button;
   /** Last aim angle, kept after the aim stick is released. */
   aimAngle = 0;
 
   private gfx: Phaser.GameObjects.Graphics;
   private labels: Phaser.GameObjects.Text[] = [];
 
-  constructor(private scene: Phaser.Scene) {
+  constructor(
+    private scene: Phaser.Scene,
+    skillName: string,
+  ) {
     scene.input.addPointer(3); // up to 4 fingers at once
     const { width, height } = scene.scale;
     this.dashButton = { x: width - 170, y: height - 70, r: 42, label: "DASH", pointerId: null };
-    this.volleyButton = { x: width - 70, y: height - 150, r: 42, label: "VOLLEY", pointerId: null };
+    this.skillButton = { x: width - 70, y: height - 150, r: 42, label: skillName, pointerId: null };
     this.gfx = scene.add.graphics().setDepth(100);
-    for (const b of [this.dashButton, this.volleyButton]) {
+    for (const b of [this.dashButton, this.skillButton]) {
       this.labels.push(
         scene.add
-          .text(b.x, b.y, b.label, { fontFamily: '"Press Start 2P", monospace', fontSize: "10px", color: "#ffffff" })
+          .text(b.x, b.y, b.label, { fontFamily: '"Press Start 2P", monospace', fontSize: "8px", color: "#ffffff", align: "center", wordWrap: { width: 70 } })
           .setOrigin(0.5)
           .setDepth(101),
       );
@@ -62,8 +66,8 @@ export class TouchControls {
     return this.dashButton.pointerId !== null;
   }
 
-  get volleying() {
-    return this.volleyButton.pointerId !== null;
+  get skilling() {
+    return this.skillButton.pointerId !== null;
   }
 
   get shooting() {
@@ -83,7 +87,7 @@ export class TouchControls {
   }
 
   private hitButton(p: Phaser.Input.Pointer): Button | undefined {
-    return [this.dashButton, this.volleyButton].find((b) => Math.hypot(p.x - b.x, p.y - b.y) < b.r + 10);
+    return [this.dashButton, this.skillButton].find((b) => Math.hypot(p.x - b.x, p.y - b.y) < b.r + 10);
   }
 
   private onDown(p: Phaser.Input.Pointer) {
@@ -117,7 +121,9 @@ export class TouchControls {
       }
       stick.dx = dx / STICK_RADIUS;
       stick.dy = dy / STICK_RADIUS;
-      if (stick === this.aim && Math.hypot(stick.dx, stick.dy) > DEADZONE) {
+      const pushed = Math.hypot(stick.dx, stick.dy) > DEADZONE;
+      if (pushed && (stick === this.aim || this.aim.pointerId === null)) {
+        // The aim stick wins; otherwise face where you walk.
         this.aimAngle = Math.atan2(stick.dy, stick.dx);
       }
     }
@@ -131,13 +137,13 @@ export class TouchControls {
         stick.dy = 0;
       }
     }
-    for (const b of [this.dashButton, this.volleyButton]) {
+    for (const b of [this.dashButton, this.skillButton]) {
       if (b.pointerId === p.id) b.pointerId = null;
     }
   }
 
-  /** Redraw sticks and buttons. Volley shows its cooldown as a filling ring. */
-  draw(volleyReady: number, dashReady: number) {
+  /** Redraw sticks and buttons. Buttons show their cooldown as a filling ring. */
+  draw(skillReady: number, dashReady: number) {
     const g = this.gfx;
     g.clear();
     for (const stick of [this.move, this.aim]) {
@@ -153,7 +159,7 @@ export class TouchControls {
     }
     const buttons: [Button, number][] = [
       [this.dashButton, dashReady],
-      [this.volleyButton, volleyReady],
+      [this.skillButton, skillReady],
     ];
     for (const [b, ready] of buttons) {
       const pressed = b.pointerId !== null;

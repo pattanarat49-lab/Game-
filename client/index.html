@@ -36,8 +36,9 @@
         display: flex;
         flex-direction: column;
         align-items: center;
-        justify-content: center;
-        gap: 24px;
+        justify-content: safe center;
+        overflow-y: auto;
+        gap: 20px;
         background: radial-gradient(circle at 50% 60%, #4a1d1d 0%, #120b0f 70%);
         z-index: 10;
         text-align: center;
@@ -88,6 +89,102 @@
         transform: translate(2px, 2px);
         box-shadow: 2px 2px 0 #1a0f14;
       }
+      #heroes {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 14px;
+        max-width: 900px;
+      }
+      .hero {
+        width: 240px;
+        padding: 14px;
+        background: #241a20;
+        border: 3px solid #1a0f14;
+        box-shadow: 4px 4px 0 #1a0f14;
+        color: #fff;
+        font-family: inherit;
+        text-align: left;
+        cursor: pointer;
+        display: grid;
+        grid-template-columns: 72px 1fr;
+        gap: 4px 12px;
+        align-items: start;
+      }
+      .hero:hover {
+        background: #2e2128;
+      }
+      .hero[aria-pressed="true"] {
+        border-color: #ffd23f;
+        background: #3a2418;
+        outline: 3px solid #f07a22;
+        outline-offset: 2px;
+      }
+      .hero canvas {
+        grid-row: span 3;
+        width: 64px;
+        height: 72px;
+        image-rendering: pixelated;
+      }
+      .hero .name {
+        font-size: 11px;
+        color: #ffd23f;
+        line-height: 1.5;
+      }
+      .hero .role {
+        font-size: 8px;
+        color: #c9b8c0;
+      }
+      .hero .stats {
+        grid-column: 1 / -1;
+        display: grid;
+        grid-template-columns: auto 1fr;
+        gap: 5px 8px;
+        font-size: 7px;
+        color: #c9b8c0;
+        align-items: center;
+        margin-top: 6px;
+      }
+      .hero .bar {
+        height: 6px;
+        background: #120b0f;
+      }
+      .hero .bar span {
+        display: block;
+        height: 100%;
+        background: #f07a22;
+      }
+      .hero .blurb {
+        grid-column: 1 / -1;
+        font-size: 7px;
+        line-height: 1.7;
+        color: #e6dbe0;
+        margin-top: 4px;
+      }
+      @media (max-height: 500px) {
+        #menu {
+          gap: 10px;
+          padding-block: 10px;
+        }
+        h1 {
+          font-size: 24px;
+        }
+        #intro {
+          display: none;
+        }
+        .hero {
+          width: 190px;
+          padding: 8px;
+          grid-template-columns: 44px 1fr;
+        }
+        .hero canvas {
+          width: 40px;
+          height: 45px;
+        }
+        .hero .blurb {
+          display: none;
+        }
+      }
       #rotate {
         display: none;
       }
@@ -127,7 +224,8 @@
     <div id="game"></div>
     <div id="menu">
       <h1>RIFTBORN</h1>
-      <p>The multiverse is collapsing. Hold the rift in Emberfall.<br />Survive 4 waves and slay the Pyre Warden. Mind the lava.<br />Online: up to 4 players together. Solo: play right now, no server needed.</p>
+      <p id="intro">The multiverse is collapsing. Hold the rift in Emberfall.<br />Survive 4 waves and slay the Pyre Warden. Mind the lava.</p>
+      <div id="heroes" role="group" aria-label="Choose your hero"></div>
       <form id="join-form">
         <input id="name" maxlength="16" placeholder="Your name" autocomplete="off" />
         <button type="submit" id="join-online">PLAY ONLINE</button>

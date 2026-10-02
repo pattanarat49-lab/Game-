@@ -13,26 +13,21 @@ import {
   ENEMY_SHOT_DAMAGE,
   ENEMY_SHOT_SPEED,
   EnemyKind,
+  HEROES,
+  HeroDef,
   INTERMISSION_TIME,
   LAVA_DPS,
   LAVA_MIN_RADIUS,
   LAVA_SHRINK_PER_SEC,
   LAVA_START_RADIUS,
-  PLAYER_MAX_HP,
   PLAYER_RADIUS,
-  PLAYER_SPEED,
   PlayerInput,
   RESPAWN_TIME,
-  SHOT_COOLDOWN,
-  SHOT_DAMAGE,
-  SHOT_SPEED,
-  VOLLEY_COOLDOWN,
-  VOLLEY_COUNT,
-  VOLLEY_SPREAD,
   WAVES,
   WAVE_COUNT,
   WORLD_H,
   WORLD_W,
+  heroOf,
   hitsRock,
   inLava,
   inputDirection,
@@ -42,9 +37,12 @@ import {
 export const TICK_MS = 1000 / 30;
 const HURT_IFRAMES = 0.5;
 const WAVE_CLEAR_HEAL = 0.3;
+const SNIPER_BURST = 3;
+const SNIPER_BURST_GAP = 0.15;
 
 export interface SimPlayer {
   name: string;
+  hero: string;
   x: number;
   y: number;
   aim: number;
@@ -53,10 +51,14 @@ export interface SimPlayer {
   dead: boolean;
   dashing: boolean;
   dashCooldown: number;
-  volleyCooldown: number;
+  skillCooldown: number;
   respawnIn: number;
   score: number;
   color: number;
+  /** Goes up by one on every basic attack, so clients can play the swing effect. */
+  attackSeq: number;
+  /** Goes up by one every time the skill is used. */
+  skillSeq: number;
 }
 
 export interface SimEnemy {
@@ -68,7 +70,10 @@ export interface SimEnemy {
   hitFlash: number;
 }
 
+export type BulletKind = "snipe" | "wave" | "enemy";
+
 export interface SimBullet {
+  kind: string;
   x: number;
   y: number;
   vx: number;
@@ -105,11 +110,13 @@ export interface SimFactory<P, E, B> {
 // Data that players do not need to see.
 interface PlayerBrain {
   input: PlayerInput;
-  shotTimer: number;
+  attackTimer: number;
   dashTimer: number;
   dashX: number;
   dashY: number;
   hurtTimer: number;
+  burstLeft: number;
+  burstTimer: number;
 }
 
 interface EnemyBrain {
@@ -117,9 +124,18 @@ interface EnemyBrain {
   burstAngle: number;
 }
 
+interface BulletBrain {
+  owner?: string;
+  damage: number;
+  pierceLeft: number;
+  life: number; // seconds left
+  hit: Set<string>;
+}
+
 export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBullet> {
   private brains = new Map<string, PlayerBrain>();
   private enemyBrains = new Map<string, EnemyBrain>();
+  private bulletBrains = new Map<string, BulletBrain>();
   private nextId = 1;
 
   constructor(
@@ -129,15 +145,26 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
     this.startIntermission(0);
   }
 
-  addPlayer(id: string, name: string): P {
+  addPlayer(id: string, name: string, hero: string): P {
+    const def = heroOf(hero);
     const player = this.make.player();
     player.name = name.slice(0, 16) || "Riftborn";
+    player.hero = hero in HEROES ? hero : "superman";
     player.color = this.state.players.size % 4;
     this.placeAtSpawn(player);
-    player.maxHp = PLAYER_MAX_HP;
-    player.hp = PLAYER_MAX_HP;
+    player.maxHp = def.maxHp;
+    player.hp = def.maxHp;
     this.state.players.set(id, player);
-    this.brains.set(id, { input: { ...EMPTY_INPUT }, shotTimer: 0, dashTimer: 0, dashX: 0, dashY: 0, hurtTimer: 0 });
+    this.brains.set(id, {
+      input: { ...EMPTY_INPUT },
+      attackTimer: 0,
+      dashTimer: 0,
+      dashX: 0,
+      dashY: 0,
+      hurtTimer: 0,
+      burstLeft: 0,
+      burstTimer: 0,
+    });
     return player;
   }
 
@@ -157,7 +184,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       aim: Number.isFinite(input.aim) ? Number(input.aim) : 0,
       shoot: !!input.shoot,
       dash: !!input.dash,
-      volley: !!input.volley,
+      skill: !!input.skill,
     };
   }
 
@@ -219,12 +246,14 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
     s.players.forEach((p, id) => {
       const brain = this.brains.get(id)!;
       const input = brain.input;
+      const hero = heroOf(p.hero);
       brain.hurtTimer = Math.max(0, brain.hurtTimer - dt);
+      brain.attackTimer = Math.max(0, brain.attackTimer - dt);
       p.dashCooldown = Math.max(0, p.dashCooldown - dt);
-      p.volleyCooldown = Math.max(0, p.volleyCooldown - dt);
-      brain.shotTimer = Math.max(0, brain.shotTimer - dt);
+      p.skillCooldown = Math.max(0, p.skillCooldown - dt);
 
       if (p.dead) {
+        brain.burstLeft = 0;
         p.respawnIn = Math.max(0, p.respawnIn - dt);
         if (p.respawnIn <= 0) {
           p.dead = false;
@@ -252,27 +281,74 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
         brain.dashTimer -= dt;
         moved = moveCircle(p.x, p.y, brain.dashX * DASH_SPEED * dt, brain.dashY * DASH_SPEED * dt, PLAYER_RADIUS);
       } else {
-        moved = moveCircle(p.x, p.y, dir.x * PLAYER_SPEED * dt, dir.y * PLAYER_SPEED * dt, PLAYER_RADIUS);
+        moved = moveCircle(p.x, p.y, dir.x * hero.speed * dt, dir.y * hero.speed * dt, PLAYER_RADIUS);
       }
       p.x = moved.x;
       p.y = moved.y;
       p.dashing = brain.dashTimer > 0;
 
-      // Shooting
-      if (input.shoot && brain.shotTimer <= 0) {
-        brain.shotTimer = SHOT_COOLDOWN;
-        this.spawnBullet(p.x, p.y, input.aim, SHOT_SPEED, false, id);
+      // Basic attack
+      if (input.shoot && brain.attackTimer <= 0) {
+        brain.attackTimer = hero.attackCooldown;
+        p.attackSeq++;
+        if (hero.attack === "rifle") {
+          this.spawnBullet("snipe", p.x, p.y, input.aim, hero.shotSpeed, { owner: id, damage: hero.damage, pierce: hero.pierce, life: hero.range / hero.shotSpeed });
+        } else {
+          this.sweep(id, p.x, p.y, input.aim, hero.range, hero.arc, hero.damage);
+        }
       }
-      if (input.volley && p.volleyCooldown <= 0) {
-        p.volleyCooldown = VOLLEY_COOLDOWN;
-        for (let i = 0; i < VOLLEY_COUNT; i++) {
-          const a = input.aim - VOLLEY_SPREAD / 2 + (VOLLEY_SPREAD * i) / (VOLLEY_COUNT - 1);
-          this.spawnBullet(p.x, p.y, a, SHOT_SPEED * 1.1, false, id);
+
+      // Skill
+      if (input.skill && p.skillCooldown <= 0) {
+        p.skillCooldown = hero.skill.cooldown;
+        p.skillSeq++;
+        this.useSkill(id, p, hero, brain);
+      }
+
+      // Sniper burst continues over a few ticks.
+      if (brain.burstLeft > 0) {
+        brain.burstTimer -= dt;
+        if (brain.burstTimer <= 0) {
+          brain.burstLeft--;
+          brain.burstTimer = SNIPER_BURST_GAP;
+          p.attackSeq++;
+          this.spawnBullet("snipe", p.x, p.y, input.aim, hero.shotSpeed, { owner: id, damage: hero.skill.damage, pierce: 99, life: hero.range / hero.shotSpeed });
         }
       }
 
       // Emberfall twist: the lava burns.
       if (inLava(p.x, p.y, s.lavaRadius)) this.damagePlayer(id, LAVA_DPS * dt, true);
+    });
+  }
+
+  private useSkill(id: string, p: P, hero: HeroDef, brain: PlayerBrain) {
+    if (hero.attack === "punch") {
+      // SMASH: ground pound that hits everything around you.
+      this.sweep(id, p.x, p.y, 0, hero.skill.radius, Math.PI * 2, hero.skill.damage);
+    } else if (hero.attack === "sword") {
+      // SKY SLASH: a flying sword wave that cuts through every enemy in its path.
+      const speed = 300;
+      this.spawnBullet("wave", p.x, p.y, p.aim, speed, { owner: id, damage: hero.skill.damage, pierce: 99, life: hero.skill.radius / speed });
+    } else {
+      // WHITE DEATH: three rapid piercing shots.
+      brain.burstLeft = SNIPER_BURST;
+      brain.burstTimer = 0;
+    }
+  }
+
+  /** Hit every enemy inside a slice of a circle (a punch, a sword swing, or a full circle). */
+  private sweep(owner: string, x: number, y: number, aim: number, range: number, arc: number, damage: number) {
+    this.state.enemies.forEach((e, eid) => {
+      const def = ENEMIES[e.kind as EnemyKind];
+      const dx = e.x - x;
+      const dy = e.y - y;
+      if (Math.hypot(dx, dy) > range + def.radius) return;
+      if (arc < Math.PI * 2) {
+        let diff = Math.atan2(dy, dx) - aim;
+        diff = Math.atan2(Math.sin(diff), Math.cos(diff));
+        if (Math.abs(diff) > arc / 2) return;
+      }
+      this.damageEnemy(eid, damage, owner);
     });
   }
 
@@ -320,6 +396,19 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
     const id = `e${this.nextId++}`;
     this.state.enemies.set(id, e);
     this.enemyBrains.set(id, { shootTimer: (def.shootEvery ?? 0) * Math.random() + 1, burstAngle: 0 });
+  }
+
+  private damageEnemy(eid: string, damage: number, owner?: string) {
+    const e = this.state.enemies.get(eid);
+    if (!e) return;
+    e.hp -= damage;
+    e.hitFlash = 0.1;
+    if (e.hp <= 0) {
+      this.state.enemies.delete(eid);
+      this.enemyBrains.delete(eid);
+      const killer = owner && this.state.players.get(owner);
+      if (killer) killer.score += ENEMIES[e.kind as EnemyKind].score;
+    }
   }
 
   /** More players means tougher enemies. */
@@ -371,15 +460,16 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
         if (brain.shootTimer <= 0) {
           brain.shootTimer = def.shootEvery;
           const aim = Math.atan2(dy, dx);
+          const shot = { damage: ENEMY_SHOT_DAMAGE, pierce: 0, life: 6 };
           if (e.kind === "warden") {
             // Rotating ring of fire plus a shot aimed at the target.
             brain.burstAngle += 0.25;
             for (let i = 0; i < 14; i++) {
-              this.spawnBullet(e.x, e.y, brain.burstAngle + (i * Math.PI * 2) / 14, ENEMY_SHOT_SPEED * 0.8, true);
+              this.spawnBullet("enemy", e.x, e.y, brain.burstAngle + (i * Math.PI * 2) / 14, ENEMY_SHOT_SPEED * 0.8, shot);
             }
-            for (const off of [-0.15, 0, 0.15]) this.spawnBullet(e.x, e.y, aim + off, ENEMY_SHOT_SPEED * 1.3, true);
+            for (const off of [-0.15, 0, 0.15]) this.spawnBullet("enemy", e.x, e.y, aim + off, ENEMY_SHOT_SPEED * 1.3, shot);
           } else {
-            this.spawnBullet(e.x, e.y, aim, ENEMY_SHOT_SPEED, true);
+            this.spawnBullet("enemy", e.x, e.y, aim, ENEMY_SHOT_SPEED, shot);
           }
         }
       }
@@ -388,32 +478,42 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
 
   // ------------------------------------------------------------- bullets
 
-  private bulletOwners = new Map<string, string>();
-
-  private spawnBullet(x: number, y: number, angle: number, speed: number, hostile: boolean, owner?: string) {
+  private spawnBullet(
+    kind: BulletKind,
+    x: number,
+    y: number,
+    angle: number,
+    speed: number,
+    opts: { owner?: string; damage: number; pierce: number; life: number },
+  ) {
     const b = this.make.bullet();
+    b.kind = kind;
     b.x = x;
     b.y = y;
     b.vx = Math.cos(angle) * speed;
     b.vy = Math.sin(angle) * speed;
-    b.hostile = hostile;
+    b.hostile = kind === "enemy";
     const id = `b${this.nextId++}`;
     this.state.bullets.set(id, b);
-    if (owner) this.bulletOwners.set(id, owner);
+    this.bulletBrains.set(id, { owner: opts.owner, damage: opts.damage, pierceLeft: opts.pierce, life: opts.life, hit: new Set() });
     return id;
   }
 
   private removeBullet(id: string) {
     this.state.bullets.delete(id);
-    this.bulletOwners.delete(id);
+    this.bulletBrains.delete(id);
   }
 
   private updateBullets(dt: number) {
     const s = this.state;
     s.bullets.forEach((b, id) => {
+      const brain = this.bulletBrains.get(id)!;
       b.x += b.vx * dt;
       b.y += b.vy * dt;
-      if (b.x < 0 || b.y < 0 || b.x > WORLD_W || b.y > WORLD_H || hitsRock(b.x, b.y)) {
+      brain.life -= dt;
+      // Sword waves fly over rocks; bullets do not.
+      const blocked = b.kind !== "wave" && hitsRock(b.x, b.y);
+      if (brain.life <= 0 || b.x < 0 || b.y < 0 || b.x > WORLD_W || b.y > WORLD_H || blocked) {
         this.removeBullet(id);
         return;
       }
@@ -422,27 +522,22 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
         s.players.forEach((p, pid) => {
           if (!s.bullets.has(id) || p.dead || p.dashing) return;
           if (Math.hypot(p.x - b.x, p.y - b.y) < PLAYER_RADIUS + 2) {
-            this.damagePlayer(pid, ENEMY_SHOT_DAMAGE);
+            this.damagePlayer(pid, brain.damage);
             this.removeBullet(id);
           }
         });
         return;
       }
 
+      const hitRadius = b.kind === "wave" ? 14 : 2;
       s.enemies.forEach((e, eid) => {
-        if (!s.bullets.has(id)) return;
+        if (!s.bullets.has(id) || brain.hit.has(eid)) return;
         const def = ENEMIES[e.kind as EnemyKind];
-        if (Math.hypot(e.x - b.x, e.y - b.y) < def.radius + 2) {
-          const owner = this.bulletOwners.get(id);
-          this.removeBullet(id);
-          e.hp -= SHOT_DAMAGE;
-          e.hitFlash = 0.1;
-          if (e.hp <= 0) {
-            s.enemies.delete(eid);
-            this.enemyBrains.delete(eid);
-            const killer = owner && s.players.get(owner);
-            if (killer) killer.score += def.score;
-          }
+        if (Math.hypot(e.x - b.x, e.y - b.y) < def.radius + hitRadius) {
+          brain.hit.add(eid);
+          this.damageEnemy(eid, brain.damage, brain.owner);
+          if (brain.pierceLeft <= 0) this.removeBullet(id);
+          else brain.pierceLeft--;
         }
       });
     });

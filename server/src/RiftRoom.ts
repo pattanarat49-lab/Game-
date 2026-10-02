@@ -18,9 +18,9 @@ export class RiftRoom extends Room<RiftState> {
     this.setSimulationInterval((deltaMs) => this.sim.update(Math.min(deltaMs, 100) / 1000), TICK_MS);
   }
 
-  onJoin(client: Client, options: { name?: string }) {
-    const player = this.sim.addPlayer(client.sessionId, String(options?.name || "Riftborn"));
-    console.log(`${player.name} entered Emberfall (${this.state.players.size}/${MAX_PLAYERS})`);
+  onJoin(client: Client, options: { name?: string; hero?: string }) {
+    const player = this.sim.addPlayer(client.sessionId, String(options?.name || "Riftborn"), String(options?.hero || ""));
+    console.log(`${player.name} (${player.hero}) entered Emberfall (${this.state.players.size}/${MAX_PLAYERS})`);
   }
 
   onLeave(client: Client) {
