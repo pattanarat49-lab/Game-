@@ -1,0 +1,16 @@
+{
+  "name": "riftborn",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Riftborn: a multiplayer pixel-art action RPG across the multiverse (prototype)",
+  "scripts": {
+    "install:all": "npm install && npm install --prefix server && npm install --prefix client",
+    "dev": "concurrently -n server,client -c red,cyan \"npm run dev --prefix server\" \"npm run dev --prefix client\"",
+    "build": "npm run build --prefix client",
+    "start": "npm run start --prefix server",
+    "typecheck": "npm run typecheck --prefix server && npm run typecheck --prefix client"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.0"
+  }
+}

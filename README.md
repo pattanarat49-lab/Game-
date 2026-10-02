@@ -1,1 +1,64 @@
-# Game-
+# Riftborn
+
+A multiplayer pixel-art action RPG set in a collapsing multiverse. This is the first playable prototype: **one dimension (Emberfall), one class (Gunslinger), up to 4 players in the browser.**
+
+Design doc: see `docs/game-design-foundation.md`.
+
+## What's in the prototype
+
+- **Emberfall**, a volcanic arena with basalt pillars
+- **Rule twist:** lava creeps in from the edges during each wave and burns anyone standing in it. It cools between waves.
+- **Gunslinger** class: shoot (left mouse), dash with invulnerability (Space), Volley spread shot (Q, 1 or right mouse)
+- **Enemies:** Cinderlings (fast), Magma Brutes (tanky), Ash Casters (ranged), and the **Pyre Warden** boss on wave 5
+- **Co-op for up to 4 players.** Enemies get tougher with more players. Fallen players respawn after 5 seconds.
+- **Server-authoritative multiplayer:** the server decides movement, hits and damage. The client predicts your own movement so it feels instant.
+
+## Run it
+
+You need [Node.js](https://nodejs.org/) 20 or newer.
+
+```bash
+npm run install:all   # installs root, server and client packages
+npm run dev           # starts the game server (port 2567) and the client (port 5173)
+```
+
+Open http://localhost:5173 in two browser tabs to play together. Friends on the same network can join with your computer's IP address, for example `http://192.168.1.20:5173`.
+
+### One-process mode (for hosting)
+
+```bash
+npm run build   # builds the client into client/dist
+npm start       # server hosts the game at http://localhost:2567
+```
+
+Set `PORT` to change the port. If the client is hosted somewhere else, build it with `VITE_SERVER_URL=wss://your-server` set.
+
+## Project layout
+
+```
+shared/game.ts            Game rules and tuning numbers used by both client and server
+server/src/RiftRoom.ts    The authoritative game loop: players, waves, enemies, bullets, lava
+server/src/schema.ts      State that is synced to every player
+server/src/index.ts       Server entry point (Colyseus + Express)
+client/src/art.ts         All pixel art, drawn as editable text grids
+client/src/scenes/        Phaser scenes: Boot (textures), Game (world), Hud (UI)
+client/index.html         Title screen
+```
+
+## Easy things to edit
+
+- **Balance:** every number (speeds, damage, cooldowns, waves, lava speed) is at the top of `shared/game.ts`.
+- **Waves:** the `WAVES` list in `shared/game.ts`.
+- **Pixel art:** change the letter grids in `client/src/art.ts`. Each letter is a color from the palette below the grid, and `.` is transparent. The four player coat colors are in `PLAYER_COATS`.
+- **Map pillars:** the `ROCKS` list in `shared/game.ts`.
+
+## Tech
+
+Phaser 3 + TypeScript + Vite on the client, Node + Colyseus 0.15 on the server.
+
+## Next steps
+
+- Real sprite sheets made in Aseprite, with walk and attack animations
+- The Nexus hub where players meet before entering rifts
+- A second dimension (Neon Verge) and a second class
+- Accounts and saved characters
