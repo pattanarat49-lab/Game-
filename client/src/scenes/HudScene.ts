@@ -58,7 +58,8 @@ export class HudScene extends Phaser.Scene {
       this.hpText.setText(`${me.name} (${heroOf(me.hero).name})  HP ${Math.ceil(me.hp)}/${me.maxHp}`);
       const dash = me.dashCooldown > 0 ? `${me.dashCooldown.toFixed(1)}s` : "READY";
       const hero = heroOf(me.hero);
-      const skill = me.skillCooldown > 0 ? `${me.skillCooldown.toFixed(1)}s` : "READY";
+      const noCooldown = hero.skill.cooldown < 0.2; // e.g. Ricardo's jab
+      const skill = noCooldown ? "NO COOLDOWN" : me.skillCooldown > 0 ? `${me.skillCooldown.toFixed(1)}s` : "READY";
       this.skills.setText(`DASH   ${dash}\n${hero.skill.name.padEnd(6)} ${skill}`);
       this.drawCooldown(220, 68, 1 - me.dashCooldown / DASH_COOLDOWN);
       this.drawCooldown(220, 84, 1 - me.skillCooldown / hero.skill.cooldown);

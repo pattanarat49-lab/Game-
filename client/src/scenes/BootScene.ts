@@ -2,10 +2,12 @@ import Phaser from "phaser";
 import { MAP_COLS, MAP_ROWS, ROCKS, TILE, WORLD_H, WORLD_W } from "../../../shared/game";
 import {
   BRUTE,
+  CALCIFER,
   CASTER,
   CINDERLING,
   ENEMY_SHOT,
   HERO_SPRITES,
+  MAGIC_ORB,
   RIFLE,
   SNIPE_SHOT,
   SPARK,
@@ -37,6 +39,8 @@ export class BootScene extends Phaser.Scene {
     this.addCanvas("rifle", renderPixelSprite(RIFLE));
     this.addCanvas("wave", renderPixelSprite(SWORD_WAVE));
     this.addCanvas("snipe", renderPixelSprite(SNIPE_SHOT));
+    this.addCanvas("magic", renderPixelSprite(MAGIC_ORB));
+    this.addCanvas("calcifer", renderPixelSprite(CALCIFER));
     this.addCanvas("cinderling", renderPixelSprite(CINDERLING));
     this.addCanvas("brute", renderPixelSprite(BRUTE));
     this.addCanvas("caster", renderPixelSprite(CASTER));

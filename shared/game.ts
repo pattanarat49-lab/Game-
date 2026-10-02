@@ -19,8 +19,9 @@ export const DASH_TIME = 0.15;
 export const DASH_COOLDOWN = 1.2;
 
 // Heroes. Every number here is safe to tweak for balance.
-export type HeroId = "superman" | "isekai" | "simo";
-export type AttackStyle = "punch" | "sword" | "rifle";
+export type HeroId = "superman" | "isekai" | "simo" | "killua" | "howl" | "ricardo";
+export type AttackStyle = "punch" | "sword" | "rifle" | "lightning" | "magic";
+export type SkillKind = "smash" | "wave" | "burst" | "storm" | "fireball" | "jab";
 
 export interface HeroDef {
   name: string;
@@ -31,15 +32,17 @@ export interface HeroDef {
   attack: AttackStyle;
   attackCooldown: number; // seconds between basic attacks
   damage: number;
-  range: number; // reach for punch/sword, bullet travel for rifle
+  range: number; // reach for punch/sword/lightning, travel distance for rifle/magic
   arc: number; // radians covered by a punch or sword swing
+  aoe: number; // blast radius for lightning strikes and magic explosions
   shotSpeed: number;
   pierce: number; // how many enemies one bullet can pass through
   skill: {
+    kind: SkillKind;
     name: string;
     cooldown: number;
     damage: number;
-    radius: number; // smash radius, or wave reach
+    radius: number; // area of effect, or reach for waves and jabs
   };
 }
 
@@ -55,9 +58,10 @@ export const HEROES: Record<HeroId, HeroDef> = {
     damage: 40,
     range: 22,
     arc: 1.6,
+    aoe: 0,
     shotSpeed: 0,
     pierce: 0,
-    skill: { name: "SMASH", cooldown: 5, damage: 60, radius: 70 },
+    skill: { kind: "smash", name: "SMASH", cooldown: 5, damage: 60, radius: 70 },
   },
   isekai: {
     name: "Isekai Hero",
@@ -70,9 +74,10 @@ export const HEROES: Record<HeroId, HeroDef> = {
     damage: 25,
     range: 42,
     arc: 2.4,
+    aoe: 0,
     shotSpeed: 0,
     pierce: 0,
-    skill: { name: "SKY SLASH", cooldown: 4, damage: 40, radius: 230 },
+    skill: { kind: "wave", name: "SKY SLASH", cooldown: 4, damage: 40, radius: 230 },
   },
   simo: {
     name: "Simo Hayha",
@@ -85,9 +90,59 @@ export const HEROES: Record<HeroId, HeroDef> = {
     damage: 85,
     range: 900,
     arc: 0,
+    aoe: 0,
     shotSpeed: 720,
     pierce: 3,
-    skill: { name: "WHITE DEATH", cooldown: 6, damage: 85, radius: 0 },
+    skill: { kind: "burst", name: "WHITE DEATH", cooldown: 6, damage: 85, radius: 0 },
+  },
+  killua: {
+    name: "Killua",
+    role: "Lightning assassin",
+    blurb: "Moves three times faster than anyone. Strikes call down lightning that hits an area.",
+    maxHp: 100,
+    speed: 320,
+    attack: "lightning",
+    attackCooldown: 0.5,
+    damage: 22,
+    range: 40,
+    arc: 0,
+    aoe: 26,
+    shotSpeed: 0,
+    pierce: 0,
+    skill: { kind: "storm", name: "THUNDERBOLT", cooldown: 5, damage: 50, radius: 95 },
+  },
+  howl: {
+    name: "Howl",
+    role: "Wizard",
+    blurb: "Long-range magic orbs that explode in a wide blast.",
+    maxHp: 100,
+    speed: 105,
+    attack: "magic",
+    attackCooldown: 0.8,
+    damage: 28,
+    range: 260,
+    arc: 0,
+    aoe: 42,
+    shotSpeed: 240,
+    pierce: 0,
+    skill: { kind: "fireball", name: "CALCIFER", cooldown: 6, damage: 70, radius: 90 },
+  },
+  ricardo: {
+    name: "Ricardo Martinez",
+    role: "Boxer",
+    blurb: "His jab has no cooldown, but his reach is very short.",
+    maxHp: 170,
+    speed: 115,
+    attack: "punch",
+    attackCooldown: 0.55,
+    damage: 45,
+    range: 16,
+    arc: 1.2,
+    aoe: 0,
+    shotSpeed: 0,
+    pierce: 0,
+    // A jab is limited only by how fast fists move, not by a cooldown.
+    skill: { kind: "jab", name: "JAB", cooldown: 0.12, damage: 11, radius: 16 },
   },
 };
 

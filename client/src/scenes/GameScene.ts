@@ -14,6 +14,7 @@ import {
   TILE,
   WORLD_H,
   WORLD_W,
+  HEROES,
   heroOf,
   inLava,
   inputDirection,
@@ -35,7 +36,7 @@ interface PlayerView {
 
 /** A short-lived swing, slash or shockwave drawn on top of the world. */
 interface Effect {
-  kind: "punch" | "sword" | "smash" | "muzzle";
+  kind: "punch" | "sword" | "smash" | "muzzle" | "bolt" | "storm" | "blast";
   x: number;
   y: number;
   aim: number;
@@ -46,6 +47,7 @@ interface Effect {
 }
 
 const WEAPON_TEXTURE: Record<string, string | undefined> = { isekai: "sword", simo: "rifle" };
+const BULLET_TEXTURE: Record<string, string> = { snipe: "snipe", wave: "wave", magic: "magic", fireball: "calcifer", enemy: "eshot" };
 const PLAYER_MARKERS = [0x3b7dd8, 0xd84b3b, 0x3bd87a, 0xc93bd8];
 
 interface EnemyView {
@@ -316,16 +318,28 @@ export class GameScene extends Phaser.Scene {
       if (hero.attack === "rifle") {
         this.effects.push({ kind: "muzzle", x, y, aim, range: 16, arc: 0, age: 0, life: 0.08 });
         if (p === this.room?.state.players.get(this.room.sessionId)) this.cameras.main.shake(60, 0.004);
+      } else if (hero.attack === "magic") {
+        this.effects.push({ kind: "muzzle", x, y, aim, range: 10, arc: 0, age: 0, life: 0.1 });
+      } else if (hero.attack === "lightning") {
+        const tx = x + Math.cos(aim) * hero.range;
+        const ty = y + 5 + Math.sin(aim) * hero.range;
+        this.effects.push({ kind: "bolt", x: tx, y: ty, aim, range: hero.aoe, arc: 0, age: 0, life: 0.22 });
       } else {
         this.effects.push({ kind: hero.attack, x, y, aim, range: hero.range, arc: hero.arc, age: 0, life: hero.attack === "punch" ? 0.14 : 0.18 });
       }
     }
     if (p.skillSeq !== view.skillSeq) {
       view.skillSeq = p.skillSeq;
-      if (hero.attack === "punch") {
-        this.effects.push({ kind: "smash", x, y: y + 5, aim, range: hero.skill.radius, arc: Math.PI * 2, age: 0, life: 0.35 });
+      const skill = hero.skill;
+      if (skill.kind === "smash") {
+        this.effects.push({ kind: "smash", x, y: y + 5, aim, range: skill.radius, arc: Math.PI * 2, age: 0, life: 0.35 });
         this.cameras.main.shake(200, 0.012);
         this.sparks.explode(24, x, y + 5);
+      } else if (skill.kind === "storm") {
+        this.effects.push({ kind: "storm", x, y: y + 5, aim, range: skill.radius, arc: 0, age: 0, life: 0.4 });
+        this.cameras.main.shake(150, 0.008);
+      } else if (skill.kind === "jab") {
+        this.effects.push({ kind: "punch", x, y, aim, range: skill.radius, arc: 1.0, age: 0, life: 0.08 });
       }
     }
   }
@@ -360,10 +374,43 @@ export class GameScene extends Phaser.Scene {
         g.strokeCircle(e.x, e.y, e.range * t);
         g.lineStyle(2, 0xd42020, 1 - t);
         g.strokeCircle(e.x, e.y, e.range * t * 0.7);
+      } else if (e.kind === "bolt") {
+        this.drawBolt(g, e.x, e.y, 1 - t);
+        g.lineStyle(2, 0x9fd8ff, 1 - t);
+        g.strokeCircle(e.x, e.y, e.range * (0.5 + 0.5 * t));
+      } else if (e.kind === "storm") {
+        g.lineStyle(3, 0x9fd8ff, 1 - t);
+        g.strokeCircle(e.x, e.y, e.range * t);
+        for (let i = 0; i < 6; i++) {
+          const a = (i / 6) * Math.PI * 2 + e.aim;
+          this.drawBolt(g, e.x + Math.cos(a) * e.range * 0.6, e.y + Math.sin(a) * e.range * 0.6, 1 - t);
+        }
+      } else if (e.kind === "blast") {
+        g.fillStyle(e.arc > 0 ? 0xff8a1f : 0xf4a6c4, 0.5 * (1 - t));
+        g.fillCircle(e.x, e.y, e.range * (0.4 + 0.6 * t));
+        g.lineStyle(2, e.arc > 0 ? 0xffd23f : 0xb4a0dc, 1 - t);
+        g.strokeCircle(e.x, e.y, e.range * (0.4 + 0.6 * t));
       } else if (e.kind === "muzzle") {
         g.fillStyle(0xffd23f, 1 - t);
         g.fillCircle(e.x + Math.cos(e.aim) * e.range, e.y + Math.sin(e.aim) * e.range, 4);
       }
+    }
+  }
+
+  /** A jagged lightning bolt falling from the sky onto (x, y). */
+  private drawBolt(g: Phaser.GameObjects.Graphics, x: number, y: number, alpha: number) {
+    for (const [width, color] of [[4, 0x4aa8ff], [2, 0xffffff]] as const) {
+      g.lineStyle(width, color, alpha);
+      g.beginPath();
+      let px = x + (Math.random() - 0.5) * 8;
+      let py = y - 70;
+      g.moveTo(px, py);
+      while (py < y) {
+        py = Math.min(y, py + 10);
+        px = py === y ? x : x + (Math.random() - 0.5) * 12;
+        g.lineTo(px, py);
+      }
+      g.strokePath();
     }
   }
 
@@ -376,7 +423,12 @@ export class GameScene extends Phaser.Scene {
     const hero = heroOf(me.hero);
     const x = this.predicted.x;
     const y = this.predicted.y - 5;
-    if (hero.attack === "rifle") {
+    if (hero.attack === "lightning") {
+      const tx = x + Math.cos(this.aim) * hero.range;
+      const ty = y + 5 + Math.sin(this.aim) * hero.range;
+      g.fillStyle(0x9fd8ff, 0.12).fillCircle(tx, ty, hero.aoe);
+      g.lineStyle(1, 0x9fd8ff, 0.4).strokeCircle(tx, ty, hero.aoe);
+    } else if (hero.attack === "rifle" || hero.attack === "magic") {
       for (let d = 14; d < 150; d += 10) {
         g.fillStyle(0xffffff, 0.35 * (1 - d / 150));
         g.fillRect(x + Math.cos(this.aim) * d - 1, y + Math.sin(this.aim) * d - 1, 2, 2);
@@ -444,9 +496,11 @@ export class GameScene extends Phaser.Scene {
       seen.add(id);
       let sprite = this.bullets.get(id);
       if (!sprite) {
-        const texture = b.hostile ? "eshot" : b.kind === "wave" ? "wave" : "snipe";
-        sprite = this.add.image(b.x, b.y, texture).setDepth(900).setRotation(Math.atan2(b.vy, b.vx));
+        const texture = BULLET_TEXTURE[b.kind] ?? "snipe";
+        sprite = this.add.image(b.x, b.y, texture).setDepth(900).setData("kind", b.kind);
+        if (b.kind === "wave" || b.kind === "snipe") sprite.setRotation(Math.atan2(b.vy, b.vx));
         if (b.kind === "wave") sprite.setScale(1.6);
+        if (b.kind === "fireball") sprite.setScale(1.6);
         this.bullets.set(id, sprite);
       }
       // Bullets fly in straight lines, so extrapolate locally and drift toward the server.
@@ -457,6 +511,13 @@ export class GameScene extends Phaser.Scene {
     });
     for (const [id, sprite] of this.bullets) {
       if (seen.has(id)) continue;
+      const kind = sprite.getData("kind");
+      if (kind === "magic" || kind === "fireball") {
+        const big = kind === "fireball";
+        const radius = big ? HEROES.howl.skill.radius : HEROES.howl.aoe;
+        this.effects.push({ kind: "blast", x: sprite.x, y: sprite.y, aim: 0, range: radius, arc: big ? 1 : 0, age: 0, life: big ? 0.45 : 0.3 });
+        if (big) this.cameras.main.shake(180, 0.01);
+      }
       sprite.destroy();
       this.bullets.delete(id);
     }

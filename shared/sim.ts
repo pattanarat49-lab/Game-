@@ -70,7 +70,7 @@ export interface SimEnemy {
   hitFlash: number;
 }
 
-export type BulletKind = "snipe" | "wave" | "enemy";
+export type BulletKind = "snipe" | "wave" | "magic" | "fireball" | "enemy";
 
 export interface SimBullet {
   kind: string;
@@ -130,6 +130,7 @@ interface BulletBrain {
   pierceLeft: number;
   life: number; // seconds left
   hit: Set<string>;
+  blast: number; // explosion radius when it hits or runs out (0 = no explosion)
 }
 
 export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBullet> {
@@ -293,6 +294,13 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
         p.attackSeq++;
         if (hero.attack === "rifle") {
           this.spawnBullet("snipe", p.x, p.y, input.aim, hero.shotSpeed, { owner: id, damage: hero.damage, pierce: hero.pierce, life: hero.range / hero.shotSpeed });
+        } else if (hero.attack === "magic") {
+          this.spawnBullet("magic", p.x, p.y, input.aim, hero.shotSpeed, { owner: id, damage: hero.damage, pierce: 0, life: hero.range / hero.shotSpeed, blast: hero.aoe });
+        } else if (hero.attack === "lightning") {
+          // Lightning strikes the ground a short way ahead and hits everything nearby.
+          const tx = p.x + Math.cos(input.aim) * hero.range;
+          const ty = p.y + Math.sin(input.aim) * hero.range;
+          this.sweep(id, tx, ty, 0, hero.aoe, Math.PI * 2, hero.damage);
         } else {
           this.sweep(id, p.x, p.y, input.aim, hero.range, hero.arc, hero.damage);
         }
@@ -322,20 +330,33 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
   }
 
   private useSkill(id: string, p: P, hero: HeroDef, brain: PlayerBrain) {
-    if (hero.attack === "punch") {
-      // SMASH: ground pound that hits everything around you.
-      this.sweep(id, p.x, p.y, 0, hero.skill.radius, Math.PI * 2, hero.skill.damage);
-    } else if (hero.attack === "sword") {
-      // SKY SLASH: a flying sword wave that cuts through every enemy in its path.
-      const speed = 300;
-      this.spawnBullet("wave", p.x, p.y, p.aim, speed, { owner: id, damage: hero.skill.damage, pierce: 99, life: hero.skill.radius / speed });
-    } else {
-      // WHITE DEATH: three rapid piercing shots.
-      brain.burstLeft = SNIPER_BURST;
-      brain.burstTimer = 0;
+    const skill = hero.skill;
+    switch (skill.kind) {
+      case "smash": // ground pound that hits everything around you
+      case "storm": // lightning rains on everything around you
+        this.sweep(id, p.x, p.y, 0, skill.radius, Math.PI * 2, skill.damage);
+        break;
+      case "wave": {
+        // a flying sword wave that cuts through every enemy in its path
+        const speed = 300;
+        this.spawnBullet("wave", p.x, p.y, p.aim, speed, { owner: id, damage: skill.damage, pierce: 99, life: skill.radius / speed });
+        break;
+      }
+      case "burst": // three rapid piercing shots
+        brain.burstLeft = SNIPER_BURST;
+        brain.burstTimer = 0;
+        break;
+      case "fireball": {
+        // a slow, big fireball with a huge explosion
+        const speed = 170;
+        this.spawnBullet("fireball", p.x, p.y, p.aim, speed, { owner: id, damage: skill.damage, pierce: 0, life: hero.range / speed, blast: skill.radius });
+        break;
+      }
+      case "jab": // a quick, short punch
+        this.sweep(id, p.x, p.y, p.aim, skill.radius, 1.0, skill.damage);
+        break;
     }
   }
-
   /** Hit every enemy inside a slice of a circle (a punch, a sword swing, or a full circle). */
   private sweep(owner: string, x: number, y: number, aim: number, range: number, arc: number, damage: number) {
     this.state.enemies.forEach((e, eid) => {
@@ -484,7 +505,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
     y: number,
     angle: number,
     speed: number,
-    opts: { owner?: string; damage: number; pierce: number; life: number },
+    opts: { owner?: string; damage: number; pierce: number; life: number; blast?: number },
   ) {
     const b = this.make.bullet();
     b.kind = kind;
@@ -495,7 +516,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
     b.hostile = kind === "enemy";
     const id = `b${this.nextId++}`;
     this.state.bullets.set(id, b);
-    this.bulletBrains.set(id, { owner: opts.owner, damage: opts.damage, pierceLeft: opts.pierce, life: opts.life, hit: new Set() });
+    this.bulletBrains.set(id, { owner: opts.owner, damage: opts.damage, pierceLeft: opts.pierce, life: opts.life, hit: new Set(), blast: opts.blast ?? 0 });
     return id;
   }
 
@@ -514,6 +535,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       // Sword waves fly over rocks; bullets do not.
       const blocked = b.kind !== "wave" && hitsRock(b.x, b.y);
       if (brain.life <= 0 || b.x < 0 || b.y < 0 || b.x > WORLD_W || b.y > WORLD_H || blocked) {
+        if (brain.blast > 0) this.sweep(brain.owner ?? "", b.x, b.y, 0, brain.blast, Math.PI * 2, brain.damage);
         this.removeBullet(id);
         return;
       }
@@ -529,11 +551,17 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
         return;
       }
 
-      const hitRadius = b.kind === "wave" ? 14 : 2;
+      const hitRadius = b.kind === "wave" ? 14 : b.kind === "fireball" ? 8 : 2;
       s.enemies.forEach((e, eid) => {
         if (!s.bullets.has(id) || brain.hit.has(eid)) return;
         const def = ENEMIES[e.kind as EnemyKind];
         if (Math.hypot(e.x - b.x, e.y - b.y) < def.radius + hitRadius) {
+          if (brain.blast > 0) {
+            // Magic explodes on the first enemy it touches.
+            this.sweep(brain.owner ?? "", b.x, b.y, 0, brain.blast, Math.PI * 2, brain.damage);
+            this.removeBullet(id);
+            return;
+          }
           brain.hit.add(eid);
           this.damageEnemy(eid, brain.damage, brain.owner);
           if (brain.pierceLeft <= 0) this.removeBullet(id);

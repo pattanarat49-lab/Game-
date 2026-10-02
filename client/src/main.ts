@@ -29,7 +29,7 @@ function buildHeroPicker() {
     card.className = "hero";
     card.id = `hero-${id}`;
     card.setAttribute("aria-pressed", String(id === selectedHero));
-    const reach = hero.attack === "rifle" ? 1 : hero.range / 60;
+    const reach = Math.min(1, (hero.range + hero.aoe) / 600 + 0.15);
     card.innerHTML = `
       <span class="name">${hero.name}</span>
       <span class="role">${hero.role}</span>
@@ -38,7 +38,8 @@ function buildHeroPicker() {
         <span>HP</span>${bars(hero.maxHp / 300)}
         <span>DAMAGE</span>${bars(hero.damage / 90)}
         <span>RANGE</span>${bars(reach)}
-        <span>SPEED</span>${bars(1 / hero.attackCooldown / 2.5)}
+        <span>ATK SPEED</span>${bars(1 / hero.attackCooldown / 2.5)}
+        <span>MOVE</span>${bars(hero.speed / 320)}
       </div>
       <span class="blurb">${hero.blurb}</span>`;
     card.prepend(renderPixelSprite(HERO_SPRITES[id]));
