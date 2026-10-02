@@ -16,6 +16,7 @@ export class LocalRoom {
     wave: 0,
     phaseTimer: 0,
     lavaRadius: 0,
+    winner: "",
   };
   private sim: RiftSim<SimPlayer, SimEnemy, SimBullet>;
   private last = performance.now();

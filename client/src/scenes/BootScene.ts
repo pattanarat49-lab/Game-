@@ -58,6 +58,16 @@ const BOSS_THEME: GroundTheme = {
   pillar: ["#15191e", "#4d5661", "#6b7682", "#7fd0ff"],
 };
 
+// The PvP Arena: a sandstone colosseum floor.
+const ARENA_THEME: GroundTheme = {
+  seed: 77,
+  shades: ["#4a3b2c", "#4f3f2f", "#544332", "#4c3d2e"],
+  pebbles: ["#5f4d3a", "#3a2e22"],
+  cracks: ["#30261c", "#6b5842"],
+  crackChance: 0.06,
+  pillar: ["#2a2018", "#8a7556", "#a89070", "#ffd23f"],
+};
+
 export class BootScene extends Phaser.Scene {
   constructor() {
     super("Boot");
@@ -79,6 +89,7 @@ export class BootScene extends Phaser.Scene {
     this.addCanvas("spark", renderPixelSprite(SPARK));
     this.addCanvas("ground_lava", this.drawGround(LAVA_THEME));
     this.addCanvas("ground_boss", this.drawGround(BOSS_THEME));
+    this.addCanvas("ground_pvp", this.drawGround(ARENA_THEME));
     this.addCanvas("godzilla", renderPixelSprite(GODZILLA));
     this.addCanvas("lava", this.drawLavaTiles());
 

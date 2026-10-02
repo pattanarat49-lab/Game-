@@ -21,12 +21,27 @@ if (!STAGE_IDS.includes(selectedStage)) selectedStage = "lava";
 buildStagePicker();
 buildHeroPicker();
 
+/** Two heroes facing each other, for the PvP Arena card. */
+function versus(): HTMLCanvasElement {
+  const canvas = document.createElement("canvas");
+  canvas.width = 40;
+  canvas.height = 18;
+  const ctx = canvas.getContext("2d")!;
+  ctx.drawImage(renderPixelSprite(HERO_SPRITES.isekai), 0, 0);
+  ctx.save();
+  ctx.scale(-1, 1);
+  ctx.drawImage(renderPixelSprite(HERO_SPRITES.killua), -40, 0);
+  ctx.restore();
+  return canvas;
+}
+
 /** Stage cards: a tiny preview of the floor with that stage's boss on it. */
 function buildStagePicker() {
   const container = document.getElementById("stages")!;
   const previews: Record<StageId, { floor: string[]; boss: HTMLCanvasElement }> = {
     lava: { floor: ["#2b2026", "#e5501b", "#ff8a1f"], boss: renderPixelSprite(WARDEN) },
     boss: { floor: ["#2a2f36", "#31373f", "#4a5562"], boss: renderPixelSprite(GODZILLA) },
+    pvp: { floor: ["#4a3b2c", "#544332", "#6b5842"], boss: versus() },
   };
   for (const id of STAGE_IDS) {
     const stage = STAGES[id];
@@ -46,7 +61,7 @@ function buildStagePicker() {
       for (let x = 0; x < 48; x += 4) {
         // Lava creeps in from the edges; the boss room is plain concrete.
         const edge = id === "lava" && (x < 8 || x > 36 || y < 4 || y > 24);
-        ctx.fillStyle = edge ? floor[1 + ((x + y) % 8 === 0 ? 1 : 0)] : floor[(x * 7 + y * 3) % 3 === 0 && id === "boss" ? 1 : 0];
+        ctx.fillStyle = edge ? floor[1 + ((x + y) % 8 === 0 ? 1 : 0)] : floor[(x * 7 + y * 3) % 3 === 0 && id !== "lava" ? 1 : 0];
         ctx.fillRect(x, y, 4, 4);
       }
     }
@@ -103,6 +118,12 @@ form.addEventListener("submit", async (event) => {
   event.preventDefault();
   const submitter = (event as SubmitEvent).submitter as HTMLButtonElement | null;
   const solo = soloOnly || submitter?.id === "join-solo";
+  if (solo && selectedStage === "pvp") {
+    errorText.textContent = soloOnly
+      ? "PvP needs other players. Play it online at riftborn-s7tf.onrender.com"
+      : "PvP needs other players. Press PLAY ONLINE.";
+    return;
+  }
   const name = nameInput.value.trim().slice(0, 16) || "Riftborn";
   localStorageSet("riftborn-name", name);
   errorText.textContent = "";

@@ -272,7 +272,7 @@ export function inLava(x: number, y: number, lavaRadius: number): boolean {
 }
 
 // Stages
-export type StageId = "lava" | "boss";
+export type StageId = "lava" | "boss" | "pvp";
 
 export interface StageDef {
   name: string;
@@ -282,6 +282,7 @@ export interface StageDef {
 export const STAGES: Record<StageId, StageDef> = {
   lava: { name: "Lava Stage", blurb: "Survive 4 waves while lava creeps in, then slay the Pyre Warden." },
   boss: { name: "Boss Room", blurb: "No waves. Fight Godzilla straight away. Dodge the atomic beam!" },
+  pvp: { name: "PvP Arena", blurb: "Players fight each other. First to 3 kills wins. Online only." },
 };
 
 export const STAGE_IDS = Object.keys(STAGES) as StageId[];
@@ -299,3 +300,8 @@ export const BEAM_WIDTH = 16;
 export const BEAM_TURN_SPEED = 0.45; // radians per second while firing
 export const BEAM_DAMAGE = 20; // per hit; players get a short invulnerability after each hit
 export const BOSS_INTRO_TIME = 4;
+
+// PvP Arena
+export const PVP_KILLS_TO_WIN = 3;
+export const PVP_DAMAGE_SCALE = 0.6; // player-vs-player hits are softened so fights last a few seconds
+export const PVP_COUNTDOWN = 3;

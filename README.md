@@ -8,6 +8,7 @@ Design doc: see `docs/game-design-foundation.md`.
 
 - **Stage select:**
   - **Lava Stage:** four waves while lava creeps in from the edges, then the Pyre Warden boss.
+  - **PvP Arena (online only):** players fight each other. First to 3 kills wins the round, then a new round starts. Player-vs-player hits deal 60% damage (`PVP_DAMAGE_SCALE`).
   - **Boss Room:** no waves. Fight Godzilla straight away. It fires an atomic beam after a red warning line, so move out of the line. Between beams it spits fans of fireballs.
 
 - **Emberfall**, a volcanic arena with basalt pillars

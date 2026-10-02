@@ -28,6 +28,9 @@ import {
   BEAM_TURN_SPEED,
   BEAM_WIDTH,
   BOSS_INTRO_TIME,
+  PVP_COUNTDOWN,
+  PVP_DAMAGE_SCALE,
+  PVP_KILLS_TO_WIN,
   StageId,
   PLAYER_RADIUS,
   PlayerInput,
@@ -112,6 +115,8 @@ export interface SimState<P extends SimPlayer, E extends SimEnemy, B extends Sim
   wave: number;
   phaseTimer: number;
   lavaRadius: number;
+  /** PvP Arena: name of the player who won the round. */
+  winner: string;
 }
 
 export interface SimFactory<P, E, B> {
@@ -211,6 +216,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
     const s = this.state;
 
     if (s.stage === "boss") this.updateBossRoom(dt);
+    else if (s.stage === "pvp") this.updatePvp(dt);
     else if (s.phase === "intermission") {
       s.phaseTimer -= dt;
       s.lavaRadius = Math.min(LAVA_START_RADIUS, s.lavaRadius + LAVA_SHRINK_PER_SEC * 6 * dt);
@@ -243,14 +249,36 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
     const s = this.state;
     s.phase = "intermission";
     s.wave = wave;
-    if (s.stage === "boss") {
-      // No lava and no waves in the boss room.
-      s.phaseTimer = BOSS_INTRO_TIME;
+    if (s.stage === "boss" || s.stage === "pvp") {
+      // No lava and no waves in the boss room or the arena.
+      s.phaseTimer = s.stage === "pvp" ? PVP_COUNTDOWN : BOSS_INTRO_TIME;
       s.lavaRadius = 5000;
+      s.winner = "";
       return;
     }
     s.phaseTimer = INTERMISSION_TIME;
     if (wave === 0) s.lavaRadius = LAVA_START_RADIUS;
+  }
+
+  /** PvP Arena: a countdown, then free-for-all until someone reaches the kill target. */
+  private updatePvp(dt: number) {
+    const s = this.state;
+    if (s.phase === "intermission") {
+      s.phaseTimer -= dt;
+      if (s.phaseTimer <= 0) s.phase = "fight";
+    } else if (s.phase === "victory") {
+      s.phaseTimer -= dt;
+      if (s.phaseTimer <= 0) {
+        // New round: reset kills and put everyone back at full health.
+        s.players.forEach((p) => {
+          p.score = 0;
+          p.dead = false;
+          p.hp = p.maxHp;
+          this.placeAtSpawn(p);
+        });
+        this.startIntermission(0);
+      }
+    }
   }
 
   /** Boss room: a short intro, then Godzilla; beat it to win. */
@@ -418,9 +446,27 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       }
       this.damageEnemy(eid, damage, owner);
     });
+    if (!this.pvpLive()) return;
+    this.state.players.forEach((v, vid) => {
+      if (vid === owner || v.dead) return;
+      const dx = v.x - x;
+      const dy = v.y - y;
+      if (Math.hypot(dx, dy) > range + PLAYER_RADIUS) return;
+      if (arc < Math.PI * 2) {
+        let diff = Math.atan2(dy, dx) - aim;
+        diff = Math.atan2(Math.sin(diff), Math.cos(diff));
+        if (Math.abs(diff) > arc / 2) return;
+      }
+      this.damagePlayer(vid, damage * PVP_DAMAGE_SCALE, true, owner);
+    });
   }
 
-  private damagePlayer(id: string, amount: number, ignoreIframes = false) {
+  /** True while players can hurt each other. */
+  private pvpLive() {
+    return this.state.stage === "pvp" && this.state.phase === "fight";
+  }
+
+  private damagePlayer(id: string, amount: number, ignoreIframes = false, attacker?: string) {
     const p = this.state.players.get(id);
     const brain = this.brains.get(id);
     if (!p || !brain || p.dead || p.dashing) return;
@@ -432,13 +478,25 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
     if (p.hp <= 0) {
       p.dead = true;
       p.respawnIn = RESPAWN_TIME;
+      const killer = attacker && attacker !== id ? this.state.players.get(attacker) : undefined;
+      if (killer && this.pvpLive()) {
+        killer.score++;
+        if (killer.score >= PVP_KILLS_TO_WIN) {
+          this.state.phase = "victory";
+          this.state.phaseTimer = 8;
+          this.state.winner = killer.name;
+        }
+      }
     }
   }
 
   private placeAtSpawn(p: P) {
     const a = Math.random() * Math.PI * 2;
-    p.x = CENTER_X + Math.cos(a) * 30;
-    p.y = CENTER_Y + Math.sin(a) * 30;
+    // In the arena, spread players out so nobody spawns on top of an enemy player.
+    const r = this.state.stage === "pvp" ? 120 + Math.random() * 160 : 30;
+    const spot = moveCircle(CENTER_X + Math.cos(a) * r, CENTER_Y + Math.sin(a) * r, 0, 0, PLAYER_RADIUS);
+    p.x = spot.x;
+    p.y = spot.y;
   }
 
   // ------------------------------------------------------------- enemies
@@ -649,6 +707,22 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       }
 
       const hitRadius = b.kind === "wave" ? 14 : b.kind === "fireball" ? 8 : 2;
+      if (this.pvpLive()) {
+        s.players.forEach((v, vid) => {
+          if (!s.bullets.has(id) || vid === brain.owner || v.dead || brain.hit.has(vid)) return;
+          if (Math.hypot(v.x - b.x, v.y - b.y) >= PLAYER_RADIUS + hitRadius) return;
+          if (brain.blast > 0) {
+            this.sweep(brain.owner ?? "", b.x, b.y, 0, brain.blast, Math.PI * 2, brain.damage);
+            this.removeBullet(id);
+            return;
+          }
+          brain.hit.add(vid);
+          this.damagePlayer(vid, brain.damage * PVP_DAMAGE_SCALE, true, brain.owner);
+          if (brain.pierceLeft <= 0) this.removeBullet(id);
+          else brain.pierceLeft--;
+        });
+        if (!s.bullets.has(id)) return;
+      }
       s.enemies.forEach((e, eid) => {
         if (!s.bullets.has(id) || brain.hit.has(eid)) return;
         const def = ENEMIES[e.kind as EnemyKind];

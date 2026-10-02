@@ -1,5 +1,5 @@
 import Phaser from "phaser";
-import { DASH_COOLDOWN, WAVE_COUNT, heroOf } from "../../../shared/game";
+import { DASH_COOLDOWN, PVP_KILLS_TO_WIN, WAVE_COUNT, heroOf } from "../../../shared/game";
 import { PLAYER_COATS } from "../art";
 import type { GameScene } from "./GameScene";
 import { TouchControls, isTouchDevice } from "../touch";
@@ -68,7 +68,13 @@ export class HudScene extends Phaser.Scene {
 
     const waveLabel = state.wave >= WAVE_COUNT ? "BOSS" : `${state.wave}/${WAVE_COUNT}`;
     let banner = "";
-    if (state.stage === "boss") {
+    if (state.stage === "pvp") {
+      this.waveText.setText(`PVP ARENA  FIRST TO ${PVP_KILLS_TO_WIN} KILLS`);
+      if (state.phase === "victory") banner = `${state.winner} WINS!\nNext round in ${Math.ceil(state.phaseTimer)}`;
+      else if (me?.dead) banner = `YOU FELL\nRespawning in ${Math.ceil(me.respawnIn)}`;
+      else if (state.phase === "intermission") banner = `FIGHT!\nin ${Math.ceil(state.phaseTimer)}`;
+      else if (state.players.size < 2) banner = "Waiting for another player...\nShare the link with a friend";
+    } else if (state.stage === "boss") {
       // Boss room: a big health bar for Godzilla instead of a wave counter.
       this.waveText.setText("BOSS ROOM  GODZILLA");
       state.enemies.forEach((e: any) => {
@@ -96,7 +102,7 @@ export class HudScene extends Phaser.Scene {
     const rows: string[] = [];
     state.players.forEach((p: any, id: string) => {
       const marker = id === room!.sessionId ? ">" : " ";
-      rows.push(`${marker}${p.name}  ${p.score}`);
+      rows.push(`${marker}${p.name}  ${p.score}${state.stage === "pvp" ? " KO" : ""}`);
     });
     this.scores.setText(`RIFTBORN ${state.players.size}/4\n${rows.join("\n")}`);
     let i = 0;

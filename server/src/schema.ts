@@ -50,4 +50,5 @@ export class RiftState extends Schema {
   @type("uint8") wave = 0;
   @type("number") phaseTimer = 0;
   @type("number") lavaRadius = 0;
+  @type("string") winner = "";
 }
