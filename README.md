@@ -24,6 +24,18 @@ npm run dev           # starts the game server (port 2567) and the client (port 
 
 Open http://localhost:5173 in two browser tabs to play together. Friends on the same network can join with your computer's IP address, for example `http://192.168.1.20:5173`.
 
+### Play on your phone
+
+The game works on phones and tablets with touch controls:
+
+- **Left thumb:** touch anywhere on the left half of the screen and drag to move.
+- **Right thumb:** touch anywhere on the right half and drag to aim. You shoot automatically while aiming.
+- **DASH** and **VOLLEY** buttons sit in the bottom-right corner.
+
+Turn the phone sideways. On Android the game goes fullscreen and locks to landscape automatically. You can also use "Add to Home Screen" to launch it like an app.
+
+To try it, run `npm run dev` on your computer, connect your phone to the same Wi-Fi, and open `http://<your-computer-ip>:5173` on the phone. To play from anywhere, host the server online (see below).
+
 ### One-process mode (for hosting)
 
 ```bash
@@ -41,6 +53,7 @@ server/src/RiftRoom.ts    The authoritative game loop: players, waves, enemies, 
 server/src/schema.ts      State that is synced to every player
 server/src/index.ts       Server entry point (Colyseus + Express)
 client/src/art.ts         All pixel art, drawn as editable text grids
+client/src/touch.ts       Touch controls for phones (joysticks and buttons)
 client/src/scenes/        Phaser scenes: Boot (textures), Game (world), Hud (UI)
 client/index.html         Title screen
 ```

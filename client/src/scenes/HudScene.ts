@@ -2,6 +2,7 @@ import Phaser from "phaser";
 import { DASH_COOLDOWN, VOLLEY_COOLDOWN, WAVE_COUNT } from "../../../shared/game";
 import { PLAYER_COATS } from "../art";
 import type { GameScene } from "./GameScene";
+import { TouchControls, isTouchDevice } from "../touch";
 
 const FONT = { fontFamily: '"Press Start 2P", monospace', fontSize: "12px", color: "#ffffff" };
 
@@ -12,6 +13,7 @@ export class HudScene extends Phaser.Scene {
   private banner!: Phaser.GameObjects.Text;
   private scores!: Phaser.GameObjects.Text;
   private skills!: Phaser.GameObjects.Text;
+  touch?: TouchControls;
 
   constructor() {
     super("Hud");
@@ -26,6 +28,10 @@ export class HudScene extends Phaser.Scene {
       .text(this.scale.width / 2, 120, "", { ...FONT, fontSize: "20px", align: "center", stroke: "#000", strokeThickness: 4 })
       .setOrigin(0.5);
     this.scores = this.add.text(this.scale.width - 20, 16, "", { ...FONT, fontSize: "10px", align: "right", lineSpacing: 6 }).setOrigin(1, 0);
+    if (isTouchDevice()) {
+      this.touch = new TouchControls(this);
+      return;
+    }
     this.add
       .text(20, this.scale.height - 20, "WASD move  MOUSE aim/shoot  SPACE dash  Q/RMB volley", {
         ...FONT,
@@ -54,6 +60,7 @@ export class HudScene extends Phaser.Scene {
       this.skills.setText(`DASH   ${dash}\nVOLLEY ${volley}`);
       this.drawCooldown(150, 68, 1 - me.dashCooldown / DASH_COOLDOWN);
       this.drawCooldown(150, 84, 1 - me.volleyCooldown / VOLLEY_COOLDOWN);
+      this.touch?.draw(1 - me.volleyCooldown / VOLLEY_COOLDOWN, 1 - me.dashCooldown / DASH_COOLDOWN);
     }
 
     const waveLabel = state.wave >= WAVE_COUNT ? "BOSS" : `${state.wave}/${WAVE_COUNT}`;

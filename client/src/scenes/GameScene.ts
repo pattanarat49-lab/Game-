@@ -19,6 +19,7 @@ import {
   inputDirection,
   moveCircle,
 } from "../../../shared/game";
+import type { HudScene } from "./HudScene";
 
 interface PlayerView {
   body: Phaser.GameObjects.Image;
@@ -60,6 +61,7 @@ export class GameScene extends Phaser.Scene {
   private sendTimer = 0;
   private lastSent = "";
   private cameraTarget!: Phaser.GameObjects.Zone;
+  private aim = 0;
 
   constructor() {
     super("Game");
@@ -125,21 +127,38 @@ export class GameScene extends Phaser.Scene {
   // --------------------------------------------------------------- input
 
   private readInput(): PlayerInput {
-    const k = this.keys;
     const me = this.room?.state.players.get(this.room.sessionId);
+    const alive = !!me && !me.dead;
+    const touch = (this.scene.get("Hud") as HudScene | undefined)?.touch;
+
+    if (touch) {
+      this.aim = touch.aimAngle;
+      const dir = touch.directions;
+      return {
+        left: alive && dir.left,
+        right: alive && dir.right,
+        up: alive && dir.up,
+        down: alive && dir.down,
+        aim: Math.round(this.aim * 1000) / 1000,
+        shoot: alive && touch.shooting,
+        dash: alive && touch.dashing,
+        volley: alive && touch.volleying,
+      };
+    }
+
+    const k = this.keys;
     const pointer = this.input.activePointer;
     pointer.updateWorldPoint(this.cameras.main);
-    const aim = Math.atan2(pointer.worldY - this.predicted.y, pointer.worldX - this.predicted.x);
-    const alive = me && !me.dead;
+    this.aim = Math.atan2(pointer.worldY - this.predicted.y, pointer.worldX - this.predicted.x);
     return {
-      left: !!alive && (k.A.isDown || k.LEFT.isDown),
-      right: !!alive && (k.D.isDown || k.RIGHT.isDown),
-      up: !!alive && (k.W.isDown || k.UP.isDown),
-      down: !!alive && (k.S.isDown || k.DOWN.isDown),
-      aim: Math.round(aim * 1000) / 1000,
-      shoot: !!alive && pointer.leftButtonDown(),
-      dash: !!alive && k.SPACE.isDown,
-      volley: !!alive && (k.Q.isDown || k.ONE.isDown || pointer.rightButtonDown()),
+      left: alive && (k.A.isDown || k.LEFT.isDown),
+      right: alive && (k.D.isDown || k.RIGHT.isDown),
+      up: alive && (k.W.isDown || k.UP.isDown),
+      down: alive && (k.S.isDown || k.DOWN.isDown),
+      aim: Math.round(this.aim * 1000) / 1000,
+      shoot: alive && pointer.leftButtonDown(),
+      dash: alive && k.SPACE.isDown,
+      volley: alive && (k.Q.isDown || k.ONE.isDown || pointer.rightButtonDown()),
     };
   }
 
@@ -207,7 +226,7 @@ export class GameScene extends Phaser.Scene {
       else body.setPosition(body.x + (tx - body.x) * 0.3, body.y + (ty - body.y) * 0.3);
 
       // Walk bob and facing
-      const aim = isMe ? this.readAimForMe() : p.aim;
+      const aim = isMe ? this.aim : p.aim;
       body.setFlipX(Math.cos(aim) < 0);
       const bob = Math.sin(this.time.now / 90) * 0.6;
       body.setDepth(body.y);
@@ -248,11 +267,6 @@ export class GameScene extends Phaser.Scene {
       view.bar.destroy();
       this.players.delete(id);
     }
-  }
-
-  private readAimForMe(): number {
-    const pointer = this.input.activePointer;
-    return Math.atan2(pointer.worldY - this.predicted.y, pointer.worldX - this.predicted.x);
   }
 
   // ------------------------------------------------------------- enemies
