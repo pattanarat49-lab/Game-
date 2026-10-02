@@ -32,6 +32,17 @@ To make your own copy, run `npm run build:solo --prefix client`. It writes one s
 
 **Online co-op** needs the game server running, as described below.
 
+## Play online with friends
+
+The repo is ready to host on [Render](https://render.com) for free. `render.yaml` describes the service.
+
+1. Create a Render account. Signing in with GitHub is easiest.
+2. Click this button and approve: [![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/pattanarat49-lab/Game-)
+3. Wait for the first build (a few minutes). Render gives you a link like `https://riftborn-xxxx.onrender.com`.
+4. Share that link. Everyone who opens it and presses **PLAY ONLINE** on the same stage plays together (up to 4 per room).
+
+Every push to `main` redeploys automatically. On the free plan the server sleeps after 15 minutes with no players, so the first visit after a break takes about a minute to wake up.
+
 ## Run it
 
 You need [Node.js](https://nodejs.org/) 20 or newer.

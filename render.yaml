@@ -1,0 +1,13 @@
+# One-click hosting on Render (https://render.com). See "Play online" in README.md.
+# A single web service builds the client and runs the game server, which also serves the client.
+services:
+  - type: web
+    name: riftborn
+    runtime: node
+    plan: free
+    buildCommand: npm install --include=dev && npm install --prefix server --include=dev && npm install --prefix client --include=dev && npm run build
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
