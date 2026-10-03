@@ -1572,6 +1572,16 @@ export class GameScene extends Phaser.Scene {
         }
         const drop = left * left * 420;
         img.setPosition(z.x, z.y - drop).setRotation(0.25 * left).setDepth(z.y + 50);
+      } else if (z.kind === "solve") {
+        // SOLVE IT: a lock-on reticle snaps shut around the target.
+        const t = 1 - z.life / z.maxLife;
+        const r = z.radius * (1 + 2 * Math.max(0, 1 - t * 4));
+        sky.lineStyle(2, 0xff2a3a, 1 - t * 0.6).strokeCircle(z.x, z.y - 8, r);
+        for (let i = 0; i < 4; i++) {
+          const a = (i * Math.PI) / 2 + t * 2;
+          sky.lineBetween(z.x + Math.cos(a) * (r - 4), z.y - 8 + Math.sin(a) * (r - 4), z.x + Math.cos(a) * (r + 6), z.y - 8 + Math.sin(a) * (r + 6));
+        }
+        sky.fillStyle(0xff2a3a, 1 - t).fillCircle(z.x, z.y - 8, 2);
       } else if (z.kind === "dashkick") {
         // FLASH KICK: the kick lands with a starburst.
         const t = 1 - z.life / z.maxLife;

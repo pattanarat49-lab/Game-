@@ -17,14 +17,14 @@ Design doc: see `docs/game-design-foundation.md`.
 - **Character select** with 32 heroes, ordered by PvP strength (weakest at the top, strongest at the bottom; the order is `PVP_RANKING` in `shared/game.ts`):
   - Every hero has 3x the base HP listed in `shared/game.ts` (`HP_SCALE`); the HP comparisons below still hold.
   - Heroes are drawn 1.5x bigger (with a matching hitbox); the maps stay the same size.
-  - Damage is balanced per hero with `DAMAGE_BALANCE` in `shared/game.ts` (a multiplier on everything the hero and its summons hit for), tuned from bot duels so almost every hero wins 40-60% of its 1v1 fights. The Detective, Plain Hero and Glitch God sit outside that range because their kits do not depend on damage.
+  - Damage is balanced per hero with `DAMAGE_BALANCE` in `shared/game.ts` (a multiplier on everything the hero and its summons hit for), tuned from bot duels so every hero wins roughly 40-60% of its 1v1 fights.
   - **Captain Steel:** melee punches, the hardest hits and 3x HP. Skill SMASH hits everything around him and stuns it for 1 second (bosses are not stunned). HEAT VISION (E) fires a laser from his eyes for 2.5 seconds that follows where he aims.
   - **Reborn Knight:** mid-range sword sweeps that hit every enemy in the arc. Skill SKY SLASH throws a sword wave that cuts through enemies.
   - **Frost Sniper:** sniper with very long range and huge damage, but a slow reload. Shots pierce. Skill FROST VOLLEY fires three rapid shots.
   - **Volt Kid:** three times faster than anyone. Attacks call down lightning that hits an area. Skill THUNDERBOLT strikes everything around him.
   - **Sky Wizard:** long-range magic orbs that explode in a wide blast. Skill FIRE SPIRIT throws a big fireball with a huge explosion.
   - **Champ Rico:** fast boxer (1.5x speed, quick punches) with very short reach. Skill JAB (1s cooldown) fires a long straight jab that stuns monsters and rival players for 0.5 seconds (bosses are not stunned). DEATH CROSS (E) is a crushing straight right (150 damage) that sends everything it hits flying far away (bosses do not budge).
-  - **Plain Hero:** 100x the HP of anyone else. Skill FINAL BLOW kills anything in front of him (Reborn Knight's reach).
+  - **Plain Hero:** 1.5x HP. Skill FINAL BLOW kills anything in front of him (Reborn Knight's reach), but takes 15 seconds to come back.
   - **Holy Healer:** holy bolts from range. Skill HEAL restores 50% max HP to every ally nearby (and himself).
   - **Green Rookie:** runs 1.5x faster. Skill FULL POWER SMASH blasts a wide straight line.
   - **Sakura Blade:** fast sword. Skill PHANTOM SLASH cuts everything around her 8 times.
@@ -32,11 +32,11 @@ Design doc: see `docs/game-design-foundation.md`.
   - **Chrono Brawler:** very fast punches. Skill TIME STOP freezes the whole map for 4 seconds; only he can move.
   - **Storm Mage:** magic bolts. Skill HURRICANE summons a storm cloud that keeps striking lightning over a wide area.
   - **Trickster:** magic shots and two skills. ILLUSION raises a golden city for 10 seconds; enemies inside lose 7% of their max HP each second. CLONE (E) makes a copy with 25% of his HP that attacks enemies by itself.
-  - **The Detective:** weak hits, runs 1.1x faster. No skill; PASSIVE FORESIGHT shows a ghost of where every monster and boss will be 0.5 seconds ahead.
+  - **The Detective:** runs 1.1x faster. PASSIVE FORESIGHT shows a ghost of where every monster and boss will be 0.5 seconds ahead. SOLVE IT (E) needs no aiming: it locks on to the nearest enemy (or PvP rival) within range and stuns it for 5 seconds (bosses are not stunned).
   - **Viking Kid:** quick twin-dagger slashes. Skill DAGGER RUSH dashes forward, cutting every enemy on the way.
   - **Giant Shifter:** very weak hits as a human. Skill GIANT FORM turns him into a 50m giant for 10 seconds; every attack smashes everything around him.
   - **Retired Hitman:** runs 1.2x faster, quick knife slashes. Skill SWAP MODE switches to a machine gun that fires very fast; use it again to go back to the knife.
-  - **Glitch God (6 stars, special):** Captain Steel's HP (900), moves 2x faster, hard-hitting glitch shots, and glitches like a rendering error. CREATOR builds a whole city (bigger than the golden city) for 15 seconds; enemies inside lose 10% of their max HP per second and he heals 10% per second. REALITY CHANGE (E) turns every enemy into an ordinary human for 10 seconds: they hit for 1 and cannot use any skill (no beam, no fireballs).
+  - **Glitch God (6 stars, special):** 2x HP (600), moves 2x faster, hard-hitting glitch shots, and glitches like a rendering error. CREATOR builds a whole city (bigger than the golden city) for 15 seconds; enemies inside lose 2% of their max HP per second and he heals 2% per second. REALITY CHANGE (E) turns every enemy into an ordinary human for 3 seconds: they hit for 1 and cannot use any skill (no beam, no fireballs).
   - **Rubber Pirate:** 1.5x HP, stretchy punches. Skill GATLING PUNCH pounds a medium-range lane with a storm of fists for 1 second.
   - **Mad Scientist:** laser gun. PORTAL GUN: press once to open a portal, again to open its partner; walk into one to come out of the other (anyone can use them). MISSILES (E): 10 missiles that chase targets until they hit; in PvP, melee swings can cut them down.
   - **Gadget Cat:** 1.5x HP, air-cannon blasts. BIG LIGHT shines a flashlight ahead: every enemy (or PvP rival) caught in the cone grows 1.8x bigger, so it is much easier to hit, and moves at half speed for 5 seconds. GUNNER BOTS (E): 6 little gunner robots, each with 15% of his HP, fight for 15 seconds.

@@ -1151,6 +1151,24 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       case "biglight":
         this.bigLight(id, p, skill);
         break;
+      case "solve": {
+        // SOLVE IT: the Detective has worked it out. The nearest target is locked on and stunned.
+        const t = this.findTarget(id, p, skill.radius, true);
+        if (!t) break;
+        const stun = skill.duration ?? 5;
+        if (t.key.startsWith("p:")) {
+          const vid = t.key.slice(2);
+          this.damagePlayer(vid, skill.damage * PVP_DAMAGE_SCALE, true, id);
+          const v = s.players.get(vid);
+          if (v && !v.dead) v.stun = Math.max(v.stun, stun);
+        } else {
+          const e = s.enemies.get(t.key);
+          this.damageEnemy(t.key, skill.damage, id);
+          if (e && !ENEMIES[e.kind as EnemyKind].boss && s.enemies.has(t.key)) e.stun = Math.max(e.stun, stun);
+        }
+        this.addZone("solve", t.x, t.y, 14, 1, { owner: id, every: Infinity, damage: 0 });
+        break;
+      }
       case "rewind":
         this.rewind(skill.duration ?? 2);
         this.addZone("rewind", p.x, p.y, 400, 0.8, { owner: id, every: Infinity, damage: 0 });
@@ -1226,7 +1244,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
   }
 
   /** The nearest monster (or rival, in PvP) within `radius` and roughly where `p` is aiming. Blocks are ignored. */
-  private findTarget(id: string, p: P, radius: number): { key: string; x: number; y: number } | undefined {
+  private findTarget(id: string, p: P, radius: number, anyDirection = false): { key: string; x: number; y: number } | undefined {
     let best = Infinity;
     let pick: string | undefined;
     let tx = 0;
@@ -1236,7 +1254,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       if (d > radius || d >= best) return;
       let diff = Math.atan2(y - p.y, x - p.x) - p.aim;
       diff = Math.atan2(Math.sin(diff), Math.cos(diff));
-      if (Math.abs(diff) > LATCH_CONE && d > 30) return;
+      if (!anyDirection && Math.abs(diff) > LATCH_CONE && d > 30) return;
       [best, pick, tx, ty] = [d, key, x, y];
     };
     this.state.enemies.forEach((e, eid) => {
@@ -2212,6 +2230,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       case "dashkick":
       case "truck":
       case "biglight":
+      case "solve":
       case "eyebeam":
       case "onepunch":
       case "smash":

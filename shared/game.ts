@@ -100,6 +100,7 @@ export type SkillKind =
   | "cross" // a huge straight punch that knocks targets far away
   | "dashkick" // dart in, kick and stun the nearest target in front, then hop back
   | "truck" // stop time, then drop a truck on the aimed spot
+  | "solve" // lock on to the nearest enemy anywhere in range and stun it
   | "biglight" // a flashlight beam: everything caught in it grows bigger (easier to hit) and slower
   | "diamond" // a diamond sword for a while: basic attacks become strong, fast, long sword swings
   | "build" // place a random block: dirt (a shield), TNT (explodes when hit) or a craft table (break it for 2x damage)
@@ -258,9 +259,9 @@ export const HEROES: Record<HeroId, HeroDef> = {
   saitama: {
     name: "Plain Hero",
     role: "Hobby hero",
-    blurb: "A hundred times the HP of anyone else. FINAL BLOW ends any fight.",
+    blurb: "1.5x HP. FINAL BLOW ends any fight, but takes 15s to come back.",
     stars: 5,
-    maxHp: 10000,
+    maxHp: 150,
     speed: 105,
     attack: "punch",
     attackCooldown: 0.5,
@@ -270,7 +271,7 @@ export const HEROES: Record<HeroId, HeroDef> = {
     aoe: 0,
     shotSpeed: 0,
     pierce: 0,
-    skill: { kind: "onepunch", name: "FINAL BLOW", cooldown: 5, damage: Infinity, radius: 42 },
+    skill: { kind: "onepunch", name: "FINAL BLOW", cooldown: 15, damage: Infinity, radius: 42 },
   },
   healer: {
     name: "Holy Healer",
@@ -379,19 +380,21 @@ export const HEROES: Record<HeroId, HeroDef> = {
   lawliet: {
     name: "The Detective",
     role: "Detective",
-    blurb: "Weak hits, runs 1.1x faster. PASSIVE: sees where every monster and boss will be 0.5s ahead (ghost images).",
+    blurb: "Weak hits, runs 1.1x faster. PASSIVE: sees where every monster and boss will be 0.5s ahead (ghost images). SOLVE IT (E) locks on to the nearest enemy in range and stuns it for 5s.",
     stars: 2,
     maxHp: 100,
     speed: 116,
     attack: "punch",
     attackCooldown: 0.45,
-    damage: 8,
+    damage: 24,
     range: 20,
     arc: 1.4,
     aoe: 0,
     shotSpeed: 0,
     pierce: 0,
     skill: { kind: "passive", name: "FORESIGHT", cooldown: 1, damage: 0, radius: 0, duration: 0.5 },
+    // SOLVE IT: no aiming needed, it finds the nearest target within `radius` (bosses are not stunned).
+    skill2: { kind: "solve", name: "SOLVE IT", cooldown: 15, damage: 10, radius: 220, duration: 5 },
   },
   thorfinn: {
     name: "Viking Kid",
@@ -431,9 +434,9 @@ export const HEROES: Record<HeroId, HeroDef> = {
   yaotsu: {
     name: "Glitch God",
     role: "Indignia God",
-    blurb: "Captain Steel's HP, moves 2x faster. CREATOR builds a whole city: enemies inside lose 10% HP/s, he heals 10%/s. REALITY CHANGE turns every enemy into an ordinary human for 10s.",
+    blurb: "2x HP, moves 2x faster. CREATOR builds a whole city: enemies inside lose 2% HP/s, he heals 2%/s. REALITY CHANGE turns every enemy into an ordinary human for 3s.",
     stars: 6,
-    maxHp: 300,
+    maxHp: 200,
     speed: 210,
     attack: "magic",
     attackCooldown: 0.5,
@@ -444,8 +447,8 @@ export const HEROES: Record<HeroId, HeroDef> = {
     shotSpeed: 300,
     pierce: 0,
     shot: "glitch",
-    skill: { kind: "city", name: "CREATOR", cooldown: 20, damage: 0.1, radius: 380, duration: 15 },
-    skill2: { kind: "reality", name: "REALITY CHANGE", cooldown: 25, damage: 1, radius: 0, duration: 10 },
+    skill: { kind: "city", name: "CREATOR", cooldown: 20, damage: 0.02, radius: 380, duration: 15 },
+    skill2: { kind: "reality", name: "REALITY CHANGE", cooldown: 25, damage: 1, radius: 0, duration: 3 },
   },
   loki: {
     name: "Trickster",
@@ -806,10 +809,10 @@ for (const def of Object.values(HEROES)) def.maxHp *= HP_SCALE;
  * The character select shows them in this order. Heroes missing here go at the end.
  */
 const PVP_RANKING: HeroId[] = [
-  "lawliet", "theworld", "superman", "okita", "healer", "rick", "killua", "joyboy", "howl", "agamemnon",
-  "vampire", "deku", "rudeus", "loki", "sakamoto", "simo", "kid", "rider", "starplatinum", "trainer",
-  "steve", "doraemon", "ricardo", "titan", "taekwondo", "hanuman", "isekai", "gojo", "badigadi", "thorfinn",
-  "yaotsu", "saitama",
+  "superman", "howl", "rick", "rudeus", "titan", "killua", "sakamoto", "healer", "okita", "simo",
+  "yaotsu", "saitama", "joyboy", "steve", "kid", "trainer", "deku", "ricardo", "agamemnon", "vampire",
+  "lawliet", "loki", "hanuman", "theworld", "starplatinum", "gojo", "rider", "isekai", "badigadi", "taekwondo",
+  "thorfinn", "doraemon",
 ];
 export const HERO_IDS = [
   ...PVP_RANKING,
@@ -851,7 +854,7 @@ export const DAMAGE_BALANCE: Partial<Record<HeroId, number>> = {
   gojo: 2.27,
   badigadi: 0.44,
   thorfinn: 2.53,
-  yaotsu: 0.1,
+  yaotsu: 0.35,
   saitama: 0.1,
 };
 
