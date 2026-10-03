@@ -591,6 +591,23 @@ export class GameScene extends Phaser.Scene {
           view.bar.fillStyle(0x9a4aff, 0.18 + 0.1 * pulse).fillCircle(body.x, body.y - 9, 17);
           view.bar.lineStyle(2, 0xd8a8ff, 0.7 + 0.3 * pulse).strokeCircle(body.x, body.y - 9, 17);
         }
+        if (p.beam > 0) {
+          // HEAT VISION: twin red beams from the eyes, following his aim.
+          const eb = heroOf(p.hero).skill2 ?? heroOf(p.hero).skill;
+          const cos = Math.cos(aim);
+          const sin = Math.sin(aim);
+          const ex = body.x;
+          const ey = body.y - 13;
+          const tx = ex + cos * eb.radius;
+          const ty = ey + 8 + sin * eb.radius;
+          const flick = 0.75 + Math.random() * 0.25;
+          view.bar.lineStyle(eb.width ?? 10, 0xff2a1a, 0.35 * flick).lineBetween(ex, ey, tx, ty);
+          view.bar.lineStyle(3, 0xff5a3a, flick).lineBetween(ex - 2, ey, tx, ty);
+          view.bar.lineStyle(3, 0xff5a3a, flick).lineBetween(ex + 2, ey, tx, ty);
+          view.bar.lineStyle(1, 0xfff0c0, 1).lineBetween(ex, ey, tx, ty);
+          view.bar.fillStyle(0xffd23f, 0.8).fillCircle(tx, ty, 4 + Math.random() * 3);
+          if (Math.random() < 0.3) this.sparks.explode(1, tx, ty);
+        }
         if (p.latch > 0 && Math.random() < 0.5) {
           // BLOOD LATCH: drops of blood fly off the bite.
           view.bar.fillStyle(0xe02a3a, 1).fillRect(body.x + (Math.random() - 0.5) * 14, body.y - 8 - Math.random() * 10, 2, 2);
@@ -736,6 +753,7 @@ export class GameScene extends Phaser.Scene {
     const cam = this.cameras.main;
     switch (skill.kind) {
       case "smash":
+        if (skill.duration) cam.flash(80, 255, 240, 160);
         this.effects.push({ kind: "smash", x, y: y + 5, aim, range: skill.radius, arc: Math.PI * 2, age: 0, life: 0.35 });
         cam.shake(200, 0.012);
         this.sparks.explode(24, x, y + 5);
@@ -819,6 +837,9 @@ export class GameScene extends Phaser.Scene {
         break;
       case "revive":
         this.effects.push({ kind: "heal", x, y: y + 5, aim, range: 30, arc: 0, age: 0, life: 0.6 });
+        break;
+      case "eyebeam":
+        this.effects.push({ kind: "muzzle", x, y: y - 8, aim, range: 6, arc: 0, age: 0, life: 0.15 });
         break;
       case "latch":
         this.effects.push({ kind: "ripple", x, y, aim, range: 30, arc: 0, age: 0, life: 0.3 });
@@ -1125,6 +1146,7 @@ export class GameScene extends Phaser.Scene {
         lane(skill.radius, 8);
         break;
       case "kick":
+      case "eyebeam":
         lane(skill.radius, skill.width ?? 30);
         break;
       case "latch": {

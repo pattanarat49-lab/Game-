@@ -77,6 +77,7 @@ const REWIND_EVERY = 0.1; // seconds between TIME MACHINE snapshots
 const LATCH_CONE = 0.7; // BLOOD LATCH finds targets within this angle of the aim (radians, each side)
 const LATCH_TICK = 0.25; // seconds between bites
 const SQUAD_SPACING = 12; // helpers keep this far apart
+const EYEBEAM_TICK = 0.1; // seconds between HEAT VISION hits
 
 export interface SimPlayer {
   name: string;
@@ -121,6 +122,8 @@ export interface SimPlayer {
   barrier: number;
   /** Seconds left clinging to a target (BLOOD LATCH); the server moves the hero meanwhile. */
   latch: number;
+  /** Seconds left of HEAT VISION: the eye laser fires along the hero's aim. */
+  beam: number;
 }
 
 export interface SimEnemy {
@@ -221,6 +224,7 @@ interface PlayerBrain {
   latchDx: number;
   latchDy: number;
   latchTick: number;
+  eyebeamTick: number;
   /** The portal we just came out of: it cannot send us back until we step off it. */
   portalLock?: string;
   cloneLife: number; // seconds a clone has left
@@ -323,6 +327,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       latchDx: 0,
       latchDy: 0,
       latchTick: 0,
+      eyebeamTick: 0,
       cloneLife: 0,
       moveBudget: 0,
       kbExtra: 0,
@@ -609,6 +614,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
         p.barrier = 0;
         p.revive = 0;
         p.latch = 0;
+        p.beam = 0;
         p.respawnIn = Math.max(0, p.respawnIn - dt);
         if (p.respawnIn <= 0) {
           p.dead = false;
@@ -725,6 +731,17 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
         }
       }
 
+      // HEAT VISION keeps burning along wherever he looks.
+      if (p.beam > 0) {
+        const eb = hero.skill2?.kind === "eyebeam" ? hero.skill2 : hero.skill;
+        p.beam = Math.max(0, p.beam - dt);
+        brain.eyebeamTick -= dt;
+        if (brain.eyebeamTick <= 0) {
+          brain.eyebeamTick += EYEBEAM_TICK;
+          this.lineHit(id, p.x, p.y, p.aim, eb.radius, eb.width ?? 10, eb.damage * EYEBEAM_TICK);
+        }
+      }
+
       // GATLING PUNCH keeps pounding the lane it was aimed down.
       if (brain.gatlingLeft > 0) {
         brain.gatlingTimer -= dt;
@@ -755,7 +772,14 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
   private useSkill(id: string, p: P, hero: HeroDef, skill: SkillDef, brain: PlayerBrain) {
     const s = this.state;
     switch (skill.kind) {
-      case "smash": // ground pound that hits everything around you
+      case "smash": // ground pound that hits everything around you (and can stun it)
+        this.sweep(id, p.x, p.y, 0, skill.radius, Math.PI * 2, skill.damage);
+        if (skill.duration) this.stunAround(id, p.x, p.y, skill.radius, skill.duration);
+        break;
+      case "eyebeam":
+        p.beam = skill.duration ?? 2.5;
+        brain.eyebeamTick = 0;
+        break;
       case "storm": // lightning rains on everything around you
         this.sweep(id, p.x, p.y, 0, skill.radius, Math.PI * 2, skill.damage);
         break;
@@ -909,6 +933,17 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
         break;
       }
     }
+  }
+
+  /** Stun every monster (not bosses) and, in PvP, every rival within `radius`. */
+  private stunAround(owner: string, x: number, y: number, radius: number, seconds: number) {
+    this.state.enemies.forEach((e) => {
+      const def = ENEMIES[e.kind as EnemyKind];
+      if (!def.boss && Math.hypot(e.x - x, e.y - y) <= radius + def.radius) e.stun = Math.max(e.stun, seconds);
+    });
+    this.state.players.forEach((v, vid) => {
+      if (!v.dead && this.isFoe(owner, vid) && Math.hypot(v.x - x, v.y - y) <= radius + PLAYER_RADIUS) v.stun = Math.max(v.stun, seconds);
+    });
   }
 
   /** BLOOD LATCH: leap onto the nearest target in front (monster, or rival in PvP); with none, just leap. */

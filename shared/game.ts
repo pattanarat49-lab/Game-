@@ -88,7 +88,8 @@ export type SkillKind =
   | "revive" // get straight back up if you fall soon after
   | "immortal" // a barrier that blocks all damage and heals
   | "latch" // leap onto a target, cling to it and drink its blood
-  | "kick"; // a flying kick along a line that stuns whoever it hits
+  | "kick" // a flying kick along a line that stuns whoever it hits
+  | "eyebeam"; // a laser from the eyes that keeps firing and follows the aim
 
 export interface SkillDef {
   kind: SkillKind;
@@ -143,7 +144,10 @@ export const HEROES: Record<HeroId, HeroDef> = {
     aoe: 0,
     shotSpeed: 0,
     pierce: 0,
-    skill: { kind: "smash", name: "SMASH", cooldown: 5, damage: 60, radius: 70 },
+    // SMASH also stuns everything it hits for `duration` seconds (bosses shrug it off).
+    skill: { kind: "smash", name: "SMASH", cooldown: 5, damage: 60, radius: 70, duration: 1 },
+    // HEAT VISION: a beam `radius` long that follows his aim for `duration` seconds, `damage` per second.
+    skill2: { kind: "eyebeam", name: "HEAT VISION", cooldown: 8, damage: 70, radius: 220, width: 10, duration: 2.5 },
   },
   isekai: {
     name: "Reborn Knight",
@@ -724,7 +728,7 @@ export const HEROES: Record<HeroId, HeroDef> = {
 const PVP_RANKING: HeroId[] = [
   "lawliet", "healer", "titan", "trainer", "howl", "rudeus", "loki", "isekai", "vampire", "kid",
   "rick", "thorfinn", "deku", "okita", "sakamoto", "hanuman", "joyboy", "doraemon", "agamemnon", "killua",
-  "rider", "gojo", "superman", "badigadi", "starplatinum", "ricardo", "simo", "yaotsu", "saitama",
+  "rider", "gojo", "badigadi", "superman", "starplatinum", "ricardo", "simo", "yaotsu", "saitama",
 ];
 export const HERO_IDS = [
   ...PVP_RANKING,

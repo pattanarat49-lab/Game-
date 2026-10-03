@@ -80,7 +80,7 @@ export class HudScene extends Phaser.Scene {
       const skill = hero.skill.kind === "swap" ? `NOW ${me.mode === 1 ? "GUN" : "KNIFE"}` : hero.skill.kind === "passive" ? "PASSIVE" : me.titan > 0 || me.barrier > 0 || me.revive > 0 || me.latch > 0 ? `ACTIVE ${Math.max(me.titan, me.barrier, me.revive, me.latch).toFixed(1)}s` : me.skillCooldown > 0 ? `${me.skillCooldown.toFixed(1)}s` : "READY";
       const lines = [`DASH   ${dash}`, `${hero.skill.name.padEnd(6)} ${skill}`];
       const skill2Ready = hero.skill2 ? 1 - me.skill2Cooldown / hero.skill2.cooldown : 1;
-      if (hero.skill2) lines.push(`${hero.skill2.name.padEnd(6)} ${me.skill2Cooldown > 0 ? `${me.skill2Cooldown.toFixed(1)}s` : "READY"}`);
+      if (hero.skill2) lines.push(`${hero.skill2.name.padEnd(6)} ${me.beam > 0 ? `ACTIVE ${me.beam.toFixed(1)}s` : me.skill2Cooldown > 0 ? `${me.skill2Cooldown.toFixed(1)}s` : "READY"}`);
       this.skills.setText(lines.join("\n"));
       const barX = Math.max(220, 20 + this.skills.width + 12);
       this.drawCooldown(barX, 68, 1 - me.dashCooldown / DASH_COOLDOWN);

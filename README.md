@@ -14,7 +14,7 @@ Design doc: see `docs/game-design-foundation.md`.
 - **Emberfall**, a volcanic arena with basalt pillars
 - **Rule twist:** lava creeps in from the edges during each wave and burns anyone standing in it. It cools between waves.
 - **Character select** with 29 heroes, ordered by PvP strength (weakest at the top, strongest at the bottom; the order is `PVP_RANKING` in `shared/game.ts`):
-  - **Captain Steel:** melee punches, the hardest hits and 3x HP. Skill SMASH hits everything around him.
+  - **Captain Steel:** melee punches, the hardest hits and 3x HP. Skill SMASH hits everything around him and stuns it for 1 second (bosses are not stunned). HEAT VISION (E) fires a laser from his eyes for 2.5 seconds that follows where he aims.
   - **Reborn Knight:** mid-range sword sweeps that hit every enemy in the arc. Skill SKY SLASH throws a sword wave that cuts through enemies.
   - **Frost Sniper:** sniper with very long range and huge damage, but a slow reload. Shots pierce. Skill FROST VOLLEY fires three rapid shots.
   - **Volt Kid:** three times faster than anyone. Attacks call down lightning that hits an area. Skill THUNDERBOLT strikes everything around him.
