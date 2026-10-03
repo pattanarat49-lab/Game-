@@ -434,7 +434,7 @@ export const HEROES: Record<HeroId, HeroDef> = {
   titan: {
     name: "Giant Shifter",
     role: "Shifter",
-    blurb: "Very weak hits as a human. GIANT FORM turns him into a 50m giant for 10s: every hit smashes everything around him. ODM GEAR (E, 2s): fire a wire into the wall ahead and zip along it.",
+    blurb: "Very weak hits as a human. GIANT FORM turns him into a 50m giant for 10s: every hit smashes everything around him. ODM GEAR (E, 0.5s): fire a wire into the wall ahead and zip along it.",
     stars: 4,
     maxHp: 165,
     speed: 105,
@@ -449,7 +449,7 @@ export const HEROES: Record<HeroId, HeroDef> = {
     // In Titan form: damage and radius of each smash, and seconds between smashes.
     skill: { kind: "titan", name: "GIANT FORM", cooldown: 20, damage: 90, radius: 75, duration: 10 },
     // ODM GEAR: the wire reaches `radius`; he zips to where it hits a wall (or its end).
-    skill2: { kind: "grapple", name: "ODM GEAR", cooldown: 2, damage: 0, radius: 260 },
+    skill2: { kind: "grapple", name: "ODM GEAR", cooldown: 0.5, damage: 0, radius: 260 },
   },
   yaotsu: {
     name: "Glitch God",
