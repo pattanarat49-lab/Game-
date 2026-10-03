@@ -3,7 +3,7 @@ import { BootScene } from "./scenes/BootScene";
 import { GameScene } from "./scenes/GameScene";
 import { HudScene } from "./scenes/HudScene";
 import { isTouchDevice } from "./touch";
-import { HEROES, HERO_IDS, HeroId, STAGES, STAGE_IDS, StageId } from "../../shared/game";
+import { HEROES, HERO_IDS, HP_SCALE, HeroId, STAGES, STAGE_IDS, StageId } from "../../shared/game";
 import { GODZILLA, KINGKONG, SWORD_GOD, HERO_SPRITES, WARDEN, renderPixelSprite } from "./art";
 
 const menu = document.getElementById("menu")!;
@@ -121,7 +121,7 @@ function buildHeroPicker() {
       <span class="role">${hero.role}</span>
       <span class="role">Skill: ${hero.skill.name}${hero.skill2 ? ` + ${hero.skill2.name}` : ""}</span>
       <div class="stats">
-        <span>HP</span>${bars(hero.invincible ? 1 : hero.maxHp / 300)}
+        <span>HP</span>${bars(hero.invincible ? 1 : hero.maxHp / 300 / HP_SCALE)}
         <span>DAMAGE</span>${bars(hero.damage / 90)}
         <span>RANGE</span>${bars(reach)}
         <span>ATK SPEED</span>${bars(1 / hero.attackCooldown / 2.5)}

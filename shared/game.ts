@@ -790,6 +790,10 @@ export const HEROES: Record<HeroId, HeroDef> = {
   },
 };
 
+/** Every hero has this many times the HP written above (user request 2026-10-03: triple HP, nothing else changed). */
+export const HP_SCALE = 3;
+for (const def of Object.values(HEROES)) def.maxHp *= HP_SCALE;
+
 /**
  * Pickable heroes, ranked by how strong they are in the PvP Arena: weakest first, strongest last.
  * The character select shows them in this order. Heroes missing here go at the end.
