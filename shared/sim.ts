@@ -781,10 +781,12 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
         brain.tick += brain.every;
         if (z.kind === "hurricane") {
           this.sweep(brain.owner, z.x, z.y, 0, z.radius, Math.PI * 2, brain.damage);
-        } else if (z.kind === "city") {
-          const p = s.players.get(brain.owner);
-          if (p && !p.dead && Math.hypot(p.x - z.x, p.y - z.y) <= z.radius) p.hp = Math.min(p.maxHp, p.hp + p.maxHp * brain.damage * brain.every);
-        } else if (z.kind === "asgard") {
+        } else if (z.kind === "asgard" || z.kind === "city") {
+          if (z.kind === "city") {
+            // Yaotsu heals inside their own city.
+            const p = s.players.get(brain.owner);
+            if (p && !p.dead && Math.hypot(p.x - z.x, p.y - z.y) <= z.radius) p.hp = Math.min(p.maxHp, p.hp + p.maxHp * brain.damage * brain.every);
+          }
           // Everyone hostile inside the illusion loses a share of their max HP.
           const share = brain.damage * brain.every;
           s.enemies.forEach((e, eid) => {

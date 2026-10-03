@@ -31,7 +31,7 @@ Design doc: see `docs/game-design-foundation.md`.
   - **L:** weak hits, runs 1.1x faster. No skill; PASSIVE FORESIGHT shows a ghost of where every monster and boss will be 0.5 seconds ahead.
   - **Thorfinn:** quick twin-dagger slashes. Skill DAGGER RUSH dashes forward, cutting every enemy on the way.
   - **Titan:** very weak hits as a human. Skill TITAN turns him into a 50m Titan for 10 seconds; every attack smashes everything around him.
-  - **Yaotsu (6 stars, special):** infinite HP, moves 2x faster, and glitches like a rendering error. CREATOR builds a whole city (bigger than Asgard) for 15 seconds; inside it Yaotsu heals 10% HP per second. REALITY CHANGE (E) turns every enemy into an ordinary human for 10 seconds: they hit for 1 and cannot use any skill (no beam, no fireballs).
+  - **Yaotsu (6 stars, special):** Superman's HP (300), moves 2x faster, hard-hitting glitch shots, and glitches like a rendering error. CREATOR builds a whole city (bigger than Asgard) for 15 seconds; enemies inside lose 10% of their max HP per second and Yaotsu heals 10% per second. REALITY CHANGE (E) turns every enemy into an ordinary human for 10 seconds: they hit for 1 and cannot use any skill (no beam, no fireballs).
 - Controls: attack with left mouse, aim with the mouse, dash with Space, use your skill with Q or right mouse (E too, unless the hero has a second skill, which E uses)
 - **Enemies:** Cinderlings (fast), Magma Brutes (tanky), Ash Casters (ranged), and the **Pyre Warden** boss on wave 5
 - **Co-op for up to 4 players.** Enemies get tougher with more players. Fallen players respawn after 5 seconds.
