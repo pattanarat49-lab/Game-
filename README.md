@@ -13,7 +13,7 @@ Design doc: see `docs/game-design-foundation.md`.
 
 - **Emberfall**, a volcanic arena with basalt pillars
 - **Rule twist:** lava creeps in from the edges during each wave and burns anyone standing in it. It cools between waves.
-- **Character select** with 26 heroes:
+- **Character select** with 29 heroes:
   - **Captain Steel:** melee punches, the hardest hits and 3x HP. Skill SMASH hits everything around him.
   - **Reborn Knight:** mid-range sword sweeps that hit every enemy in the arc. Skill SKY SLASH throws a sword wave that cuts through enemies.
   - **Frost Sniper:** sniper with very long range and huge damage, but a slow reload. Shots pierce. Skill FROST VOLLEY fires three rapid shots.
@@ -40,6 +40,9 @@ Design doc: see `docs/game-design-foundation.md`.
   - **Phantom Thief:** runs 1.3x faster, pistol shots. Skill DRAW CARD throws a random card 1-9 that takes 10-90% of the target's max HP (a tenth of that on bosses).
   - **Hanuman:** runs 1.5x faster, quick trident thrusts. Skill REVIVE: for 5 seconds after pressing it, falling brings him straight back up with half his HP.
   - **Demon Lord:** four arms, 3x HP, runs 1.2x faster. Slow but crushing blows hit a wide area around him. Skill IMMORTAL: a barrier blocks all damage for 3 seconds and heals 10% HP each second.
+  - **Agamemnon:** 2x HP, bronze sword sweeps. Skill GLADIATORS calls 20 gladiators (10% of his HP each) that fight with swords for 20 seconds.
+  - **Vampire:** quick claw swipes. Skill BLOOD LATCH leaps onto the nearest target in front, clings to it for 3 seconds and drains 40 HP a second, healing the same.
+  - **Hopper Rider:** 1.5x HP, runs 1.5x faster, very fast punches. Skill RIDER KICK leaps into a flying kick that stuns everything it hits for 2 seconds (bosses are not stunned).
 - Controls: attack with left mouse, aim with the mouse, dash with Space, use your skill with Q or right mouse (E too, unless the hero has a second skill, which E uses). Skills are aimed while the key is held (a yellow guide shows where they land) and go off when you let go. Press Esc while holding to call it off. On phones, hold a skill button, drag to aim, and release; drop it on the CANCEL spot that appears above the button to call it off.
 - **Knockback and parry:** basic hits from melee heroes (punch and sword) push monsters and rival players back (bosses do not budge) and cut down enemy shots, and rival shots in PvP, inside the swing.
 - **Online:** your own attacks and skills show the moment you press them, and the HUD shows your ping to the server in the top-right corner.

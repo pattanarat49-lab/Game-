@@ -74,6 +74,9 @@ const MISSILE_SPEED = 210;
 const MISSILE_TURN = 5; // radians per second a homing missile can turn
 const MISSILE_LAUNCH = 0.25; // seconds missiles fly straight out before homing in
 const REWIND_EVERY = 0.1; // seconds between TIME MACHINE snapshots
+const LATCH_CONE = 0.7; // BLOOD LATCH finds targets within this angle of the aim (radians, each side)
+const LATCH_TICK = 0.25; // seconds between bites
+const SQUAD_SPACING = 12; // helpers keep this far apart
 
 export interface SimPlayer {
   name: string;
@@ -116,6 +119,8 @@ export interface SimPlayer {
   revive: number;
   /** Seconds left behind a barrier that blocks all damage (IMMORTAL). */
   barrier: number;
+  /** Seconds left clinging to a target (BLOOD LATCH); the server moves the hero meanwhile. */
+  latch: number;
 }
 
 export interface SimEnemy {
@@ -211,6 +216,11 @@ interface PlayerBrain {
   gatlingLeft: number; // GATLING PUNCH: hits still to come
   gatlingTimer: number;
   gatlingAim: number;
+  /** BLOOD LATCH: who we cling to ("p:" + id for a player), where on them, and the next bite. */
+  latchOn?: string;
+  latchDx: number;
+  latchDy: number;
+  latchTick: number;
   /** The portal we just came out of: it cannot send us back until we step off it. */
   portalLock?: string;
   cloneLife: number; // seconds a clone has left
@@ -310,6 +320,9 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       gatlingLeft: 0,
       gatlingTimer: 0,
       gatlingAim: 0,
+      latchDx: 0,
+      latchDy: 0,
+      latchTick: 0,
       cloneLife: 0,
       moveBudget: 0,
       kbExtra: 0,
@@ -595,6 +608,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
         p.titan = 0;
         p.barrier = 0;
         p.revive = 0;
+        p.latch = 0;
         p.respawnIn = Math.max(0, p.respawnIn - dt);
         if (p.respawnIn <= 0) {
           p.dead = false;
@@ -656,6 +670,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       }
       p.x = moved.x;
       p.y = moved.y;
+      if (p.latch > 0) this.updateLatch(id, p, brain, hero, dt);
       p.dashing = brain.dashTimer > 0;
 
       // Basic attack
@@ -878,7 +893,81 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       case "immortal":
         p.barrier = skill.duration ?? 3;
         break;
+      case "latch":
+        this.startLatch(id, p, skill, brain);
+        break;
+      case "kick": {
+        // RIDER KICK: leap along the aim, kicking through everything and stunning it.
+        const end = moveCircle(p.x, p.y, Math.cos(p.aim) * skill.radius, Math.sin(p.aim) * skill.radius, PLAYER_RADIUS);
+        const len = Math.hypot(end.x - p.x, end.y - p.y);
+        this.lineHit(id, p.x, p.y, p.aim, len, skill.width ?? 30, skill.damage, skill.duration ?? 2);
+        p.x = end.x;
+        p.y = end.y;
+        p.warp = (p.warp + 1) % 256;
+        brain.target = undefined;
+        brain.hurtTimer = Math.max(brain.hurtTimer, 0.4);
+        break;
+      }
     }
+  }
+
+  /** BLOOD LATCH: leap onto the nearest target in front (monster, or rival in PvP); with none, just leap. */
+  private startLatch(id: string, p: P, skill: SkillDef, brain: PlayerBrain) {
+    let best = Infinity;
+    let pick: string | undefined;
+    let tx = 0;
+    let ty = 0;
+    const consider = (key: string, x: number, y: number) => {
+      const d = Math.hypot(x - p.x, y - p.y);
+      if (d > skill.radius || d >= best) return;
+      let diff = Math.atan2(y - p.y, x - p.x) - p.aim;
+      diff = Math.atan2(Math.sin(diff), Math.cos(diff));
+      if (Math.abs(diff) > LATCH_CONE && d > 30) return;
+      [best, pick, tx, ty] = [d, key, x, y];
+    };
+    this.state.enemies.forEach((e, eid) => consider(eid, e.x, e.y));
+    this.state.players.forEach((v, vid) => {
+      if (!v.dead && this.isFoe(id, vid)) consider(`p:${vid}`, v.x, v.y);
+    });
+    if (!pick) {
+      const end = moveCircle(p.x, p.y, Math.cos(p.aim) * skill.radius * 0.6, Math.sin(p.aim) * skill.radius * 0.6, PLAYER_RADIUS);
+      p.x = end.x;
+      p.y = end.y;
+      p.warp = (p.warp + 1) % 256;
+      brain.target = undefined;
+      return;
+    }
+    // Cling to the side we came from.
+    const a = Math.atan2(p.y - ty, p.x - tx);
+    brain.latchOn = pick;
+    brain.latchDx = Math.cos(a) * 6;
+    brain.latchDy = Math.sin(a) * 6;
+    brain.latchTick = 0;
+    p.latch = skill.duration ?? 3;
+    this.updateLatch(id, p, brain, heroOf(p.hero), 0);
+  }
+
+  /** Clinging on: ride along with the target and bite it every LATCH_TICK, healing what we drink. */
+  private updateLatch(id: string, p: P, brain: PlayerBrain, hero: HeroDef, dt: number) {
+    const key = brain.latchOn ?? "";
+    const victim = key.startsWith("p:") ? this.state.players.get(key.slice(2)) : this.state.enemies.get(key);
+    p.latch = Math.max(0, p.latch - dt);
+    if (!victim || (key.startsWith("p:") && ((victim as P).dead || !this.isFoe(id, key.slice(2)))) || p.latch <= 0) {
+      p.latch = 0;
+      brain.latchOn = undefined;
+      return;
+    }
+    p.x = victim.x + brain.latchDx;
+    p.y = victim.y + brain.latchDy;
+    brain.target = undefined;
+    brain.dashTimer = 0;
+    brain.latchTick -= dt;
+    if (brain.latchTick > 0) return;
+    brain.latchTick += LATCH_TICK;
+    const bite = hero.skill.damage * LATCH_TICK;
+    if (key.startsWith("p:")) this.damagePlayer(key.slice(2), bite * PVP_DAMAGE_SCALE, true, id);
+    else this.damageEnemy(key, bite, id);
+    p.hp = Math.min(p.maxHp, p.hp + bite);
   }
 
   /** PORTAL GUN: the first shot opens a portal, the second opens its partner and links them. */
@@ -998,26 +1087,29 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
     let ty = 0;
     let best = CLONE_SIGHT;
     this.state.enemies.forEach((e) => {
-      const d = Math.hypot(e.x - c.x, e.y - c.y);
-      if (d < best) [best, tx, ty] = [d, e.x, e.y];
+      const r = ENEMIES[e.kind as EnemyKind].radius;
+      const d = Math.hypot(e.x - c.x, e.y - c.y) - r;
+      if (d < best) [best, tx, ty] = [d, e.x, e.y]; // measured to its edge, so melee helpers close in
     });
     this.state.players.forEach((v, vid) => {
       if (v.dead || !this.isFoe(id, vid)) return;
-      const d = Math.hypot(v.x - c.x, v.y - c.y);
+      const d = Math.hypot(v.x - c.x, v.y - c.y) - PLAYER_RADIUS;
       if (d < best) [best, tx, ty] = [d, v.x, v.y];
     });
+    const melee = hero.attack === "sword" || hero.attack === "punch";
     let mx = 0;
     let my = 0;
     if (best < CLONE_SIGHT) {
       c.aim = Math.atan2(ty - c.y, tx - c.x);
       // Keep at casting distance.
-      const want = best > hero.range * 0.7 ? 1 : best < hero.range * 0.35 ? -1 : 0;
+      const want = melee ? (best > hero.range * 0.6 ? 1 : 0) : best > hero.range * 0.7 ? 1 : best < hero.range * 0.35 ? -1 : 0;
       mx = Math.cos(c.aim) * want;
       my = Math.sin(c.aim) * want;
       if (brain.attackTimer <= 0 && best <= hero.range) {
         brain.attackTimer = hero.attackCooldown * (hero.summon ? 1 : 1.3);
         c.attackSeq++;
-        if (hero.attack === "lightning") this.sweep(id, tx, ty, 0, hero.aoe, Math.PI * 2, hero.damage); // a bolt right on the target
+        if (melee) this.sweep(id, c.x, c.y, c.aim, hero.range, hero.arc, hero.damage);
+        else if (hero.attack === "lightning") this.sweep(id, tx, ty, 0, hero.aoe, Math.PI * 2, hero.damage); // a bolt right on the target
         else this.spawnBullet((hero.shot ?? "magic") as BulletKind, c.x, c.y, c.aim, hero.shotSpeed, { owner: id, damage: hero.damage, pierce: 0, life: hero.range / hero.shotSpeed, blast: hero.aoe });
       }
     } else {
@@ -1029,6 +1121,18 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
         c.aim = Math.atan2(my, mx);
       }
     }
+    // Spread out from the rest of the squad instead of piling onto one spot.
+    this.state.players.forEach((q, qid) => {
+      if (qid === id || q.owner !== c.owner) return;
+      const dx = c.x - q.x;
+      const dy = c.y - q.y;
+      const d = Math.hypot(dx, dy);
+      if (d >= SQUAD_SPACING) return;
+      if (d < 0.01) [mx, my] = [mx + Math.random() - 0.5, my + Math.random() - 0.5];
+      else [mx, my] = [mx + (dx / d) * (1 - d / SQUAD_SPACING) * 1.5, my + (dy / d) * (1 - d / SQUAD_SPACING) * 1.5];
+    });
+    const len = Math.hypot(mx, my);
+    if (len > 1) [mx, my] = [mx / len, my / len];
     const moved = moveCircle(c.x, c.y, mx * hero.speed * dt, my * hero.speed * dt, PLAYER_RADIUS);
     c.x = moved.x;
     c.y = moved.y;

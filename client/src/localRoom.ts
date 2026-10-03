@@ -56,6 +56,7 @@ export class LocalRoom {
         mode: 0,
         revive: 0,
         barrier: 0,
+        latch: 0,
         stun: 0,
       }),
       enemy: () => ({ kind: "cinderling", x: 0, y: 0, hp: 0, maxHp: 0, hitFlash: 0, beamState: 0, beamAngle: 0, move: 0, stun: 0 }),

@@ -9,6 +9,8 @@ import {
   ENEMY_SHOT,
   HERO_SPRITES,
   TRIDENT,
+  BRONZE_SWORD,
+  GLADIUS,
   RAYGUN,
   PISTOL,
   AIR_CANNON,
@@ -123,6 +125,8 @@ export class BootScene extends Phaser.Scene {
     this.addCanvas("machinegun", renderPixelSprite(MACHINE_GUN));
     this.addCanvas("bullet", renderPixelSprite(MG_SHOT));
     this.addCanvas("trident", renderPixelSprite(TRIDENT));
+    this.addCanvas("bronzesword", renderPixelSprite(BRONZE_SWORD));
+    this.addCanvas("gladius", renderPixelSprite(GLADIUS));
     this.addCanvas("raygun", renderPixelSprite(RAYGUN));
     this.addCanvas("pistol", renderPixelSprite(PISTOL));
     this.addCanvas("aircannon", renderPixelSprite(AIR_CANNON));

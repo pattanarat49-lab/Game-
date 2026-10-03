@@ -51,7 +51,11 @@ export type HeroId =
   | "badigadi"
   | "gunbot"
   | "sparkmouse"
-  | "flamedragon";
+  | "flamedragon"
+  | "agamemnon"
+  | "vampire"
+  | "rider"
+  | "gladiator";
 export type AttackStyle = "punch" | "sword" | "rifle" | "lightning" | "magic";
 export type SkillKind =
   | "smash"
@@ -82,7 +86,9 @@ export type SkillKind =
   | "summon" // call out helpers that fight on their own
   | "card" // a thrown card that takes a random share of the target's HP
   | "revive" // get straight back up if you fall soon after
-  | "immortal"; // a barrier that blocks all damage and heals
+  | "immortal" // a barrier that blocks all damage and heals
+  | "latch" // leap onto a target, cling to it and drink its blood
+  | "kick"; // a flying kick along a line that stuns whoever it hits
 
 export interface SkillDef {
   kind: SkillKind;
@@ -582,6 +588,58 @@ export const HEROES: Record<HeroId, HeroDef> = {
     pierce: 0,
     skill: { kind: "immortal", name: "IMMORTAL", cooldown: 18, damage: 0.1, radius: 0, duration: 3 },
   },
+  agamemnon: {
+    name: "Agamemnon",
+    role: "King of kings",
+    blurb: "2x HP, bronze sword sweeps. SUMMON GLADIATORS calls 20 gladiators (10% of his HP each) to fight for 20 seconds.",
+    stars: 5,
+    maxHp: 220,
+    speed: 105,
+    attack: "sword",
+    attackCooldown: 0.45,
+    damage: 28,
+    range: 40,
+    arc: 2.2,
+    aoe: 0,
+    shotSpeed: 0,
+    pierce: 0,
+    skill: { kind: "summon", name: "GLADIATORS", cooldown: 30, damage: 0.1, radius: 0, count: 20, duration: 20, pet: "gladiator" },
+  },
+  vampire: {
+    name: "Vampire",
+    role: "Night hunter",
+    blurb: "Quick claw swipes. BLOOD LATCH leaps onto the nearest target in front, clings to it for 3s and drains its blood to heal.",
+    stars: 4,
+    maxHp: 120,
+    speed: 130,
+    attack: "sword",
+    attackCooldown: 0.3,
+    damage: 16,
+    range: 26,
+    arc: 1.6,
+    aoe: 0,
+    shotSpeed: 0,
+    pierce: 0,
+    // BLOOD LATCH: leap up to `radius`, then `damage` per second for `duration`, healing the same.
+    skill: { kind: "latch", name: "BLOOD LATCH", cooldown: 9, damage: 40, radius: 170, duration: 3 },
+  },
+  rider: {
+    name: "Hopper Rider",
+    role: "Masked hero",
+    blurb: "1.5x HP, runs 1.5x faster, very fast punches. RIDER KICK leaps into a flying kick that stuns everything it hits for 2s.",
+    stars: 4,
+    maxHp: 165,
+    speed: 165,
+    attack: "punch",
+    attackCooldown: 0.18,
+    damage: 12,
+    range: 24,
+    arc: 1.2,
+    aoe: 0,
+    shotSpeed: 0,
+    pierce: 0,
+    skill: { kind: "kick", name: "RIDER KICK", cooldown: 8, damage: 70, radius: 150, width: 30, duration: 2 },
+  },
   // Summons (not pickable): their HP comes from the summoner's skill.
   gunbot: {
     name: "Gunner Bot",
@@ -616,6 +674,24 @@ export const HEROES: Record<HeroId, HeroDef> = {
     range: 60,
     arc: 0,
     aoe: 34,
+    shotSpeed: 0,
+    pierce: 0,
+    skill: { kind: "passive", name: "", cooldown: 1, damage: 0, radius: 0 },
+  },
+  gladiator: {
+    name: "Gladiator",
+    role: "Summon",
+    blurb: "",
+    stars: 1,
+    summon: true,
+    maxHp: 1,
+    speed: 115,
+    attack: "sword",
+    attackCooldown: 0.7,
+    damage: 10,
+    range: 24,
+    arc: 1.6,
+    aoe: 0,
     shotSpeed: 0,
     pierce: 0,
     skill: { kind: "passive", name: "", cooldown: 1, damage: 0, radius: 0 },

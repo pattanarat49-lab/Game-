@@ -52,7 +52,7 @@ interface PlayerView {
 
 /** A short-lived swing, slash or shockwave drawn on top of the world. */
 interface Effect {
-  kind: "punch" | "sword" | "smash" | "muzzle" | "bolt" | "storm" | "blast" | "impact" | "heal" | "line" | "slashes" | "ripple" | "jab" | "gatling" | "rewind";
+  kind: "punch" | "sword" | "smash" | "muzzle" | "bolt" | "storm" | "blast" | "impact" | "heal" | "line" | "slashes" | "ripple" | "jab" | "gatling" | "rewind" | "kick";
   x: number;
   y: number;
   aim: number;
@@ -64,7 +64,7 @@ interface Effect {
   follow?: PlayerView;
 }
 
-const WEAPON_TEXTURE: Record<string, string | undefined> = { isekai: "sword", simo: "rifle", okita: "sword", sakamoto: "knife", hanuman: "trident", rick: "raygun", kid: "pistol", doraemon: "aircannon" };
+const WEAPON_TEXTURE: Record<string, string | undefined> = { isekai: "sword", simo: "rifle", okita: "sword", sakamoto: "knife", hanuman: "trident", rick: "raygun", kid: "pistol", doraemon: "aircannon", agamemnon: "bronzesword", gladiator: "gladius" };
 const BULLET_TEXTURE: Record<string, string> = {
   snipe: "snipe",
   wave: "wave",
@@ -409,6 +409,11 @@ export class GameScene extends Phaser.Scene {
       this.warp = me.warp;
       this.predicted = { x: me.x, y: me.y };
       this.dashTimer = 0;
+    } else if (me.latch > 0) {
+      // BLOOD LATCH: we ride along on our victim, wherever the server says it is.
+      const k = Math.min(1, dt * 20);
+      this.predicted = { x: this.predicted.x + (me.x - this.predicted.x) * k, y: this.predicted.y + (me.y - this.predicted.y) * k };
+      this.dashTimer = 0;
     } else if (frozen) {
       // Someone stopped time: we cannot move until it flows again.
       this.dashTimer = 0;
@@ -516,7 +521,7 @@ export class GameScene extends Phaser.Scene {
           view.label.setColor("#9fffb0");
           this.sparks.explode(16, p.x, p.y - 6);
           view.body.setScale(SUMMON_SCALE[p.hero] ?? 1);
-          if (p.hero === "gunbot") view.label.setVisible(false); // six name tags would bury the squad
+          if (p.hero === "gunbot" || p.hero === "gladiator") view.label.setVisible(false); // a crowd of name tags would bury the squad
         }
         this.players.set(id, view);
       }
@@ -585,6 +590,10 @@ export class GameScene extends Phaser.Scene {
           // IMMORTAL: a dark-violet barrier around the Demon Lord.
           view.bar.fillStyle(0x9a4aff, 0.18 + 0.1 * pulse).fillCircle(body.x, body.y - 9, 17);
           view.bar.lineStyle(2, 0xd8a8ff, 0.7 + 0.3 * pulse).strokeCircle(body.x, body.y - 9, 17);
+        }
+        if (p.latch > 0 && Math.random() < 0.5) {
+          // BLOOD LATCH: drops of blood fly off the bite.
+          view.bar.fillStyle(0xe02a3a, 1).fillRect(body.x + (Math.random() - 0.5) * 14, body.y - 8 - Math.random() * 10, 2, 2);
         }
         if (p.revive > 0) {
           // REVIVE is armed: a golden halo.
@@ -811,6 +820,15 @@ export class GameScene extends Phaser.Scene {
       case "revive":
         this.effects.push({ kind: "heal", x, y: y + 5, aim, range: 30, arc: 0, age: 0, life: 0.6 });
         break;
+      case "latch":
+        this.effects.push({ kind: "ripple", x, y, aim, range: 30, arc: 0, age: 0, life: 0.3 });
+        break;
+      case "kick":
+        // We already landed: draw the flying kick back along the path.
+        this.effects.push({ kind: "kick", x: x - Math.cos(aim) * skill.radius, y: y - Math.sin(aim) * skill.radius, aim, range: skill.radius, arc: skill.width ?? 30, age: 0, life: 0.4 });
+        cam.shake(200, 0.012);
+        this.sparks.explode(16, x, y);
+        break;
       case "immortal":
         this.effects.push({ kind: "ripple", x, y, aim, range: 60, arc: 0, age: 0, life: 0.4 });
         cam.shake(150, 0.008);
@@ -990,6 +1008,16 @@ export class GameScene extends Phaser.Scene {
           g.lineStyle(1, 0x1a0f14, 1).strokeCircle(fx, fy, 4);
         }
         if (Math.random() < 0.5) this.sparks.explode(1, e.x + cos * e.range * Math.random(), e.y + sin * e.range * Math.random());
+      } else if (e.kind === "kick") {
+        // RIDER KICK: a streak of green energy ending in a burst where the foot lands.
+        const cos = Math.cos(e.aim);
+        const sin = Math.sin(e.aim);
+        const ex = e.x + cos * e.range;
+        const ey = e.y + sin * e.range;
+        g.lineStyle(e.arc * 0.6 * (1 - t), 0x3aff6a, 0.35 * (1 - t)).lineBetween(e.x, e.y, ex, ey);
+        g.lineStyle(4, 0xe02a3a, 1 - t).lineBetween(e.x + cos * e.range * 0.3, e.y + sin * e.range * 0.3, ex, ey);
+        g.lineStyle(2, 0xffffff, 1 - t).lineBetween(e.x + cos * e.range * 0.5, e.y + sin * e.range * 0.5, ex, ey);
+        g.fillStyle(0xffd400, 0.8 * (1 - t)).fillCircle(ex, ey, 6 + 18 * t);
       } else if (e.kind === "rewind") {
         // A ring closing back in, with a clock hand spinning backwards.
         g.lineStyle(4, 0x9fd8ff, 0.8 * (1 - t)).strokeCircle(e.x, e.y, e.range * (1 - t));
@@ -1096,6 +1124,19 @@ export class GameScene extends Phaser.Scene {
       case "card":
         lane(skill.radius, 8);
         break;
+      case "kick":
+        lane(skill.radius, skill.width ?? 30);
+        break;
+      case "latch": {
+        // A cone: the nearest target inside it gets bitten.
+        g.fillStyle(0xe02a3a, 0.12);
+        g.slice(x, y, skill.radius, this.aim - 0.7, this.aim + 0.7);
+        g.fillPath();
+        g.lineStyle(1, 0xe02a3a, 0.6).beginPath();
+        g.arc(x, y, skill.radius, this.aim - 0.7, this.aim + 0.7);
+        g.strokePath();
+        break;
+      }
       case "portal":
         lane(skill.radius, 4);
         area(x + cos * skill.radius, y + sin * skill.radius, 16);

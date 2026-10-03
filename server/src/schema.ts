@@ -29,6 +29,7 @@ export class Player extends Schema {
   @type("uint8") mode = 0;
   @type("float32") revive = 0;
   @type("float32") barrier = 0;
+  @type("float32") latch = 0;
   @type("float32") stun = 0;
 }
 
