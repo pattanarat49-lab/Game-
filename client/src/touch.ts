@@ -43,6 +43,8 @@ export class TouchControls {
   readonly skill2Button?: Button;
   /** Last aim angle, kept after the aim stick is released. */
   aimAngle = 0;
+  /** After a dragged skill is released, its direction holds until the cast has gone out. */
+  private aimLockUntil = 0;
 
   private gfx: Phaser.GameObjects.Graphics;
   private labels: Phaser.GameObjects.Text[] = [];
@@ -166,7 +168,8 @@ export class TouchControls {
       stick.dx = dx / STICK_RADIUS;
       stick.dy = dy / STICK_RADIUS;
       const pushed = Math.hypot(stick.dx, stick.dy) > DEADZONE;
-      if (pushed && (stick === this.aim || this.aim.pointerId === null) && !this.aimingSkill) {
+      const locked = !!this.aimingSkill || performance.now() < this.aimLockUntil;
+      if (pushed && (stick === this.aim || this.aim.pointerId === null) && !locked) {
         // The aim stick wins; otherwise face where you walk.
         this.aimAngle = Math.atan2(stick.dy, stick.dx);
       }
@@ -184,7 +187,14 @@ export class TouchControls {
     for (const b of this.buttons) {
       if (b.pointerId !== p.id) continue;
       b.pointerId = null;
-      if (b !== this.dashButton) b.castUntil = performance.now() + CAST_PULSE_MS; // release = cast
+      if (b !== this.dashButton) {
+        b.castUntil = performance.now() + CAST_PULSE_MS; // release = cast
+        // A dragged skill goes where it was aimed, not where you happen to be walking.
+        if (Math.hypot(b.dragX, b.dragY) > SKILL_AIM_DEADZONE) {
+          this.aimAngle = Math.atan2(b.dragY, b.dragX);
+          this.aimLockUntil = b.castUntil + 350; // keep facing the skill while it plays out
+        }
+      }
       b.dragX = 0;
       b.dragY = 0;
     }

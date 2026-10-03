@@ -191,6 +191,7 @@ interface PlayerBrain {
   hurtTimer: number;
   burstLeft: number;
   burstTimer: number;
+  burstAim: number; // the sniper burst keeps firing where the skill was aimed
   slashLeft: number; // Okita's dimension slash: hits still to come
   slashTimer: number;
   cloneLife: number; // seconds a clone has left
@@ -271,6 +272,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       hurtTimer: 0,
       burstLeft: 0,
       burstTimer: 0,
+      burstAim: 0,
       slashLeft: 0,
       slashTimer: 0,
       cloneLife: 0,
@@ -613,7 +615,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
           brain.burstLeft--;
           brain.burstTimer = SNIPER_BURST_GAP;
           p.attackSeq++;
-          this.spawnBullet("snipe", p.x, p.y, input.aim, hero.shotSpeed, { owner: id, damage: hero.skill.damage, pierce: 99, life: hero.range / hero.shotSpeed });
+          this.spawnBullet("snipe", p.x, p.y, brain.burstAim, hero.shotSpeed, { owner: id, damage: hero.skill.damage, pierce: 99, life: hero.range / hero.shotSpeed });
         }
       }
 
@@ -638,6 +640,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       case "burst": // three rapid piercing shots
         brain.burstLeft = SNIPER_BURST;
         brain.burstTimer = 0;
+        brain.burstAim = p.aim;
         break;
       case "fireball": {
         // a slow, big fireball with a huge explosion
