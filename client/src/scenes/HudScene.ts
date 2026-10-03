@@ -96,7 +96,16 @@ export class HudScene extends Phaser.Scene {
       this.waveText.setText(`${state.stage === "duel" ? "BOT DUEL" : "PVP ARENA"}  FIRST TO ${PVP_KILLS_TO_WIN} KILLS`);
       if (state.phase === "victory") banner = `${state.winner} WINS!\nNext round in ${Math.ceil(state.phaseTimer)}`;
       else if (me?.dead) banner = `YOU FELL\nRespawning in ${Math.ceil(me.respawnIn)}`;
-      else if (state.phase === "intermission") banner = `FIGHT!\nin ${Math.ceil(state.phaseTimer)}`;
+      else if (state.phase === "intermission") {
+        // Every knockout resets the ring: show the round and the score so far.
+        const fighters: any[] = [];
+        state.players.forEach((p: any) => {
+          if (!p.owner) fighters.push(p);
+        });
+        const round = fighters.reduce((n, p) => n + p.score, 0) + 1;
+        const score = fighters.length === 2 ? `\n${fighters[0].name} ${fighters[0].score} - ${fighters[1].score} ${fighters[1].name}` : "";
+        banner = `ROUND ${round}${round > 1 ? score : ""}\nFIGHT! in ${Math.ceil(state.phaseTimer)}`;
+      }
       else if (realPlayers(state) < 2) banner = "Waiting for another player...\nShare the link with a friend";
     } else if (state.stage === "boss") {
       // Boss room: a big health bar for Godzilla instead of a wave counter.

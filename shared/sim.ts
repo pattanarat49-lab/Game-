@@ -67,6 +67,8 @@ const WAVE_CLEAR_HEAL = 0.3;
 const SNIPER_BURST = 3;
 const SNIPER_BURST_GAP = 0.15;
 const OKITA_SLASHES = 8;
+/** PvP / Bot Duel: the pause after a knockout before the next round starts. */
+const ROUND_RESET_PAUSE = 2;
 const ONE_PUNCH_DAMAGE = 1e9; // "infinity", but still a number the network can send
 const MAX_CLONES = 2;
 export const TITAN_ATTACK_COOLDOWN = 0.6;
@@ -306,6 +308,8 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
   private brains = new Map<string, PlayerBrain>();
   private zoneBrains = new Map<string, ZoneBrain>();
   private enemyBrains = new Map<string, EnemyBrain>();
+  /** A fighter was knocked out in the ring: reset the round on the next tick. */
+  private roundOver = false;
   private bulletBrains = new Map<string, BulletBrain>();
   private history: Snapshot[] = [];
   private historyTimer = 0;
@@ -450,6 +454,46 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
     this.state.enemies.forEach((_e, eid) => ids.push(eid));
     for (const eid of ids) this.state.enemies.delete(eid);
     this.enemyBrains.clear();
+  }
+
+  /**
+   * PvP and Bot Duel, after a knockout: both fighters go back to their corners at full HP and fight on
+   * after a short pause. Summons, shots, skill areas and blocks are cleared; the score stays.
+   */
+  private resetRound() {
+    const s = this.state;
+    this.roundOver = false;
+    s.timeStop = 0;
+    s.timeStopBy = "";
+    s.reality = 0;
+    s.realityBy = "";
+    const helpers: string[] = [];
+    s.players.forEach((p, id) => {
+      if (p.owner) return helpers.push(id);
+      p.dead = false;
+      p.respawnIn = 0;
+      p.hp = p.maxHp;
+      p.titan = p.barrier = p.revive = p.latch = p.beam = p.stun = p.big = p.buff = 0;
+      p.dashing = false;
+      this.placeAtSpawn(p);
+      const brain = this.brains.get(id);
+      if (brain) {
+        brain.target = undefined;
+        brain.dashTimer = 0;
+        brain.kbx = brain.kby = 0;
+      }
+      p.kbx = p.kby = 0;
+    });
+    for (const h of helpers) this.removePlayer(h);
+    const shots: string[] = [];
+    s.bullets.forEach((_b, bid) => shots.push(bid));
+    for (const b of shots) this.removeBullet(b);
+    const zones: string[] = [];
+    s.zones.forEach((_z, zid) => zones.push(zid));
+    for (const z of zones) this.removeZone(z);
+    this.clearEnemies();
+    s.phase = "intermission";
+    s.phaseTimer = ROUND_RESET_PAUSE;
   }
 
   /** PvP: everyone is ready; fresh start positions and the countdown begins. */
@@ -710,6 +754,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
   /** PvP Arena: a countdown, then free-for-all until someone reaches the kill target. */
   private updatePvp(dt: number) {
     const s = this.state;
+    if (this.roundOver) this.resetRound();
     if (s.phase === "select") {
       let fighters = 0;
       let ready = 0;
@@ -1670,24 +1715,23 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
           this.state.winner = killer.name;
         }
       }
+      // PvP and Bot Duel: every knockout starts a fresh round (handled at the start of the next tick).
+      if (this.ring && this.state.phase === "fight") this.roundOver = true;
     }
   }
 
   private placeAtSpawn(p: P) {
     let a = Math.random() * Math.PI * 2;
     if (this.ring) {
-      // In the ring, start in the spot furthest from everyone already standing in it.
-      let bestGap = -1;
-      for (let i = 0; i < 8; i++) {
-        const ca = (i / 8) * Math.PI * 2;
-        const cx = CENTER_X + Math.cos(ca) * 110;
-        const cy = CENTER_Y + Math.sin(ca) * 110;
-        let gap = Infinity;
-        this.state.players.forEach((q) => {
-          if (q !== p && !q.dead && !q.owner) gap = Math.min(gap, Math.hypot(q.x - cx, q.y - cy));
-        });
-        if (gap > bestGap) [bestGap, a] = [gap, ca];
-      }
+      // In the ring everyone has a fixed corner: the first fighter starts on the left, the second on the right.
+      let index = 0;
+      let seen = false;
+      this.state.players.forEach((q) => {
+        if (q.owner || seen) return;
+        if (q === p) seen = true;
+        else index++;
+      });
+      a = index === 0 ? Math.PI : index === 1 ? 0 : (index * Math.PI) / 2 + Math.PI / 4;
     }
     // In the arena, spread players out so nobody spawns on top of an enemy player.
     const r = this.ring ? 110 : 30;

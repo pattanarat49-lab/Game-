@@ -10,6 +10,7 @@ Design doc: see `docs/game-design-foundation.md`.
   - **Lava Stage:** four waves while lava creeps in from the edges, then the Pyre Warden boss.
   - **PvP Arena (online only, 1 vs 1):** starts on a fighting-game style PLAYER SELECT screen: each player sees the other's pick move live (1P cyan, 2P red), then presses READY; the match starts when both are ready. Players fight in a small boxing ring with no cover (`RING` in `shared/game.ts`). First to 3 kills wins, then both go back to player select. If a player leaves mid-match, the match is void and the other player goes back to player select. Player-vs-player hits deal 60% damage (`PVP_DAMAGE_SCALE`).
   - **Bot Duel (solo):** 1v1 in the same boxing ring against a bot. Pick the bot's hero under the stage cards. The bot closes in or keeps its range, circles, and uses its skills; first to 3 KOs wins.
+  - In both ring modes every knockout ends the round: both fighters go back to their corners (1P left, 2P right) at full HP, summons, shots and blocks are cleared, and the next round starts after a 2-second pause. First to 3 KOs wins.
   - **Boss Room:** no waves. Fight the Atomic Kaiju straight away. It fires an atomic beam after a red warning line, so move out of the line. Between beams it spits fans of fireballs.
 
 - **Emberfall**, a volcanic arena with basalt pillars
