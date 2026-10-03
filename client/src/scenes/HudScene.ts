@@ -66,8 +66,9 @@ export class HudScene extends Phaser.Scene {
       const w = 200;
       this.bars.fillStyle(0x000000, 0.6).fillRect(16, 36, w + 8, 18);
       this.bars.fillStyle(0x7a1f1f, 1).fillRect(20, 40, w, 10);
-      this.bars.fillStyle(0x4cd964, 1).fillRect(20, 40, w * Math.max(0, me.hp / me.maxHp), 10);
-      this.hpText.setText(`${me.name} (${heroOf(me.hero).name})  HP ${Math.ceil(me.hp)}/${me.maxHp}`);
+      const invincible = !!heroOf(me.hero).invincible;
+      this.bars.fillStyle(invincible ? 0xf6f6f6 : 0x4cd964, 1).fillRect(20, 40, w * (invincible ? 1 : Math.max(0, me.hp / me.maxHp)), 10);
+      this.hpText.setText(`${me.name} (${heroOf(me.hero).name})  HP ${invincible ? "INFINITE" : `${Math.ceil(me.hp)}/${me.maxHp}`}`);
       const dash = me.dashCooldown > 0 ? `${me.dashCooldown.toFixed(1)}s` : "READY";
       const hero = heroOf(me.hero);
       const noCooldown = hero.skill.cooldown < 0.2; // e.g. Ricardo's jab
@@ -121,8 +122,12 @@ export class HudScene extends Phaser.Scene {
     let color = "#ffffff";
     state.zones?.forEach((z: any) => {
       if (z.kind === "domain") [special, color] = ["DOMAIN EXPANSION\nUNLIMITED VOID", "#c9a8ff"];
+      else if (z.kind === "city" && !special) [special, color] = [z.maxLife - z.life < 1.5 ? "CREATOR" : "", "#e8f0ff"];
       else if (z.kind === "asgard" && !special) [special, color] = [z.maxLife - z.life < 1.5 ? "ILLUSION: ASGARD" : "", "#ffd86a"];
     });
+    if (state.reality > 0) {
+      [special, color] = [`REALITY CHANGE  ${state.reality.toFixed(1)}s\nenemies are ordinary humans`, "#ff6a9a"];
+    }
     if (state.timeStop > 0) {
       const by = state.players.get(state.timeStopBy);
       [special, color] = [`TIME STOP!\n${by?.name ?? ""} ${state.timeStop.toFixed(1)}s`, "#9fd8ff"];

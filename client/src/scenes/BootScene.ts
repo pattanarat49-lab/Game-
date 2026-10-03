@@ -8,7 +8,9 @@ import {
   GODZILLA,
   ENEMY_SHOT,
   HERO_SPRITES,
+  GLITCH_ORB,
   HOLY_ORB,
+  HUMAN,
   LOKI_ORB,
   MAGIC_ORB,
   WATER_ORB,
@@ -90,6 +92,9 @@ export class BootScene extends Phaser.Scene {
     this.addCanvas("lokishot", renderPixelSprite(LOKI_ORB));
     this.addCanvas("asgard", this.drawAsgard());
     this.addCanvas("titanform", renderPixelSprite(TITAN_FORM));
+    this.addCanvas("human", renderPixelSprite(HUMAN));
+    this.addCanvas("glitchshot", renderPixelSprite(GLITCH_ORB));
+    this.addCanvas("city", this.drawCity());
     this.addCanvas("cinderling", renderPixelSprite(CINDERLING));
     this.addCanvas("brute", renderPixelSprite(BRUTE));
     this.addCanvas("caster", renderPixelSprite(CASTER));
@@ -226,6 +231,56 @@ export class BootScene extends Phaser.Scene {
     px(94, H - 18, 12, 8, "#ffe9a0");
     // Sparkles
     for (let i = 0; i < 40; i++) px(rand() * W, rand() * (H - 30), 1, 1, "#ffffff");
+    return canvas;
+  }
+
+  /** Yaotsu's CREATOR: a whole modern city skyline, glass towers and lit windows. */
+  private drawCity(): HTMLCanvasElement {
+    const W = 340;
+    const H = 230;
+    const canvas = document.createElement("canvas");
+    canvas.width = W;
+    canvas.height = H;
+    const ctx = canvas.getContext("2d")!;
+    const rand = seeded(31);
+    const px = (x: number, y: number, w: number, h: number, c: string) => {
+      ctx.fillStyle = c;
+      ctx.fillRect(Math.round(x), Math.round(y), Math.round(w), Math.round(h));
+    };
+    const ground = H - 16;
+    // Three rows of buildings: far (pale), middle, near (dark), so the city has depth.
+    const rows: { count: number; minH: number; maxH: number; body: string; light: string; shade: string; win: string }[] = [
+      { count: 14, minH: 90, maxH: 200, body: "#9aa8c0", light: "#b8c4d8", shade: "#7a88a0", win: "#e8f0ff" },
+      { count: 12, minH: 60, maxH: 150, body: "#5d6a84", light: "#75839e", shade: "#46526a", win: "#ffe9a0" },
+      { count: 10, minH: 30, maxH: 90, body: "#2f3648", light: "#424b62", shade: "#232838", win: "#ffd86a" },
+    ];
+    for (const row of rows) {
+      let x = rand() * 10;
+      while (x < W - 10) {
+        const w = 18 + rand() * 22;
+        const h = row.minH + rand() * (row.maxH - row.minH);
+        const top = ground - h;
+        px(x - 1, top - 1, w + 2, h + 1, "#141820");
+        px(x, top, w, h, row.body);
+        px(x, top, w * 0.25, h, row.light);
+        px(x + w * 0.8, top, w * 0.2, h, row.shade);
+        for (let y = top + 4; y < ground - 4; y += 6) {
+          for (let wx = x + 3; wx < x + w - 3; wx += 5) {
+            if (rand() < 0.55) px(wx, y, 2, 3, row.win);
+          }
+        }
+        // antennas and spires on the tallest towers
+        if (h > row.maxH * 0.8) px(x + w / 2, top - 12, 1, 12, "#d0d8e8");
+        x += w + rand() * 6;
+      }
+    }
+    // Street with lane markings and a few cars.
+    px(0, ground, W, 16, "#2a2d34");
+    for (let x = 4; x < W; x += 14) px(x, ground + 7, 7, 1, "#f2e6a0");
+    for (let i = 0; i < 6; i++) {
+      const cx = rand() * (W - 12);
+      px(cx, ground + 2 + (i % 2) * 7, 10, 4, ["#d84b3b", "#3b7dd8", "#f2f2f2", "#ffd23f"][i % 4]);
+    }
     return canvas;
   }
 

@@ -36,7 +36,8 @@ export type HeroId =
   | "loki"
   | "lawliet"
   | "thorfinn"
-  | "titan";
+  | "titan"
+  | "yaotsu";
 export type AttackStyle = "punch" | "sword" | "rifle" | "lightning" | "magic";
 export type SkillKind =
   | "smash"
@@ -56,7 +57,9 @@ export type SkillKind =
   | "clone" // a copy that fights on its own
   | "passive" // no button: the hero's power is always on
   | "rush" // dash through enemies, cutting everything on the way
-  | "titan"; // transform into a giant: basic attacks hit all around
+  | "titan" // transform into a giant: basic attacks hit all around
+  | "city" // build a whole city that heals the caster inside it
+  | "reality"; // every enemy becomes an ordinary human for a while
 
 export interface SkillDef {
   kind: SkillKind;
@@ -72,7 +75,8 @@ export interface HeroDef {
   name: string;
   role: string;
   blurb: string;
-  stars: number; // overall strength, 1-5, shown on the hero card
+  stars: number; // overall strength, 1-5, shown on the hero card (6 = special)
+  invincible?: boolean; // takes no damage at all (shown as infinite HP)
   maxHp: number;
   speed: number;
   attack: AttackStyle;
@@ -364,6 +368,26 @@ export const HEROES: Record<HeroId, HeroDef> = {
     pierce: 0,
     // In Titan form: damage and radius of each smash, and seconds between smashes.
     skill: { kind: "titan", name: "TITAN", cooldown: 20, damage: 90, radius: 75, duration: 10 },
+  },
+  yaotsu: {
+    name: "Yaotsu",
+    role: "Indignia God",
+    blurb: "Infinite HP, moves 2x faster. CREATOR builds a whole city (heals 10% HP/s inside). REALITY CHANGE turns every enemy into an ordinary human for 10s.",
+    stars: 6,
+    invincible: true,
+    maxHp: 9999,
+    speed: 210,
+    attack: "magic",
+    attackCooldown: 0.5,
+    damage: 30,
+    range: 240,
+    arc: 0,
+    aoe: 0,
+    shotSpeed: 300,
+    pierce: 0,
+    shot: "glitch",
+    skill: { kind: "city", name: "CREATOR", cooldown: 20, damage: 0.1, radius: 380, duration: 15 },
+    skill2: { kind: "reality", name: "REALITY CHANGE", cooldown: 25, damage: 1, radius: 0, duration: 10 },
   },
   loki: {
     name: "Loki",

@@ -15,6 +15,8 @@ export class LocalRoom {
     zones: new Map(),
     timeStop: 0,
     timeStopBy: "",
+    reality: 0,
+    realityBy: "",
     phase: "intermission",
     wave: 0,
     phaseTimer: 0,

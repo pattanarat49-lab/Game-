@@ -56,6 +56,7 @@ const OKITA_SLASHES = 8;
 const ONE_PUNCH_DAMAGE = 1e9; // "infinity", but still a number the network can send
 const MAX_CLONES = 2;
 const TITAN_ATTACK_COOLDOWN = 0.6;
+const ENEMY = "#enemy"; // attacker id for damage dealt by monsters
 const CLONE_SIGHT = 300;
 
 export interface SimPlayer {
@@ -101,7 +102,7 @@ export interface SimEnemy {
   beamAngle: number;
 }
 
-export type BulletKind = "snipe" | "wave" | "magic" | "fireball" | "enemy" | "holy" | "stone" | "loki";
+export type BulletKind = "snipe" | "wave" | "magic" | "fireball" | "enemy" | "holy" | "stone" | "loki" | "glitch";
 
 /** A lasting area on the map: a storm cloud, an illusion kingdom, a domain. */
 export interface SimZone {
@@ -141,6 +142,9 @@ export interface SimState<P extends SimPlayer, E extends SimEnemy, B extends Sim
   /** Seconds of stopped time left, and who stopped it (they alone can move). */
   timeStop: number;
   timeStopBy: string;
+  /** Yaotsu's reality change: seconds left, and who cast it. Their enemies become ordinary humans. */
+  reality: number;
+  realityBy: string;
   phase: string;
   wave: number;
   phaseTimer: number;
@@ -309,6 +313,14 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
         this.updateBullets(dt, by);
         this.updateZones(dt, by);
         return;
+      }
+    }
+
+    if (s.reality > 0) {
+      s.reality = Math.max(0, s.reality - dt);
+      if (s.reality <= 0 || !s.players.has(s.realityBy)) {
+        s.reality = 0;
+        s.realityBy = "";
       }
     }
 
@@ -513,13 +525,14 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
         }
       }
 
-      // Skills
-      if (input.skill && p.skillCooldown <= 0 && hero.skill.kind !== "passive") {
+      // Skills (ordinary humans under a reality change cannot use any)
+      const powerless = s.reality > 0 && this.isFoe(s.realityBy, id);
+      if (input.skill && p.skillCooldown <= 0 && hero.skill.kind !== "passive" && !powerless) {
         p.skillCooldown = hero.skill.cooldown;
         p.skillSeq++;
         this.useSkill(id, p, hero, hero.skill, brain);
       }
-      if (hero.skill2 && input.skill2 && p.skill2Cooldown <= 0) {
+      if (hero.skill2 && input.skill2 && p.skill2Cooldown <= 0 && !powerless) {
         p.skill2Cooldown = hero.skill2.cooldown;
         p.skill2Seq++;
         this.useSkill(id, p, hero, hero.skill2, brain);
@@ -634,6 +647,17 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       case "titan":
         p.titan = skill.duration ?? 10;
         brain.attackTimer = 0;
+        break;
+      case "city": {
+        // CREATOR: a whole city appears around Yaotsu.
+        const x = Math.min(WORLD_W - 60, Math.max(60, p.x));
+        const y = Math.min(WORLD_H - 60, Math.max(60, p.y));
+        this.addZone("city", x, y, skill.radius, skill.duration ?? 15, { owner: id, every: 0.5, damage: skill.damage });
+        break;
+      }
+      case "reality":
+        s.reality = skill.duration ?? 10;
+        s.realityBy = id;
         break;
     }
   }
@@ -757,6 +781,9 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
         brain.tick += brain.every;
         if (z.kind === "hurricane") {
           this.sweep(brain.owner, z.x, z.y, 0, z.radius, Math.PI * 2, brain.damage);
+        } else if (z.kind === "city") {
+          const p = s.players.get(brain.owner);
+          if (p && !p.dead && Math.hypot(p.x - z.x, p.y - z.y) <= z.radius) p.hp = Math.min(p.maxHp, p.hp + p.maxHp * brain.damage * brain.every);
         } else if (z.kind === "asgard") {
           // Everyone hostile inside the illusion loses a share of their max HP.
           const share = brain.damage * brain.every;
@@ -814,6 +841,11 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
     const p = this.state.players.get(id);
     const brain = this.brains.get(id);
     if (!p || !brain || p.dead || p.dashing) return;
+    if (heroOf(p.hero).invincible) return;
+    // Under Yaotsu's reality change, ordinary humans hit for 1.
+    if (this.state.reality > 0 && attacker && (attacker === ENEMY || this.isFoe(this.state.realityBy, attacker))) {
+      amount = Math.min(amount, 1);
+    }
     if (!ignoreIframes) {
       if (brain.hurtTimer > 0) return;
       brain.hurtTimer = HURT_IFRAMES;
@@ -919,8 +951,10 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       const dy = p.y - e.y;
       const dist = Math.hypot(dx, dy) || 1;
 
-      if (e.kind === "godzilla" && this.updateBeam(e, brain, dx, dy, dt)) {
-        if (dist < def.radius + PLAYER_RADIUS) this.damagePlayer(targetId, def.touchDamage);
+      const human = this.state.reality > 0;
+      if (human) e.beamState = 0; // ordinary humans have no atomic breath
+      if (e.kind === "godzilla" && !human && this.updateBeam(e, brain, dx, dy, dt)) {
+        if (dist < def.radius + PLAYER_RADIUS) this.damagePlayer(targetId, def.touchDamage, false, ENEMY);
         return;
       }
 
@@ -935,9 +969,9 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       e.x = moved.x;
       e.y = moved.y;
 
-      if (dist < def.radius + PLAYER_RADIUS) this.damagePlayer(targetId, def.touchDamage);
+      if (dist < def.radius + PLAYER_RADIUS) this.damagePlayer(targetId, def.touchDamage, false, ENEMY);
 
-      if (def.shootEvery) {
+      if (def.shootEvery && !human) {
         brain.shootTimer -= dt;
         if (brain.shootTimer <= 0) {
           brain.shootTimer = def.shootEvery;
@@ -994,7 +1028,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       const along = (p.x - e.x) * cos + (p.y - e.y) * sin;
       if (along < 0 || along > BEAM_LENGTH) return;
       const across = Math.abs(-(p.x - e.x) * sin + (p.y - e.y) * cos);
-      if (across < BEAM_WIDTH / 2 + PLAYER_RADIUS) this.damagePlayer(pid, BEAM_DAMAGE);
+      if (across < BEAM_WIDTH / 2 + PLAYER_RADIUS) this.damagePlayer(pid, BEAM_DAMAGE, false, ENEMY);
     });
     if (brain.beamTimer <= 0) {
       e.beamState = 0;
@@ -1051,7 +1085,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
         s.players.forEach((p, pid) => {
           if (!s.bullets.has(id) || p.dead || p.dashing) return;
           if (Math.hypot(p.x - b.x, p.y - b.y) < PLAYER_RADIUS + 2) {
-            this.damagePlayer(pid, brain.damage);
+            this.damagePlayer(pid, brain.damage, false, ENEMY);
             this.removeBullet(id);
           }
         });

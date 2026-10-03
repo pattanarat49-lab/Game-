@@ -40,6 +40,7 @@ interface PlayerView {
   attackSeq: number;
   skillSeq: number;
   skill2Seq: number;
+  glitch?: Phaser.GameObjects.Image[]; // Yaotsu's "error" afterimages
 }
 
 /** A short-lived swing, slash or shockwave drawn on top of the world. */
@@ -64,6 +65,7 @@ const BULLET_TEXTURE: Record<string, string> = {
   holy: "holy",
   stone: "stone",
   loki: "lokishot",
+  glitch: "glitchshot",
 };
 const PLAYER_MARKERS = [0x3b7dd8, 0xd84b3b, 0x3bd87a, 0xc93bd8];
 
@@ -450,9 +452,11 @@ export class GameScene extends Phaser.Scene {
 
       // Titan form: a giant body for the duration.
       const titanNow = p.titan > 0 && !p.dead;
-      const texture = titanNow ? "titanform" : `hero_${p.hero}`;
+      // Under Yaotsu's reality change, rival players are ordinary humans too.
+      const humanized = state.reality > 0 && state.stage === "pvp" && (p.owner || id) !== state.realityBy && !p.dead;
+      const texture = humanized ? "human" : titanNow ? "titanform" : `hero_${p.hero}`;
       if (body.texture.key !== texture) {
-        body.setTexture(texture).setScale(titanNow ? 2.6 : 1);
+        body.setTexture(texture).setScale(titanNow && !humanized ? 2.6 : 1);
         if (titanNow) {
           this.effects.push({ kind: "bolt", x: body.x, y: body.y, aim: 0, range: 60, arc: 0, age: 0, life: 0.5 });
           this.cameras.main.shake(400, 0.02);
@@ -461,6 +465,7 @@ export class GameScene extends Phaser.Scene {
         } else this.sparks.explode(20, body.x, body.y - 6);
       }
       view.label.setPosition(body.x, body.y - (titanNow ? 66 : 18));
+      if (p.hero === "yaotsu") this.drawGlitch(view, p.dead);
       view.label.setDepth(1000);
 
       if (p.hp < view.lastHp - 0.5) view.hurtFlash = 0.15;
@@ -490,10 +495,37 @@ export class GameScene extends Phaser.Scene {
       if (seen.has(id)) continue;
       view.body.destroy();
       view.weapon?.destroy();
+      view.glitch?.forEach((g) => g.destroy());
       view.label.destroy();
       view.bar.destroy();
       this.players.delete(id);
       this.tracks.delete(`p${id}`);
+    }
+  }
+
+  /** Yaotsu looks like a rendering error: red and cyan copies jitter around the body. */
+  private drawGlitch(view: PlayerView, dead: boolean) {
+    const body = view.body;
+    if (!view.glitch) {
+      view.glitch = [0xff2a6a, 0x2affea].map((tint) =>
+        this.add.image(body.x, body.y, body.texture.key).setOrigin(0.5, 0.85).setTint(tint).setBlendMode(Phaser.BlendModes.ADD),
+      );
+    }
+    const burst = Math.random() < 0.12; // every so often the image tears badly
+    view.glitch.forEach((g, i) => {
+      const spread = burst ? 4 : 1.5;
+      g.setTexture(body.texture.key)
+        .setScale(body.scaleX * (burst && i === 0 ? 1.15 : 1), body.scaleY)
+        .setFlipX(body.flipX)
+        .setPosition(body.x + (Math.random() - 0.5) * spread * 2 + (i === 0 ? -1 : 1), body.y + (Math.random() - 0.5) * spread)
+        .setDepth(body.depth - 0.1)
+        .setAlpha(dead ? 0 : burst ? 0.8 : 0.45)
+        .setVisible(!dead);
+    });
+    if (burst && !dead) {
+      // a torn scanline across the body
+      const y = body.y - 4 - Math.random() * 12;
+      this.fx.fillStyle(Math.random() < 0.5 ? 0xff2a6a : 0x2affea, 0.8).fillRect(body.x - 10 + (Math.random() - 0.5) * 8, y, 20, 1);
     }
   }
 
@@ -582,6 +614,15 @@ export class GameScene extends Phaser.Scene {
         break;
       case "titan":
         break; // the transformation is drawn when the body changes
+      case "city":
+        cam.shake(400, 0.01);
+        this.sparks.explode(30, x, y);
+        break;
+      case "reality":
+        this.effects.push({ kind: "ripple", x, y, aim, range: 900, arc: 0, age: 0, life: 0.9 });
+        cam.flash(300, 255, 255, 255);
+        cam.shake(200, 0.01);
+        break;
     }
   }
 
@@ -767,6 +808,12 @@ export class GameScene extends Phaser.Scene {
         this.enemies.set(id, view);
       }
       const s = view.sprite;
+      const asHuman = state.reality > 0;
+      const etex = asHuman ? "human" : e.kind;
+      if (s.texture.key !== etex) {
+        s.setTexture(etex).setScale(asHuman ? 1.2 : ENEMY_SCALE[e.kind as EnemyKind]);
+        this.sparks.explode(8, s.x, s.y - 4);
+      }
       const at = this.smoothed(`e${id}`, e.x, e.y);
       if (Math.abs(at.x - s.x) > 0.05) s.setFlipX(at.x < s.x);
       if (dt > 0 && !(state.timeStop > 0)) {
@@ -887,6 +934,22 @@ export class GameScene extends Phaser.Scene {
           const r = Math.random() * z.radius;
           this.drawBolt(sky, z.x + Math.cos(a) * r, z.y + Math.sin(a) * r, fade);
         }
+      } else if (z.kind === "city") {
+        // Yaotsu's CREATOR: streets fill the ground and a skyline rises.
+        floor.fillStyle(0x3a3e48, 0.55 * fade).fillCircle(z.x, z.y, z.radius);
+        floor.lineStyle(1, 0xf2e6a0, 0.35 * fade);
+        for (let d = -z.radius; d <= z.radius; d += 48) {
+          const half = Math.sqrt(Math.max(0, z.radius * z.radius - d * d));
+          floor.lineBetween(z.x + d, z.y - half, z.x + d, z.y + half);
+          floor.lineBetween(z.x - half, z.y + d, z.x + half, z.y + d);
+        }
+        floor.lineStyle(3, 0xc8d4ec, 0.9 * fade).strokeCircle(z.x, z.y, z.radius);
+        let img = this.zoneImages.get(id);
+        if (!img) {
+          img = this.add.image(z.x, z.y, "city").setOrigin(0.5, 0.72).setDepth(-2).setScale(2);
+          this.zoneImages.set(id, img);
+        }
+        img.setAlpha(0.92 * fade);
       } else if (z.kind === "asgard") {
         // Loki's illusion: golden Asgard rises out of the ground.
         floor.fillStyle(0xffd86a, 0.16 * fade).fillCircle(z.x, z.y, z.radius);

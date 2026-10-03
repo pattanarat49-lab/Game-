@@ -187,6 +187,26 @@
         font-size: 12px;
         letter-spacing: 1px;
       }
+      .hero .stars.special {
+        background: linear-gradient(90deg, #ff2a6a, #ffd23f, #2affea, #c93bd8);
+        -webkit-background-clip: text;
+        background-clip: text;
+        color: transparent;
+        font-size: 10px;
+      }
+      /* Yaotsu's card glitches like a rendering error */
+      .hero.special canvas {
+        animation: glitch 1.6s steps(1) infinite;
+      }
+      @keyframes glitch {
+        0%, 86%, 100% { transform: none; filter: none; }
+        88% { transform: translate(-2px, 1px) skewX(8deg); filter: drop-shadow(2px 0 #ff2a6a) drop-shadow(-2px 0 #2affea); }
+        91% { transform: translate(2px, -1px); filter: drop-shadow(-3px 0 #ff2a6a) drop-shadow(3px 0 #2affea) invert(1); }
+        94% { transform: translate(-1px, 0) skewX(-6deg); filter: drop-shadow(2px 0 #2affea); }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .hero.special canvas { animation: none; }
+      }
       .hero .stars .dim {
         color: #4a3f45;
       }

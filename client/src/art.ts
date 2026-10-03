@@ -457,6 +457,29 @@ export const HERO_SPRITES: Record<string, PixelSprite> = {
     ],
     palette: { k: OUTLINE, h: "#4a2c18", s: "#f2c49a", e: "#1a4a2a", G: "#2fae6a", m: "#8a4030", g: "#2f6a3a", j: "#b08a5a", b: "#5a3a1a", w: "#efe8dc", n: "#3a2a1a" },
   },
+  yaotsu: {
+    grid: [
+      ".kk.kkkkkk.kk...",
+      "kwwkwwwwwwkwwk..",
+      "kwwwwwwwwwwwwwk.",
+      "kwwwsssssssswwk.",
+      "kwwsesssssesswk.",
+      "kwwssssssssswwk.",
+      "kwwwssssmssswwk.",
+      ".kwwksssssskwwk.",
+      ".kbbbbswwwwbbk..",
+      ".kbwbbbwwbwbbk..",
+      ".kbbwbwbbwbbbk..",
+      ".kbbbwbbwbwwbk..",
+      ".ksbwbbwbbwbsk..",
+      "..kbbbwbwbbbk...",
+      "..kbwbk.kbwbk...",
+      "..kbbwk.kwbbk...",
+      "..kbbbk.kbwbk...",
+      "..kkkkk.kkkkk...",
+    ],
+    palette: { k: OUTLINE, w: "#f6f6f6", s: "#dcd8d2", e: "#111111", m: "#6a6a6a", b: "#141414" },
+  },
 };
 
 // Titan form: a 50m Attack Titan (drawn bigger and scaled up in game).
@@ -493,10 +516,32 @@ export const TITAN_FORM: PixelSprite = {
     palette: { k: OUTLINE, h: "#2a1a12", s: "#d9a07a", S: "#a8704e", G: "#4dff9a", r: "#7a2a1a", w: "#fff4e0", t: "#3a1a10", R: "#c97a5a" },
   };
 
+// An ordinary person: what monsters turn into under Yaotsu's REALITY CHANGE.
+export const HUMAN: PixelSprite = {
+  grid: [
+    "..kkkkk...",
+    ".khhhhhk..",
+    ".khssssk..",
+    ".ksesesk..",
+    ".kssmssk..",
+    "..kssskk..",
+    ".kbbbbbbk.",
+    "kbkbbbbkbk",
+    "ksk bbbksk".replace(" ", "b"),
+    "..kbbbbk..",
+    "..kgggk...",
+    "..kgkgk...",
+    "..kgkgk...",
+    "..kkkkk...",
+  ],
+  palette: { k: OUTLINE, h: "#5a3a22", s: "#e9b48c", e: "#1a0f14", m: "#8a4030", b: "#6a8ac8", g: "#5a5a64" },
+};
+
 // Projectiles for the newer casters: the same orb shape in their own colours.
 const ORB_GRID = ["..kkk..", ".kpvpk.", "kpwwvpk", "kvwwwvk", "kpvwvpk", ".kpvpk.", "..kkk.."];
 export const HOLY_ORB: PixelSprite = { grid: ORB_GRID, palette: { k: "#b8862a", p: "#ffe28a", v: "#fff4c0", w: "#ffffff" } };
 export const WATER_ORB: PixelSprite = { grid: ORB_GRID, palette: { k: "#1f4a8a", p: "#4aa8ff", v: "#9fd8ff", w: "#ffffff" } };
+export const GLITCH_ORB: PixelSprite = { grid: ORB_GRID, palette: { k: "#ff2a6a", p: "#141414", v: "#2affea", w: "#ffffff" } };
 export const LOKI_ORB: PixelSprite = { grid: ORB_GRID, palette: { k: "#1f5a28", p: "#3a8a3a", v: "#e7b83a", w: "#fff4c0" } };
 
 export const MAGIC_ORB: PixelSprite = {

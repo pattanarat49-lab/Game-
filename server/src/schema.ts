@@ -64,6 +64,8 @@ export class RiftState extends Schema {
   @type({ map: Zone }) zones = new MapSchema<Zone>();
   @type("float32") timeStop = 0;
   @type("string") timeStopBy = "";
+  @type("float32") reality = 0;
+  @type("string") realityBy = "";
   @type("string") phase: Phase = "intermission";
   @type("uint8") wave = 0;
   @type("float32") phaseTimer = 0;

@@ -91,11 +91,15 @@ function buildHeroPicker() {
     const reach = Math.min(1, (hero.range + hero.aoe) / 600 + 0.15);
     card.innerHTML = `
       <span class="name">${hero.name}</span>
-      <span class="stars" title="${hero.stars} of 5 stars">${"★".repeat(hero.stars)}<span class="dim">${"★".repeat(5 - hero.stars)}</span></span>
+      ${
+        hero.stars > 5
+          ? `<span class="stars special" title="${hero.stars} stars, special">${"★".repeat(hero.stars)} SPECIAL</span>`
+          : `<span class="stars" title="${hero.stars} of 5 stars">${"★".repeat(hero.stars)}<span class="dim">${"★".repeat(5 - hero.stars)}</span></span>`
+      }
       <span class="role">${hero.role}</span>
       <span class="role">Skill: ${hero.skill.name}${hero.skill2 ? ` + ${hero.skill2.name}` : ""}</span>
       <div class="stats">
-        <span>HP</span>${bars(hero.maxHp / 300)}
+        <span>HP</span>${bars(hero.invincible ? 1 : hero.maxHp / 300)}
         <span>DAMAGE</span>${bars(hero.damage / 90)}
         <span>RANGE</span>${bars(reach)}
         <span>ATK SPEED</span>${bars(1 / hero.attackCooldown / 2.5)}
@@ -103,6 +107,7 @@ function buildHeroPicker() {
       </div>
       <span class="blurb">${hero.blurb}</span>`;
     card.prepend(renderPixelSprite(HERO_SPRITES[id]));
+    if (hero.stars > 5) card.classList.add("special");
     card.addEventListener("click", () => {
       selectedHero = id;
       localStorageSet("riftborn-hero", id);
