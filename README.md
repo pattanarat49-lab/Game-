@@ -9,32 +9,32 @@ Design doc: see `docs/game-design-foundation.md`.
 - **Stage select:**
   - **Lava Stage:** four waves while lava creeps in from the edges, then the Pyre Warden boss.
   - **PvP Arena (online only):** players fight each other. First to 3 kills wins the round, then a new round starts. Player-vs-player hits deal 60% damage (`PVP_DAMAGE_SCALE`).
-  - **Boss Room:** no waves. Fight Godzilla straight away. It fires an atomic beam after a red warning line, so move out of the line. Between beams it spits fans of fireballs.
+  - **Boss Room:** no waves. Fight the Atomic Kaiju straight away. It fires an atomic beam after a red warning line, so move out of the line. Between beams it spits fans of fireballs.
 
 - **Emberfall**, a volcanic arena with basalt pillars
 - **Rule twist:** lava creeps in from the edges during each wave and burns anyone standing in it. It cools between waves.
-- **Character select** with six heroes:
-  - **Superman:** melee punches, the hardest hits and 3x HP. Skill SMASH hits everything around him.
-  - **Isekai Hero:** mid-range sword sweeps that hit every enemy in the arc. Skill SKY SLASH throws a sword wave that cuts through enemies.
-  - **Simo Hayha:** sniper with very long range and huge damage, but a slow reload. Shots pierce. Skill WHITE DEATH fires three rapid shots.
-  - **Killua:** three times faster than anyone. Attacks call down lightning that hits an area. Skill THUNDERBOLT strikes everything around him.
-  - **Howl:** long-range magic orbs that explode in a wide blast. Skill CALCIFER throws a big fireball with a huge explosion.
-  - **Ricardo Martinez:** boxer with very short reach. Skill JAB has no cooldown, so hold it for rapid jabs.
-  - **Saitama:** 100x the HP of anyone else. Skill ONE PUNCH kills anything in front of him (Isekai Hero's reach).
-  - **Healer:** holy bolts from range. Skill HEAL restores 50% max HP to every ally nearby (and himself).
-  - **Deku:** runs 1.5x faster. Skill 100% SMASH blasts a wide straight line.
-  - **Okita Souji:** fast sword. Skill DIMENSION SLASH cuts everything around her 8 times.
-  - **Gojo:** close-range fighter. Skill DOMAIN EXPANSION hits every enemy on the whole map.
-  - **Star Platinum:** very fast punches. Skill TIME STOP freezes the whole map for 4 seconds; only he can move.
-  - **Rudeus Greyrat:** magic bolts. Skill HURRICANE summons a storm cloud that keeps striking lightning over a wide area.
-  - **Loki:** magic shots and two skills. ILLUSION raises Asgard for 10 seconds; enemies inside lose 7% of their max HP each second. CLONE (E) makes a copy with 25% of his HP that attacks enemies by itself.
-  - **L:** weak hits, runs 1.1x faster. No skill; PASSIVE FORESIGHT shows a ghost of where every monster and boss will be 0.5 seconds ahead.
-  - **Thorfinn:** quick twin-dagger slashes. Skill DAGGER RUSH dashes forward, cutting every enemy on the way.
-  - **Titan:** very weak hits as a human. Skill TITAN turns him into a 50m Titan for 10 seconds; every attack smashes everything around him.
-  - **Yaotsu (6 stars, special):** Superman's HP (300), moves 2x faster, hard-hitting glitch shots, and glitches like a rendering error. CREATOR builds a whole city (bigger than Asgard) for 15 seconds; enemies inside lose 10% of their max HP per second and Yaotsu heals 10% per second. REALITY CHANGE (E) turns every enemy into an ordinary human for 10 seconds: they hit for 1 and cannot use any skill (no beam, no fireballs).
+- **Character select** with 18 heroes:
+  - **Captain Steel:** melee punches, the hardest hits and 3x HP. Skill SMASH hits everything around him.
+  - **Reborn Knight:** mid-range sword sweeps that hit every enemy in the arc. Skill SKY SLASH throws a sword wave that cuts through enemies.
+  - **Frost Sniper:** sniper with very long range and huge damage, but a slow reload. Shots pierce. Skill FROST VOLLEY fires three rapid shots.
+  - **Volt Kid:** three times faster than anyone. Attacks call down lightning that hits an area. Skill THUNDERBOLT strikes everything around him.
+  - **Sky Wizard:** long-range magic orbs that explode in a wide blast. Skill FIRE SPIRIT throws a big fireball with a huge explosion.
+  - **Champ Rico:** boxer with very short reach. Skill JAB has no cooldown, so hold it for rapid jabs.
+  - **Plain Hero:** 100x the HP of anyone else. Skill FINAL BLOW kills anything in front of him (Reborn Knight's reach).
+  - **Holy Healer:** holy bolts from range. Skill HEAL restores 50% max HP to every ally nearby (and himself).
+  - **Green Rookie:** runs 1.5x faster. Skill FULL POWER SMASH blasts a wide straight line.
+  - **Sakura Blade:** fast sword. Skill PHANTOM SLASH cuts everything around her 8 times.
+  - **Void Sorcerer:** close-range fighter. Skill VOID REALM hits every enemy on the whole map.
+  - **Chrono Brawler:** very fast punches. Skill TIME STOP freezes the whole map for 4 seconds; only he can move.
+  - **Storm Mage:** magic bolts. Skill HURRICANE summons a storm cloud that keeps striking lightning over a wide area.
+  - **Trickster:** magic shots and two skills. ILLUSION raises a golden city for 10 seconds; enemies inside lose 7% of their max HP each second. CLONE (E) makes a copy with 25% of his HP that attacks enemies by itself.
+  - **The Detective:** weak hits, runs 1.1x faster. No skill; PASSIVE FORESIGHT shows a ghost of where every monster and boss will be 0.5 seconds ahead.
+  - **Viking Kid:** quick twin-dagger slashes. Skill DAGGER RUSH dashes forward, cutting every enemy on the way.
+  - **Giant Shifter:** very weak hits as a human. Skill GIANT FORM turns him into a 50m giant for 10 seconds; every attack smashes everything around him.
+  - **Glitch God (6 stars, special):** Captain Steel's HP (300), moves 2x faster, hard-hitting glitch shots, and glitches like a rendering error. CREATOR builds a whole city (bigger than the golden city) for 15 seconds; enemies inside lose 10% of their max HP per second and he heals 10% per second. REALITY CHANGE (E) turns every enemy into an ordinary human for 10 seconds: they hit for 1 and cannot use any skill (no beam, no fireballs).
 - Controls: attack with left mouse, aim with the mouse, dash with Space, use your skill with Q or right mouse (E too, unless the hero has a second skill, which E uses)
 - **Enemies:** Cinderlings (fast), Magma Brutes (tanky), Ash Casters (ranged), and the **Pyre Warden** boss on wave 5
-- **Stage 2: Jungle Temple** (harder than the Lava Stage, no lava): bigger waves of fast Monkeys and Banana Monkeys that throw bananas from range, then **King Kong** on wave 5. King Kong hurls boulders and, every few seconds, winds up (a red warning lane shows) and charges along it.
+- **Stage 2: Jungle Temple** (harder than the Lava Stage, no lava): bigger waves of fast Monkeys and Banana Monkeys that throw bananas from range, then the **Ape King** on wave 5. The Ape King hurls boulders and, every few seconds, winds up (a red warning lane shows) and charges along it.
 - **Co-op for up to 4 players.** Enemies get tougher with more players. Fallen players respawn after 5 seconds.
 - **Smooth multiplayer:** your own hero moves on your device at full frame rate and the server follows it (never faster than the hero can run), so there is no rubber-banding. The server still decides hits, damage and spawns. Other players and enemies are drawn ~60-150 ms in the past, blended between timestamped updates (30 a second), so they glide even when the network is jittery.
 
@@ -108,7 +108,7 @@ client/index.html         Title screen
 
 - **Balance:** every number (speeds, damage, cooldowns, waves, lava speed) is at the top of `shared/game.ts`. Each hero's stats are in the `HEROES` list there.
 - **Waves:** the `WAVES` list in `shared/game.ts`.
-- **Stages and Godzilla's beam:** `STAGES` and the `BEAM_*` numbers at the bottom of `shared/game.ts`.
+- **Stages and the Atomic Kaiju's beam:** `STAGES` and the `BEAM_*` numbers at the bottom of `shared/game.ts`.
 - **Pixel art:** change the letter grids in `client/src/art.ts`. Each letter is a color from the palette below the grid, and `.` is transparent. The hero sprites are in `HERO_SPRITES`.
 - **Map pillars:** the `ROCKS` list in `shared/game.ts`.
 

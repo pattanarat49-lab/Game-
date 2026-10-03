@@ -94,7 +94,7 @@ export class HudScene extends Phaser.Scene {
       else if (realPlayers(state) < 2) banner = "Waiting for another player...\nShare the link with a friend";
     } else if (state.stage === "boss") {
       // Boss room: a big health bar for Godzilla instead of a wave counter.
-      this.waveText.setText("BOSS ROOM  GODZILLA");
+      this.waveText.setText("BOSS ROOM  ATOMIC KAIJU");
       state.enemies.forEach((e: any) => {
         if (e.kind !== "godzilla") return;
         const w = Math.min(500, this.scale.width - 480);
@@ -104,8 +104,8 @@ export class HudScene extends Phaser.Scene {
         this.bars.fillStyle(0x7fd0ff, 1).fillRect(x, 40, w * Math.max(0, e.hp / e.maxHp), 6);
       });
       if (me?.dead) banner = `YOU FELL\nRespawning in ${Math.ceil(me.respawnIn)}`;
-      else if (state.phase === "intermission") banner = `GODZILLA APPROACHES\nin ${Math.ceil(state.phaseTimer)}`;
-      else if (state.phase === "victory") banner = `GODZILLA DEFEATED!\nRematch in ${Math.ceil(state.phaseTimer)}`;
+      else if (state.phase === "intermission") banner = `ATOMIC KAIJU APPROACHES\nin ${Math.ceil(state.phaseTimer)}`;
+      else if (state.phase === "victory") banner = `ATOMIC KAIJU DEFEATED!\nRematch in ${Math.ceil(state.phaseTimer)}`;
     } else {
       const jungle = state.stage === "jungle";
       this.waveText.setText(`${jungle ? "JUNGLE TEMPLE" : "EMBERFALL"}  WAVE ${state.wave === 0 ? "-" : waveLabel}  ENEMIES ${state.enemies.size}`);
@@ -123,7 +123,7 @@ export class HudScene extends Phaser.Scene {
       if (me?.dead) banner = `YOU FELL\nRespawning in ${Math.ceil(me.respawnIn)}`;
       else if (state.phase === "intermission") {
         const next = state.wave + 1;
-        const boss = jungle ? "KING KONG AWAKENS" : "THE PYRE WARDEN AWAKENS";
+        const boss = jungle ? "THE APE KING AWAKENS" : "THE PYRE WARDEN AWAKENS";
         banner = `${next === WAVE_COUNT ? boss : `WAVE ${next}`}\nin ${Math.ceil(state.phaseTimer)}`;
         if (state.wave > 0) banner = `Wave cleared! ${jungle ? "The jungle goes quiet..." : "The lava cools..."}\n\n${banner}`;
       } else if (state.phase === "victory") banner = `${jungle ? "JUNGLE TEMPLE CONQUERED!" : "EMBERFALL STABILISED!"}\nNew run in ${Math.ceil(state.phaseTimer)}`;
@@ -134,9 +134,9 @@ export class HudScene extends Phaser.Scene {
     let special = "";
     let color = "#ffffff";
     state.zones?.forEach((z: any) => {
-      if (z.kind === "domain") [special, color] = ["DOMAIN EXPANSION\nUNLIMITED VOID", "#c9a8ff"];
+      if (z.kind === "domain") [special, color] = ["VOID REALM", "#c9a8ff"];
       else if (z.kind === "city" && !special) [special, color] = [z.maxLife - z.life < 1.5 ? "CREATOR" : "", "#e8f0ff"];
-      else if (z.kind === "asgard" && !special) [special, color] = [z.maxLife - z.life < 1.5 ? "ILLUSION: ASGARD" : "", "#ffd86a"];
+      else if (z.kind === "asgard" && !special) [special, color] = [z.maxLife - z.life < 1.5 ? "ILLUSION: GOLDEN CITY" : "", "#ffd86a"];
     });
     if (state.reality > 0) {
       [special, color] = [`REALITY CHANGE  ${state.reality.toFixed(1)}s\nenemies are ordinary humans`, "#ff6a9a"];
