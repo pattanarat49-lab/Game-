@@ -63,7 +63,8 @@ export type HeroId =
   | "gladiator"
   | "taekwondo"
   | "theworld"
-  | "steve";
+  | "steve"
+  | "swordgod";
 export type AttackStyle = "punch" | "sword" | "rifle" | "lightning" | "magic";
 export type SkillKind =
   | "smash"
@@ -100,6 +101,8 @@ export type SkillKind =
   | "cross" // a huge straight punch that knocks targets far away
   | "dashkick" // dart in, kick and stun the nearest target in front, then hop back
   | "truck" // stop time, then drop a truck on the aimed spot
+  | "godrush" // a lightning-fast lunge that ends in a full spin cut (the Sword God's dash and whirl)
+  | "fan" // a fan of flying sword slashes
   | "solve" // lock on to the nearest enemy anywhere in range and stun it
   | "biglight" // a flashlight beam: everything caught in it grows bigger (easier to hit) and slower
   | "diamond" // a diamond sword for a while: basic attacks become strong, fast, long sword swings
@@ -652,6 +655,26 @@ export const HEROES: Record<HeroId, HeroDef> = {
     // TRUCK SMASH: the truck lands `radius` away at most and crushes everything within 60.
     skill: { kind: "truck", name: "TRUCK SMASH", cooldown: 18, damage: 140, radius: 170, duration: 2 },
   },
+  swordgod: {
+    name: "Sword God",
+    role: "Sword saint",
+    blurb: "The Sword Dojo's master, now on your side. Quick forward cuts like his flurry. LIGHTNING DASH lunges ahead cutting everything on the way and ends in a full spin cut. SLASH FAN (E) throws a fan of 5 flying sword slashes.",
+    stars: 4,
+    maxHp: 130,
+    speed: 120,
+    attack: "sword",
+    attackCooldown: 0.3,
+    damage: 22,
+    range: 46,
+    arc: 1.7,
+    aoe: 0,
+    shotSpeed: 0,
+    pierce: 0,
+    // LIGHTNING DASH: `radius` is the lunge length; the spin at the end hits everything within 66.
+    skill: { kind: "godrush", name: "LIGHTNING DASH", cooldown: 6, damage: 50, radius: 160, width: 26 },
+    // SLASH FAN: `count` slashes, `width` radians apart, flying `radius` far.
+    skill2: { kind: "fan", name: "SLASH FAN", cooldown: 7, damage: 26, radius: 260, width: 0.24, count: 5 },
+  },
   steve: {
     name: "Block Crafter",
     role: "Builder",
@@ -811,7 +834,7 @@ for (const def of Object.values(HEROES)) def.maxHp *= HP_SCALE;
 const PVP_RANKING: HeroId[] = [
   "healer", "rudeus", "superman", "killua", "rick", "okita", "simo", "saitama", "vampire", "howl",
   "sakamoto", "steve", "titan", "yaotsu", "rider", "agamemnon", "theworld", "kid", "loki", "gojo",
-  "joyboy", "ricardo", "deku", "hanuman", "starplatinum", "lawliet", "taekwondo", "trainer", "isekai", "badigadi",
+  "joyboy", "ricardo", "deku", "hanuman", "starplatinum", "swordgod", "lawliet", "taekwondo", "trainer", "isekai", "badigadi",
   "doraemon", "thorfinn",
 ];
 export const HERO_IDS = [
@@ -854,6 +877,7 @@ export const DAMAGE_BALANCE: Partial<Record<HeroId, number>> = {
   gojo: 2.27,
   badigadi: 0.44,
   thorfinn: 2.53,
+  swordgod: 1.1,
   yaotsu: 0.35,
   saitama: 0.1,
 };

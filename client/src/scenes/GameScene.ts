@@ -87,6 +87,7 @@ const BULLET_TEXTURE: Record<string, string> = {
   boulder: "boulder",
   bullet: "bullet",
   slash: "slash",
+  godslash: "wave",
   laser: "laser",
   missile: "missile",
   air: "air",
@@ -916,6 +917,15 @@ export class GameScene extends Phaser.Scene {
       case "dashkick":
         this.effects.push({ kind: "ripple", x, y, aim, range: 26, arc: 0, age: 0, life: 0.25 });
         break;
+      case "godrush":
+        // LIGHTNING DASH: a silver streak back along the lunge, then the spin cut where he landed.
+        this.effects.push({ kind: "line", x: x - Math.cos(aim) * skill.radius, y: y - Math.sin(aim) * skill.radius, aim, range: skill.radius, arc: 10, age: 0, life: 0.3 });
+        this.effects.push({ kind: "sword", x, y, aim, range: 66, arc: Math.PI * 2, age: 0, life: 0.3 });
+        cam.shake(150, 0.008);
+        break;
+      case "fan":
+        this.effects.push({ kind: "muzzle", x, y, aim, range: 10, arc: 0, age: 0, life: 0.1 });
+        break;
       case "biglight":
         // BIG LIGHT: a flashlight beam sweeps out ahead.
         this.effects.push({ kind: "biglight", x, y, aim, range: skill.radius, arc: skill.width ?? 0.6, age: 0, life: 0.5 });
@@ -1228,6 +1238,19 @@ export class GameScene extends Phaser.Scene {
       case "rush":
         lane(skill.radius, skill.width ?? 16);
         break;
+      case "godrush":
+        lane(skill.radius, skill.width ?? 26);
+        area(x + cos * skill.radius, y + sin * skill.radius, 66);
+        break;
+      case "fan": {
+        const n = skill.count ?? 5;
+        g.lineStyle(2, 0xffd23f, 0.6);
+        for (let i = 0; i < n; i++) {
+          const a = this.aim + (i - (n - 1) / 2) * (skill.width ?? 0.24);
+          g.lineBetween(x, y, x + Math.cos(a) * skill.radius, y + Math.sin(a) * skill.radius);
+        }
+        break;
+      }
       case "fireball":
       case "burst":
         lane(heroRange, skill.kind === "fireball" ? 14 : 6);
@@ -1648,9 +1671,10 @@ export class GameScene extends Phaser.Scene {
       if (!sprite) {
         const texture = b.kind.startsWith("card") ? b.kind : BULLET_TEXTURE[b.kind] ?? "snipe";
         sprite = this.add.image(b.x, b.y, texture).setDepth(900).setData("kind", b.kind);
-        if (b.kind === "wave" || b.kind === "snipe" || b.kind === "bullet" || b.kind === "slash" || b.kind === "laser") sprite.setRotation(Math.atan2(b.vy, b.vx));
+        if (b.kind === "wave" || b.kind === "snipe" || b.kind === "bullet" || b.kind === "slash" || b.kind === "godslash" || b.kind === "laser") sprite.setRotation(Math.atan2(b.vy, b.vx));
         if (b.kind.startsWith("card")) sprite.setScale(1.3);
         if (b.kind === "wave") sprite.setScale(1.6);
+        if (b.kind === "godslash") sprite.setScale(1.1); // his own slashes look like the heroes' sword waves, not the boss's red ones
         if (b.kind === "fireball") sprite.setScale(1.6);
         if (b.kind === "stone") sprite.setScale(1.2);
         if (b.kind === "boulder") sprite.setScale(1.6);

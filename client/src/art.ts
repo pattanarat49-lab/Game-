@@ -1482,3 +1482,6 @@ export const TRUCK: PixelSprite = {
   ],
   palette: { k: OUTLINE, w: "#e8e8ec", r: "#2a6ad4", b: "#9fd8ff", s: "#8a8a92", g: "#3a3a42", y: "#ffd23f" },
 };
+
+// The Sword God, now a playable hero, looks just like the dojo boss.
+HERO_SPRITES.swordgod = SWORD_GOD;

@@ -163,7 +163,7 @@ export interface SimEnemy {
 }
 
 export type BulletKind =
-  | "snipe" | "wave" | "magic" | "fireball" | "enemy" | "banana" | "boulder" | "holy" | "stone" | "loki" | "glitch" | "bullet" | "slash"
+  | "snipe" | "wave" | "godslash" | "magic" | "fireball" | "enemy" | "banana" | "boulder" | "holy" | "stone" | "loki" | "glitch" | "bullet" | "slash"
   | "laser" | "missile" | "air" | "dragonfire"
   | `card${number}`; // DRAW CARD: the number on the card (1-9)
 
@@ -1113,6 +1113,29 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
         brain.hurtTimer = Math.max(brain.hurtTimer, 0.3);
         break;
       }
+      case "godrush": {
+        // LIGHTNING DASH: the Sword God's lunge, cutting the whole lane, then a full spin where he lands.
+        const end = this.move(p.x, p.y, Math.cos(p.aim) * skill.radius, Math.sin(p.aim) * skill.radius, PLAYER_RADIUS);
+        const len = Math.hypot(end.x - p.x, end.y - p.y);
+        this.lineHit(id, p.x, p.y, p.aim, len, skill.width ?? 26, skill.damage);
+        p.x = end.x;
+        p.y = end.y;
+        p.warp = (p.warp + 1) % 256;
+        brain.target = undefined;
+        brain.hurtTimer = Math.max(brain.hurtTimer, 0.3);
+        this.sweep(id, p.x, p.y, 0, SWORD_GOD.whirl.radius, Math.PI * 2, skill.damage);
+        break;
+      }
+      case "fan": {
+        // SLASH FAN: flying sword slashes in a fan, each cutting through everything it meets.
+        const speed = SWORD_GOD.waves.speed;
+        const n = skill.count ?? 5;
+        for (let i = 0; i < n; i++) {
+          const a = p.aim + (i - (n - 1) / 2) * (skill.width ?? 0.24);
+          this.spawnBullet("godslash", p.x, p.y, a, speed, { owner: id, damage: skill.damage, pierce: 99, life: skill.radius / speed });
+        }
+        break;
+      }
       case "titan":
         p.titan = skill.duration ?? 10;
         brain.attackTimer = 0;
@@ -2059,7 +2082,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       b.y += b.vy * dt;
       brain.life -= dt;
       // Sword waves and missiles fly over rocks; bullets do not.
-      const blocked = b.kind !== "wave" && b.kind !== "missile" && this.blocked(b.x, b.y);
+      const blocked = b.kind !== "wave" && b.kind !== "godslash" && b.kind !== "missile" && this.blocked(b.x, b.y);
       if (brain.life <= 0 || b.x < 0 || b.y < 0 || b.x > WORLD_W || b.y > WORLD_H || blocked) {
         if (brain.blast > 0) this.sweep(brain.owner ?? "", b.x, b.y, 0, brain.blast, Math.PI * 2, brain.damage);
         this.removeBullet(id);
@@ -2083,7 +2106,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
         return;
       }
 
-      const hitRadius = b.kind === "wave" ? 14 : b.kind === "fireball" ? 8 : b.kind === "missile" || b.kind.startsWith("card") ? 5 : 2;
+      const hitRadius = b.kind === "wave" ? 14 : b.kind === "godslash" ? 8 : b.kind === "fireball" ? 8 : b.kind === "missile" || b.kind.startsWith("card") ? 5 : 2;
       if (this.pvpLive()) {
         s.players.forEach((v, vid) => {
           if (!s.bullets.has(id) || !this.isFoe(brain.owner, vid) || v.dead || brain.hit.has(vid)) return;
@@ -2222,6 +2245,8 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       case "line":
       case "jab":
       case "rush":
+      case "godrush":
+      case "fan":
       case "kick":
       case "cross":
       case "gatling":

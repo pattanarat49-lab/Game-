@@ -14,7 +14,7 @@ Design doc: see `docs/game-design-foundation.md`.
 
 - **Emberfall**, a volcanic arena with basalt pillars
 - **Rule twist:** lava creeps in from the edges during each wave and burns anyone standing in it. It cools between waves.
-- **Character select** with 32 heroes, ordered by PvP strength (weakest at the top, strongest at the bottom; the order is `PVP_RANKING` in `shared/game.ts`):
+- **Character select** with 33 heroes, ordered by PvP strength (weakest at the top, strongest at the bottom; the order is `PVP_RANKING` in `shared/game.ts`):
   - Every hero has 3x the base HP listed in `shared/game.ts` (`HP_SCALE`); the HP comparisons below still hold.
   - Heroes are drawn 1.5x bigger (with a matching hitbox); the maps stay the same size.
   - Damage is balanced per hero with `DAMAGE_BALANCE` in `shared/game.ts` (a multiplier on everything the hero and its summons hit for), tuned from bot duels so every hero wins roughly 40-60% of its 1v1 fights.
@@ -49,6 +49,7 @@ Design doc: see `docs/game-design-foundation.md`.
   - **Hopper Rider:** 1.5x HP, runs 1.5x faster, very fast punches. Skill RIDER KICK leaps into a flying kick that stuns everything it hits for 2 seconds (bosses are not stunned).
   - **Taekwondo Master:** fast straight kicks that reach mid range. Skill FLASH KICK darts to the nearest target in front, kicks it, stuns it for 1 second and lands back where he started.
   - **Time Emperor:** very fast punches. Skill TRUCK SMASH stops time for 2 seconds, then a truck falls on the aimed spot and crushes everything there. He and the Chrono Brawler can both move in each other's stopped time.
+  - **Sword God:** the Sword Dojo boss as a playable hero. Quick forward sword cuts. Skill LIGHTNING DASH lunges ahead, cutting everything on the way, and ends in a full spin cut. SLASH FAN (E) throws a fan of 5 flying sword slashes that cut through everything.
   - **Block Crafter:** weak punches. Skill DIAMOND SWORD gives 10 seconds of strong, longer, faster sword swings. Skill 2 BUILD (E) places a random block where you aim (up to 6): a dirt block walls off monsters and their shots until it is hit, a TNT block explodes with a big knockback when hit, and a crafting table broken by the Block Crafter himself doubles his damage for the rest of the match.
 - Controls: attack with left mouse, aim with the mouse, dash with Space, use your skill with Q or right mouse (E too, unless the hero has a second skill, which E uses). Skills are aimed while the key is held (a yellow guide shows where they land) and go off when you let go. Press Esc while holding to call it off. On phones, hold a skill button, drag to aim, and release; drop it on the CANCEL spot that appears above the button to call it off.
 - **Knockback and parry:** basic hits from melee heroes (punch and sword) push monsters and rival players back (bosses do not budge) and cut down enemy shots, and rival shots in PvP, inside the swing.
