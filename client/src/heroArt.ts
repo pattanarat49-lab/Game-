@@ -19,6 +19,7 @@ const LAYOUT: Record<string, ArtLayout> = {
   superman: { scale: 0.45, originY: 0.97 },
   // 32x32 frames; about 30px tall.
   hanuman: { scale: 0.7, originY: 0.95 },
+  loki: { scale: 0.7, originY: 0.95 },
 };
 /** Same for the basic-attack swing frames, which can be a bigger canvas than the standing pictures. */
 const ATTACK_LAYOUT: Record<string, ArtLayout> = {
