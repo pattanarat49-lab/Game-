@@ -806,9 +806,10 @@ for (const def of Object.values(HEROES)) def.maxHp *= HP_SCALE;
  * The character select shows them in this order. Heroes missing here go at the end.
  */
 const PVP_RANKING: HeroId[] = [
-  "lawliet", "healer", "titan", "trainer", "howl", "rudeus", "steve", "loki", "isekai", "vampire", "kid",
-  "rick", "thorfinn", "theworld", "deku", "okita", "taekwondo", "sakamoto", "hanuman", "joyboy", "doraemon", "agamemnon", "killua",
-  "rider", "gojo", "badigadi", "superman", "starplatinum", "simo", "ricardo", "yaotsu", "saitama",
+  "lawliet", "theworld", "superman", "okita", "healer", "rick", "killua", "joyboy", "howl", "agamemnon",
+  "vampire", "deku", "rudeus", "loki", "sakamoto", "simo", "kid", "rider", "starplatinum", "trainer",
+  "steve", "doraemon", "ricardo", "titan", "taekwondo", "hanuman", "isekai", "gojo", "badigadi", "thorfinn",
+  "yaotsu", "saitama",
 ];
 export const HERO_IDS = [
   ...PVP_RANKING,
@@ -819,7 +820,40 @@ export const HERO_IDS = [
  * Balance pass (user request 2026-10-03): everything a hero (and its summons) hits for is multiplied by this.
  * Tuned from bot duels so no hero wins far more or far less than half its PvP fights.
  */
-export const DAMAGE_BALANCE: Partial<Record<HeroId, number>> = {};
+export const DAMAGE_BALANCE: Partial<Record<HeroId, number>> = {
+  lawliet: 4,
+  theworld: 2.14,
+  superman: 0.62,
+  okita: 1.28,
+  healer: 2.07,
+  rick: 1.36,
+  killua: 2.16,
+  joyboy: 1.61,
+  howl: 3.39,
+  agamemnon: 0.8,
+  vampire: 1.98,
+  deku: 1.36,
+  rudeus: 1.59,
+  loki: 0.99,
+  sakamoto: 1.7,
+  simo: 0.55,
+  kid: 2.03,
+  rider: 1.42,
+  starplatinum: 2.16,
+  trainer: 5.05,
+  steve: 2.09,
+  doraemon: 0.61,
+  ricardo: 0.62,
+  titan: 1.43,
+  taekwondo: 1.64,
+  hanuman: 1.75,
+  isekai: 3.16,
+  gojo: 2.27,
+  badigadi: 0.44,
+  thorfinn: 2.53,
+  yaotsu: 0.1,
+  saitama: 0.1,
+};
 
 export function heroOf(id: string): HeroDef {
   return HEROES[id as HeroId] ?? HEROES.superman;

@@ -16,6 +16,8 @@ Design doc: see `docs/game-design-foundation.md`.
 - **Rule twist:** lava creeps in from the edges during each wave and burns anyone standing in it. It cools between waves.
 - **Character select** with 32 heroes, ordered by PvP strength (weakest at the top, strongest at the bottom; the order is `PVP_RANKING` in `shared/game.ts`):
   - Every hero has 3x the base HP listed in `shared/game.ts` (`HP_SCALE`); the HP comparisons below still hold.
+  - Heroes are drawn 1.5x bigger (with a matching hitbox); the maps stay the same size.
+  - Damage is balanced per hero with `DAMAGE_BALANCE` in `shared/game.ts` (a multiplier on everything the hero and its summons hit for), tuned from bot duels so almost every hero wins 40-60% of its 1v1 fights. The Detective, Plain Hero and Glitch God sit outside that range because their kits do not depend on damage.
   - **Captain Steel:** melee punches, the hardest hits and 3x HP. Skill SMASH hits everything around him and stuns it for 1 second (bosses are not stunned). HEAT VISION (E) fires a laser from his eyes for 2.5 seconds that follows where he aims.
   - **Reborn Knight:** mid-range sword sweeps that hit every enemy in the arc. Skill SKY SLASH throws a sword wave that cuts through enemies.
   - **Frost Sniper:** sniper with very long range and huge damage, but a slow reload. Shots pierce. Skill FROST VOLLEY fires three rapid shots.
