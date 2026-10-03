@@ -23,6 +23,9 @@ export class Player extends Schema {
   @type("float32") titan = 0;
   @type("uint8") warp = 0;
   @type("float64") mt = 0;
+  @type("float32") kbx = 0;
+  @type("float32") kby = 0;
+  @type("uint8") kbSeq = 0;
 }
 
 export class Enemy extends Schema {

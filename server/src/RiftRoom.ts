@@ -15,6 +15,7 @@ export class RiftRoom extends Room<RiftState> {
       bullet: () => new Bullet(),
       zone: () => new Zone(),
     }, stageOf(String(options?.stage ?? "")));
+    this.onMessage("ping", (client, sent: number) => client.send("pong", sent));
     this.onMessage("input", (client, input: Partial<PlayerInput>) => this.sim.setInput(client.sessionId, input));
     // ~30 updates a second so other players and enemies move smoothly.
     this.setPatchRate(TICK_MS);

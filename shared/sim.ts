@@ -43,6 +43,8 @@ import {
   KONG_CHARGE_TIME,
   KONG_CHARGE_SPEED,
   KONG_CHARGE_WIDTH,
+  KNOCKBACK_DECAY,
+  KNOCKBACK_DISTANCE,
   WORLD_H,
   WORLD_W,
   heroOf,
@@ -60,7 +62,7 @@ const SNIPER_BURST_GAP = 0.15;
 const OKITA_SLASHES = 8;
 const ONE_PUNCH_DAMAGE = 1e9; // "infinity", but still a number the network can send
 const MAX_CLONES = 2;
-const TITAN_ATTACK_COOLDOWN = 0.6;
+export const TITAN_ATTACK_COOLDOWN = 0.6;
 const ENEMY = "#enemy"; // attacker id for damage dealt by monsters
 const CLONE_SIGHT = 300;
 
@@ -93,6 +95,10 @@ export interface SimPlayer {
   warp: number;
   /** The owner's clock (ms) when they were at x, y, for smooth playback on other screens. */
   mt: number;
+  /** A melee knockback push (pixels/s); `kbSeq` goes up with each one so the player's own device applies it. */
+  kbx: number;
+  kby: number;
+  kbSeq: number;
 }
 
 export interface SimEnemy {
@@ -181,12 +187,18 @@ interface PlayerBrain {
   /** Position the client says it moved to (client-side movement), and how far the server lets it go. */
   target?: { x: number; y: number; t: number };
   moveBudget: number;
+  /** Extra distance a knockback lets the client move us, and the push the server applies itself to clones. */
+  kbExtra: number;
+  kbx: number;
+  kby: number;
 }
 
 interface EnemyBrain {
   shootTimer: number;
   burstAngle: number;
   beamTimer: number; // counts down to the next beam phase
+  kbx: number; // knockback push (pixels/s), fading out
+  kby: number;
 }
 
 interface ZoneBrain {
@@ -249,6 +261,9 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       slashTimer: 0,
       cloneLife: 0,
       moveBudget: 0,
+      kbExtra: 0,
+      kbx: 0,
+      kby: 0,
     };
   }
 
@@ -447,6 +462,15 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       const hero = heroOf(p.hero);
       brain.hurtTimer = Math.max(0, brain.hurtTimer - dt);
       brain.attackTimer = Math.max(0, brain.attackTimer - dt);
+      brain.kbExtra = Math.max(0, brain.kbExtra - KNOCKBACK_DISTANCE * 2 * dt);
+      if (Math.abs(brain.kbx) + Math.abs(brain.kby) > 1) {
+        const pushed = moveCircle(p.x, p.y, brain.kbx * dt, brain.kby * dt, PLAYER_RADIUS);
+        p.x = pushed.x;
+        p.y = pushed.y;
+        const fade = Math.exp(-KNOCKBACK_DECAY * dt);
+        brain.kbx *= fade;
+        brain.kby *= fade;
+      }
       p.dashCooldown = Math.max(0, p.dashCooldown - dt);
       p.skillCooldown = Math.max(0, p.skillCooldown - dt);
       p.skill2Cooldown = Math.max(0, p.skill2Cooldown - dt);
@@ -490,7 +514,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
         // The client moves its own hero (no rubber-banding); the server follows, but never
         // faster than the hero could run. The budget absorbs messages arriving in bursts.
         const speed = dashingNow ? DASH_SPEED : hero.speed;
-        const cap = hero.speed * 0.5 + DASH_SPEED * DASH_TIME;
+        const cap = hero.speed * 0.5 + DASH_SPEED * DASH_TIME + brain.kbExtra;
         brain.moveBudget = Math.min(cap, brain.moveBudget + speed * 1.25 * dt);
         const dx = brain.target.x - p.x;
         const dy = brain.target.y - p.y;
@@ -516,7 +540,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
         if (p.titan > 0) {
           // A 50m Titan's blows crush everything around it.
           brain.attackTimer = TITAN_ATTACK_COOLDOWN;
-          this.sweep(id, p.x, p.y, 0, hero.skill.radius, Math.PI * 2, hero.skill.damage);
+          this.sweep(id, p.x, p.y, 0, hero.skill.radius, Math.PI * 2, hero.skill.damage, true);
         } else if (hero.attack === "rifle") {
           this.spawnBullet("snipe", p.x, p.y, input.aim, hero.shotSpeed, { owner: id, damage: hero.damage, pierce: hero.pierce, life: hero.range / hero.shotSpeed });
         } else if (hero.attack === "magic") {
@@ -527,7 +551,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
           const ty = p.y + Math.sin(input.aim) * hero.range;
           this.sweep(id, tx, ty, 0, hero.aoe, Math.PI * 2, hero.damage);
         } else {
-          this.sweep(id, p.x, p.y, input.aim, hero.range, hero.arc, hero.damage);
+          this.sweep(id, p.x, p.y, input.aim, hero.range, hero.arc, hero.damage, true);
         }
       }
 
@@ -812,7 +836,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
     });
   }
   /** Hit every enemy inside a slice of a circle (a punch, a sword swing, or a full circle). */
-  private sweep(owner: string, x: number, y: number, aim: number, range: number, arc: number, damage: number) {
+  private sweep(owner: string, x: number, y: number, aim: number, range: number, arc: number, damage: number, knock = false) {
     this.state.enemies.forEach((e, eid) => {
       const def = ENEMIES[e.kind as EnemyKind];
       const dx = e.x - x;
@@ -824,6 +848,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
         if (Math.abs(diff) > arc / 2) return;
       }
       this.damageEnemy(eid, damage, owner);
+      if (knock && !def.boss) this.knockEnemy(eid, dx, dy);
     });
     if (!this.pvpLive()) return;
     this.state.players.forEach((v, vid) => {
@@ -837,7 +862,37 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
         if (Math.abs(diff) > arc / 2) return;
       }
       this.damagePlayer(vid, damage * PVP_DAMAGE_SCALE, true, owner);
+      if (knock) this.knockPlayer(vid, dx, dy);
     });
+  }
+
+  /** Push an enemy away along (dx, dy). */
+  private knockEnemy(eid: string, dx: number, dy: number) {
+    const brain = this.enemyBrains.get(eid);
+    if (!brain) return; // it died from the hit
+    const d = Math.hypot(dx, dy) || 1;
+    brain.kbx = (dx / d) * KNOCKBACK_DISTANCE * KNOCKBACK_DECAY;
+    brain.kby = (dy / d) * KNOCKBACK_DISTANCE * KNOCKBACK_DECAY;
+  }
+
+  /**
+   * Push a player away along (dx, dy). Real players move on their own device, so the push is sent
+   * to it (kbSeq) and the server lets them move that much further; clones are pushed here.
+   */
+  private knockPlayer(id: string, dx: number, dy: number) {
+    const p = this.state.players.get(id);
+    const brain = this.brains.get(id);
+    if (!p || !brain || p.dead) return;
+    const d = Math.hypot(dx, dy) || 1;
+    p.kbx = (dx / d) * KNOCKBACK_DISTANCE * KNOCKBACK_DECAY;
+    p.kby = (dy / d) * KNOCKBACK_DISTANCE * KNOCKBACK_DECAY;
+    p.kbSeq = (p.kbSeq + 1) % 256;
+    brain.kbExtra = KNOCKBACK_DISTANCE;
+    brain.moveBudget += KNOCKBACK_DISTANCE;
+    if (p.owner || !brain.target) {
+      brain.kbx = p.kbx;
+      brain.kby = p.kby;
+    }
   }
 
   /** True while players can hurt each other. */
@@ -912,7 +967,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
     }
     const id = `e${this.nextId++}`;
     this.state.enemies.set(id, e);
-    this.enemyBrains.set(id, { shootTimer: (def.shootEvery ?? 0) * Math.random() + 1, burstAngle: 0, beamTimer: 3 });
+    this.enemyBrains.set(id, { shootTimer: (def.shootEvery ?? 0) * Math.random() + 1, burstAngle: 0, beamTimer: 3, kbx: 0, kby: 0 });
   }
 
   private damageEnemy(eid: string, damage: number, owner?: string) {
@@ -952,6 +1007,14 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       const def = ENEMIES[e.kind as EnemyKind];
       const brain = this.enemyBrains.get(id)!;
       e.hitFlash = Math.max(0, e.hitFlash - dt);
+      if (Math.abs(brain.kbx) + Math.abs(brain.kby) > 1) {
+        const pushed = moveCircle(e.x, e.y, brain.kbx * dt, brain.kby * dt, def.radius);
+        e.x = pushed.x;
+        e.y = pushed.y;
+        const fade = Math.exp(-KNOCKBACK_DECAY * dt);
+        brain.kbx *= fade;
+        brain.kby *= fade;
+      }
       const target = this.nearestPlayer(e.x, e.y);
       if (!target) return;
       const [targetId, p] = target;

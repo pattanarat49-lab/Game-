@@ -24,6 +24,7 @@ import {
   DASH_COOLDOWN,
   DASH_SPEED,
   DASH_TIME,
+  KNOCKBACK_DECAY,
   stageOf,
   heroOf,
   inLava,
@@ -32,6 +33,7 @@ import {
 } from "../../../shared/game";
 import type { HudScene } from "./HudScene";
 import { LocalRoom } from "../localRoom";
+import { TITAN_ATTACK_COOLDOWN } from "../../../shared/sim";
 
 interface PlayerView {
   body: Phaser.GameObjects.Image;
@@ -168,6 +170,16 @@ export class GameScene extends Phaser.Scene {
   private dashCooldown = 0;
   private dashDir = { x: 0, y: 0 };
   private driftTime = 0;
+  private localAttackTimer = 0;
+  private localSkillLock = 0;
+  private localSkill2Lock = 0;
+  private predictedAttacks: number[] = [];
+  private predictedSkills: number[] = [];
+  private predictedSkills2: number[] = [];
+  /** Round trip to the server in ms (online only), shown on the HUD. */
+  pingMs = 0;
+  private kbSeq = -1; // last knockback we applied to our own hero
+  private kbVel = { x: 0, y: 0 };
   private sendTimer = 0;
   private lastButtons = "";
   private lastSentPos = "";
@@ -237,6 +249,15 @@ export class GameScene extends Phaser.Scene {
       this.game.events.emit("connection-error", err);
       return;
     }
+    // Measure the round trip to the server every couple of seconds (shown on the HUD).
+    const room = this.room;
+    room.onMessage("pong", (sent: number) => {
+      const rtt = performance.now() - sent;
+      this.pingMs = this.pingMs ? this.pingMs + (rtt - this.pingMs) * 0.3 : rtt;
+    });
+    const ping = () => room.send("ping", performance.now());
+    ping();
+    this.time.addEvent({ delay: 2000, loop: true, callback: ping });
     this.room.onLeave(() => this.game.events.emit("connection-error", new Error("Disconnected from server")));
     this.room.onStateChange((state: any) => this.recordSnapshot(state));
     this.scene.launch("Hud");
@@ -251,6 +272,7 @@ export class GameScene extends Phaser.Scene {
 
     const input = this.readInput();
     this.predictLocal(input, dt);
+    this.predictEffects(input, dt);
     this.sendInput(input, dt);
 
     this.syncPlayers(state, dt);
@@ -358,6 +380,18 @@ export class GameScene extends Phaser.Scene {
         this.dashTimer -= dt;
         vx = this.dashDir.x * DASH_SPEED;
         vy = this.dashDir.y * DASH_SPEED;
+      }
+      // A melee hit from a rival knocks us back.
+      if (me.kbSeq !== this.kbSeq) {
+        if (this.kbSeq >= 0) this.kbVel = { x: me.kbx, y: me.kby };
+        this.kbSeq = me.kbSeq;
+      }
+      if (Math.abs(this.kbVel.x) + Math.abs(this.kbVel.y) > 1) {
+        vx += this.kbVel.x;
+        vy += this.kbVel.y;
+        const fade = Math.exp(-KNOCKBACK_DECAY * dt);
+        this.kbVel.x *= fade;
+        this.kbVel.y *= fade;
       }
       this.predicted = moveCircle(this.predicted.x, this.predicted.y, vx * dt, vy * dt, PLAYER_RADIUS);
 
@@ -548,32 +582,83 @@ export class GameScene extends Phaser.Scene {
   /** Spot new attacks and skills (their counters went up) and start an effect for each. */
   private playAttackEffects(view: PlayerView, p: any, x: number, y: number, aim: number) {
     const hero = heroOf(p.hero);
+    const isMe = p === this.room?.state.players.get(this.room.sessionId);
     if (p.attackSeq !== view.attackSeq) {
       view.attackSeq = p.attackSeq;
-      if (p.titan > 0) {
-        this.effects.push({ kind: "smash", x, y: y + 5, aim, range: hero.skill.radius, arc: Math.PI * 2, age: 0, life: 0.35 });
-        this.cameras.main.shake(150, 0.008);
-        this.sparks.explode(12, x, y + 5);
-      } else if (hero.attack === "rifle") {
-        this.effects.push({ kind: "muzzle", x, y, aim, range: 16, arc: 0, age: 0, life: 0.08 });
-        if (p === this.room?.state.players.get(this.room.sessionId)) this.cameras.main.shake(60, 0.004);
-      } else if (hero.attack === "magic") {
-        this.effects.push({ kind: "muzzle", x, y, aim, range: 10, arc: 0, age: 0, life: 0.1 });
-      } else if (hero.attack === "lightning") {
-        const tx = x + Math.cos(aim) * hero.range;
-        const ty = y + 5 + Math.sin(aim) * hero.range;
-        this.effects.push({ kind: "bolt", x: tx, y: ty, aim, range: hero.aoe, arc: 0, age: 0, life: 0.22 });
-      } else {
-        this.effects.push({ kind: hero.attack, x, y, aim, range: hero.range, arc: hero.arc, age: 0, life: hero.attack === "punch" ? 0.14 : 0.18 });
-      }
+      // Online, our own swings were already drawn the moment we pressed attack.
+      if (!(isMe && this.takePredicted(this.predictedAttacks))) this.playAttack(p, x, y, aim);
     }
     if (p.skillSeq !== view.skillSeq) {
       view.skillSeq = p.skillSeq;
-      this.playSkillEffect(hero.skill, x, y, aim);
+      if (!(isMe && this.takePredicted(this.predictedSkills))) this.playSkillEffect(hero.skill, x, y, aim);
     }
     if (hero.skill2 && p.skill2Seq !== view.skill2Seq) {
       view.skill2Seq = p.skill2Seq;
-      this.playSkillEffect(hero.skill2, x, y, aim);
+      if (!(isMe && this.takePredicted(this.predictedSkills2))) this.playSkillEffect(hero.skill2, x, y, aim);
+    }
+  }
+
+  /** Use up one effect we already drew ahead of the server (entries older than a second have expired). */
+  private takePredicted(list: number[]): boolean {
+    const now = performance.now();
+    while (list.length && now - list[0] > 1000) list.shift();
+    return list.shift() !== undefined;
+  }
+
+  /**
+   * Online, draw our own attacks and skills as soon as they are pressed instead of waiting a round
+   * trip for the server. The server still decides the hits; its echo of these effects is skipped.
+   */
+  private predictEffects(input: PlayerInput, dt: number) {
+    this.localAttackTimer = Math.max(0, this.localAttackTimer - dt);
+    this.localSkillLock = Math.max(0, this.localSkillLock - dt);
+    this.localSkill2Lock = Math.max(0, this.localSkill2Lock - dt);
+    const room = this.room;
+    if (!room || room instanceof LocalRoom) return;
+    const me = room.state.players.get(room.sessionId);
+    const state = room.state;
+    if (!me || me.dead || (state.timeStop > 0 && state.timeStopBy !== room.sessionId)) return;
+    const hero = heroOf(me.hero);
+    const x = this.predicted.x;
+    const y = this.predicted.y - 5;
+    if (input.shoot && this.localAttackTimer <= 0) {
+      this.localAttackTimer = me.titan > 0 ? TITAN_ATTACK_COOLDOWN : hero.attackCooldown;
+      this.predictedAttacks.push(performance.now());
+      this.playAttack(me, x, y, this.aim);
+    }
+    // Ordinary humans (a rival's reality change) cannot use skills.
+    if (state.reality > 0 && state.realityBy !== room.sessionId && state.stage === "pvp") return;
+    // Lock the button until the server's cooldown has had time to reach us.
+    const lock = Math.max(0.4, (this.pingMs * 1.5) / 1000);
+    if (input.skill && me.skillCooldown <= 0 && this.localSkillLock <= 0 && hero.skill.kind !== "passive") {
+      this.localSkillLock = lock;
+      this.predictedSkills.push(performance.now());
+      this.playSkillEffect(hero.skill, x, y, this.aim);
+    }
+    if (hero.skill2 && input.skill2 && me.skill2Cooldown <= 0 && this.localSkill2Lock <= 0) {
+      this.localSkill2Lock = lock;
+      this.predictedSkills2.push(performance.now());
+      this.playSkillEffect(hero.skill2, x, y, this.aim);
+    }
+  }
+
+  private playAttack(p: any, x: number, y: number, aim: number) {
+    const hero = heroOf(p.hero);
+    if (p.titan > 0) {
+      this.effects.push({ kind: "smash", x, y: y + 5, aim, range: hero.skill.radius, arc: Math.PI * 2, age: 0, life: 0.35 });
+      this.cameras.main.shake(150, 0.008);
+      this.sparks.explode(12, x, y + 5);
+    } else if (hero.attack === "rifle") {
+      this.effects.push({ kind: "muzzle", x, y, aim, range: 16, arc: 0, age: 0, life: 0.08 });
+      if (p === this.room?.state.players.get(this.room.sessionId)) this.cameras.main.shake(60, 0.004);
+    } else if (hero.attack === "magic") {
+      this.effects.push({ kind: "muzzle", x, y, aim, range: 10, arc: 0, age: 0, life: 0.1 });
+    } else if (hero.attack === "lightning") {
+      const tx = x + Math.cos(aim) * hero.range;
+      const ty = y + 5 + Math.sin(aim) * hero.range;
+      this.effects.push({ kind: "bolt", x: tx, y: ty, aim, range: hero.aoe, arc: 0, age: 0, life: 0.22 });
+    } else {
+      this.effects.push({ kind: hero.attack, x, y, aim, range: hero.range, arc: hero.arc, age: 0, life: hero.attack === "punch" ? 0.14 : 0.18 });
     }
   }
 

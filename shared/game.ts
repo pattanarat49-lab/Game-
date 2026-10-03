@@ -16,6 +16,9 @@ export const MAX_PLAYERS = 4;
 export const PLAYER_RADIUS = 6;
 export const DASH_SPEED = 340;
 export const DASH_TIME = 0.15;
+// Melee basic attacks (punch and sword heroes) knock enemies and rival players back. Bosses don't budge.
+export const KNOCKBACK_DISTANCE = 46; // pixels the push carries a target in total
+export const KNOCKBACK_DECAY = 12; // how fast the push dies out (per second)
 export const DASH_COOLDOWN = 1.2;
 
 // Heroes. Every number here is safe to tweak for balance.
@@ -438,6 +441,7 @@ export interface EnemyDef {
   shotDamage?: number; // damage per shot (default ENEMY_SHOT_DAMAGE)
   shot?: "banana" | "boulder"; // what it throws (default: a fireball)
   keepAway?: number; // ranged enemies back off when closer than this
+  boss?: boolean; // bosses shrug off knockback
 }
 
 const ENEMY_SHOT_DAMAGE_BASE = 12;
@@ -446,13 +450,13 @@ export const ENEMIES: Record<EnemyKind, EnemyDef> = {
   cinderling: { hp: 20, speed: 70, radius: 5, touchDamage: 8, score: 10 },
   brute: { hp: 90, speed: 38, radius: 9, touchDamage: 20, score: 30 },
   caster: { hp: 35, speed: 45, radius: 6, touchDamage: 6, score: 20, shootEvery: 2.2 },
-  warden: { hp: 1400, speed: 30, radius: 18, touchDamage: 30, score: 500, shootEvery: 1.6 },
+  warden: { hp: 1400, speed: 30, radius: 18, touchDamage: 30, score: 500, shootEvery: 1.6, boss: true },
   // Godzilla: basic attacks (stomp and fireballs) hit 3x harder than other bosses; the beam is BEAM_DAMAGE.
   // Jungle Temple: faster, tougher monkeys, and King Kong.
   monkey: { hp: 34, speed: 100, radius: 5, touchDamage: 11, score: 12 },
   bananamonkey: { hp: 45, speed: 55, radius: 6, touchDamage: 8, score: 22, shootEvery: 1.6, shotDamage: 14, shot: "banana", keepAway: 130 },
-  kingkong: { hp: 5000, speed: 42, radius: 22, touchDamage: 40, score: 1500, shootEvery: 2.4, shotDamage: 24, shot: "boulder" },
-  godzilla: { hp: 7000, speed: 24, radius: 22, touchDamage: 105, score: 2000, shootEvery: 3, shotDamage: ENEMY_SHOT_DAMAGE_BASE * 3 },
+  kingkong: { hp: 5000, speed: 42, radius: 22, touchDamage: 40, score: 1500, shootEvery: 2.4, shotDamage: 24, shot: "boulder", boss: true },
+  godzilla: { hp: 7000, speed: 24, radius: 22, touchDamage: 105, score: 2000, shootEvery: 3, shotDamage: ENEMY_SHOT_DAMAGE_BASE * 3, boss: true },
 };
 
 export const ENEMY_SHOT_SPEED = 140;

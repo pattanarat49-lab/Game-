@@ -18,6 +18,7 @@ export class HudScene extends Phaser.Scene {
   private bars!: Phaser.GameObjects.Graphics;
   private hpText!: Phaser.GameObjects.Text;
   private waveText!: Phaser.GameObjects.Text;
+  private pingText!: Phaser.GameObjects.Text;
   private banner!: Phaser.GameObjects.Text;
   private scores!: Phaser.GameObjects.Text;
   private skills!: Phaser.GameObjects.Text;
@@ -33,6 +34,7 @@ export class HudScene extends Phaser.Scene {
     this.hpText = this.add.text(20, 18, "", FONT);
     this.skills = this.add.text(20, 64, "", { ...FONT, fontSize: "10px", lineSpacing: 6 });
     this.waveText = this.add.text(this.scale.width / 2, 16, "", { ...FONT, color: "#ffd23f" }).setOrigin(0.5, 0);
+    this.pingText = this.add.text(this.scale.width - 20, 4, "", { ...FONT, fontSize: "8px" }).setOrigin(1, 0);
     this.banner = this.add
       .text(this.scale.width / 2, 120, "", { ...FONT, fontSize: "20px", align: "center", stroke: "#000", strokeThickness: 4 })
       .setOrigin(0.5);
@@ -58,6 +60,10 @@ export class HudScene extends Phaser.Scene {
     const game = this.scene.get("Game") as GameScene;
     const room = game.room;
     const state = room?.state;
+    // Online only: the round trip to the server, green when it is quick and red when it is slow.
+    const ping = Math.round(game.pingMs);
+    this.pingText.setText(ping > 0 ? `PING ${ping}ms` : "");
+    this.pingText.setColor(ping < 100 ? "#7dff8a" : ping < 200 ? "#ffd23f" : "#ff6a6a");
     if (!state?.players) return;
     const me = state.players.get(room!.sessionId);
 
