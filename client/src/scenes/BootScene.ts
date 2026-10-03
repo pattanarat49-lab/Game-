@@ -14,6 +14,9 @@ import {
   CRAFT_BLOCK,
   TRUCK,
   MOVING_CASTLE,
+  TROJAN_HORSE,
+  HEAL_TOTEM,
+  GIANT_PALM,
   TRIDENT,
   BRONZE_SWORD,
   GLADIUS,
@@ -138,6 +141,9 @@ export class BootScene extends Phaser.Scene {
     this.addCanvas("craftblock", renderPixelSprite(CRAFT_BLOCK));
     this.addCanvas("truck", renderPixelSprite(TRUCK));
     this.addCanvas("castle", renderPixelSprite(MOVING_CASTLE));
+    this.addCanvas("trojan", renderPixelSprite(TROJAN_HORSE));
+    this.addCanvas("totem", renderPixelSprite(HEAL_TOTEM));
+    this.addCanvas("palm", renderPixelSprite(GIANT_PALM));
     this.addCanvas("gladius", renderPixelSprite(GLADIUS));
     this.addCanvas("raygun", renderPixelSprite(RAYGUN));
     this.addCanvas("pistol", renderPixelSprite(PISTOL));

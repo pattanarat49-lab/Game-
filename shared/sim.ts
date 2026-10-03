@@ -74,6 +74,12 @@ const CASTLE_SPEED = 95;
 /** FROST SIGIL: how far ahead it is drawn, and how long it waits on the ground. */
 const FROST_SIGIL_REACH = 110;
 const FROST_SIGIL_LIFE = 10;
+/** ODM GEAR: how fast the wire reels the Giant Shifter in (pixels/s). */
+const GRAPPLE_SPEED = 620;
+/** GIANT PALM: seconds the palm takes to come down. */
+const PALM_FALL = 0.7;
+/** STICKY BOMB: how far around the bomb the blast reaches. */
+const STICKY_BLAST = 40;
 const ONE_PUNCH_DAMAGE = 1e9; // "infinity", but still a number the network can send
 const MAX_CLONES = 2;
 export const TITAN_ATTACK_COOLDOWN = 0.6;
@@ -253,6 +259,8 @@ interface PlayerBrain {
   latchDx: number;
   latchDy: number;
   latchTick: number;
+  /** ODM GEAR: the spot the wire bit into; the hero is reeled toward it. */
+  zip?: { x: number; y: number };
   eyebeamTick: number;
   /** Bot Duel: this player is driven by the simulation itself. */
   bot?: { strafe: number; strafeTimer: number; think: number; aimErr: number };
@@ -294,6 +302,8 @@ interface ZoneBrain {
   vy?: number;
   stun?: number;
   hit?: Set<string>;
+  /** STICKY BOMB: what the bomb is stuck to (an enemy id, or "p:" + a player id). */
+  stick?: string;
 }
 
 interface BulletBrain {
@@ -489,6 +499,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       const brain = this.brains.get(id);
       if (brain) {
         brain.target = undefined;
+        brain.zip = undefined;
         brain.dashTimer = 0;
         brain.kbx = brain.kby = 0;
       }
@@ -605,6 +616,22 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       v.stun = Math.max(v.stun, freeze);
       iceAt(v.x, v.y, this.pr(v));
     });
+  }
+
+  /** STICKY BOMB goes off: a small blast, and whatever it was stuck to is thrown far along the dash. */
+  private stickyBlast(z: Z, brain: ZoneBrain) {
+    this.sweep(brain.owner, z.x, z.y, 0, z.radius, Math.PI * 2, brain.damage, 1.5);
+    const key = brain.stick;
+    const scale = brain.stun ?? 5;
+    if (key?.startsWith("p:")) {
+      const vid = key.slice(2);
+      if (this.isFoe(brain.owner, vid)) this.knockPlayer(vid, brain.vx ?? 1, brain.vy ?? 0, scale);
+    } else if (key) {
+      const e = this.state.enemies.get(key);
+      const def = e && ENEMIES[e.kind as EnemyKind];
+      if (def && !def.boss && !def.block) this.knockEnemy(key, brain.vx ?? 1, brain.vy ?? 0, scale);
+    }
+    this.addZone("boom", z.x, z.y, z.radius, 0.4, { owner: brain.owner, every: Infinity, damage: 0 });
   }
 
   /** Monsters on the map (the Block Crafter's blocks do not count). */
@@ -920,6 +947,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
         p.latch = 0;
         p.beam = 0;
         p.buff = 0;
+        brain.zip = undefined;
         p.respawnIn = Math.max(0, p.respawnIn - dt);
         if (p.respawnIn <= 0) {
           p.dead = false;
@@ -943,10 +971,11 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       p.buff = Math.max(0, p.buff - dt);
       p.big = Math.max(0, p.big - dt);
       if (p.barrier > 0) {
-        // IMMORTAL: untouchable, and healing fast.
+        // IMMORTAL: untouchable, and healing fast. (THE MAGICIAN's doves are just untouchable.)
         p.barrier = Math.max(0, p.barrier - dt);
-        p.hp = Math.min(p.maxHp, p.hp + p.maxHp * hero.skill.damage * dt);
+        if (hero.skill.kind === "immortal") p.hp = Math.min(p.maxHp, p.hp + p.maxHp * hero.skill.damage * dt);
       }
+      const doves = p.barrier > 0 && hero.skill2?.kind === "doves";
 
       p.aim = input.aim;
       const dir = inputDirection(input);
@@ -963,7 +992,22 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       let moved;
       const dashingNow = brain.dashTimer > 0;
       if (dashingNow) brain.dashTimer -= dt;
-      if (brain.target) {
+      if (brain.zip) {
+        // ODM GEAR: the wire reels him in; the server moves him (the client follows, as with a latch).
+        const dx = brain.zip.x - p.x;
+        const dy = brain.zip.y - p.y;
+        const d = Math.hypot(dx, dy);
+        const step = GRAPPLE_SPEED * dt;
+        moved = d <= step ? this.move(p.x, p.y, dx, dy, PLAYER_RADIUS) : this.move(p.x, p.y, (dx / d) * step, (dy / d) * step, PLAYER_RADIUS);
+        const went = Math.hypot(moved.x - p.x, moved.y - p.y);
+        brain.target = undefined;
+        brain.dashTimer = 0;
+        p.latch = Math.max(0.01, (d - went) / GRAPPLE_SPEED);
+        if (d <= step + 1 || went < step * 0.2) {
+          brain.zip = undefined;
+          p.latch = 0;
+        }
+      } else if (brain.target) {
         // The client moves its own hero (no rubber-banding); the server follows, but never
         // faster than the hero could run. The budget absorbs messages arriving in bursts.
         const speed = dashingNow ? DASH_SPEED : hero.speed;
@@ -984,12 +1028,12 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       }
       p.x = moved.x;
       p.y = moved.y;
-      if (p.latch > 0) this.updateLatch(id, p, brain, hero, dt);
+      if (p.latch > 0 && !brain.zip && hero.skill.kind === "latch") this.updateLatch(id, p, brain, hero, dt);
       p.dashing = brain.dashTimer > 0;
 
       // Basic attack
       p.titan = Math.max(0, p.titan - dt);
-      if (input.shoot && brain.attackTimer <= 0) {
+      if (input.shoot && brain.attackTimer <= 0 && !doves) {
         brain.attackTimer = hero.attackCooldown;
         p.attackSeq++;
         if (p.titan > 0) {
@@ -1276,6 +1320,78 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       case "biglight":
         this.bigLight(id, p, skill);
         break;
+      case "grapple": {
+        // ODM GEAR: the wire flies ahead until it bites into a wall (a rock, the map edge or the ring ropes).
+        const cos = Math.cos(p.aim);
+        const sin = Math.sin(p.aim);
+        let ax = p.x;
+        let ay = p.y;
+        for (let d = 4; d <= skill.radius; d += 4) {
+          const x = p.x + cos * d;
+          const y = p.y + sin * d;
+          if (this.blocked(x, y) || x < 0 || y < 0 || x > WORLD_W || y > WORLD_H) break;
+          [ax, ay] = [x, y];
+        }
+        const len = Math.hypot(ax - p.x, ay - p.y);
+        if (len < 6) break;
+        brain.zip = { x: ax, y: ay };
+        brain.target = undefined;
+        p.latch = len / GRAPPLE_SPEED;
+        this.addZone("anchor", ax + cos * 3, ay + sin * 3, 3, p.latch + 0.15, { owner: id, every: Infinity, damage: 0 });
+        break;
+      }
+      case "trojan": {
+        // TROJAN HORSE: a wooden horse a little way ahead. When its countdown ends it bursts open.
+        const w = skill.width ?? 60;
+        const spot = this.move(p.x, p.y, Math.cos(p.aim) * w, Math.sin(p.aim) * w, 16);
+        this.addZone("trojan", spot.x, spot.y, skill.radius, skill.duration ?? 10, { owner: id, every: Infinity, damage: skill.damage });
+        break;
+      }
+      case "sticky": {
+        // STICKY BOMB: dart up to the nearest target in front and stick a bomb on it.
+        const t = this.findTarget(id, p, skill.radius);
+        let ux = Math.cos(p.aim);
+        let uy = Math.sin(p.aim);
+        let bx: number;
+        let by: number;
+        if (t) {
+          const d = Math.hypot(t.x - p.x, t.y - p.y) || 1;
+          [ux, uy] = [(t.x - p.x) / d, (t.y - p.y) / d];
+          const gap = Math.max(0, d - 18);
+          const end = this.move(p.x, p.y, ux * gap, uy * gap, PLAYER_RADIUS);
+          [p.x, p.y] = [end.x, end.y];
+          [bx, by] = [t.x, t.y];
+        } else {
+          const end = this.move(p.x, p.y, ux * skill.radius * 0.5, uy * skill.radius * 0.5, PLAYER_RADIUS);
+          [p.x, p.y] = [end.x, end.y];
+          [bx, by] = [p.x + ux * 14, p.y + uy * 14];
+        }
+        p.warp = (p.warp + 1) % 256;
+        brain.target = undefined;
+        brain.hurtTimer = Math.max(brain.hurtTimer, 0.3);
+        const zid = this.addZone("sticky", bx, by, STICKY_BLAST, skill.duration ?? 0.8, { owner: id, every: Infinity, damage: skill.damage });
+        Object.assign(this.zoneBrains.get(zid)!, { stick: t?.key, vx: ux, vy: uy, stun: skill.width ?? 5 });
+        break;
+      }
+      case "spinkick":
+        // SPINNING KICK: a full turn, kicking everything around him away.
+        this.sweep(id, p.x, p.y, 0, skill.radius, Math.PI * 2, skill.damage, 2.5);
+        break;
+      case "totem":
+        this.addZone("totem", p.x, p.y, skill.radius, skill.duration ?? 5, { owner: id, every: 0.5, damage: skill.damage });
+        break;
+      case "palm": {
+        // GIANT PALM: a hand the size of a house comes down on the aimed spot.
+        const w = skill.width ?? 150;
+        const spot = this.move(p.x, p.y, Math.cos(p.aim) * w, Math.sin(p.aim) * w, 4);
+        const zid = this.addZone("palm", spot.x, spot.y, skill.radius, PALM_FALL, { owner: id, every: Infinity, damage: skill.damage });
+        this.zoneBrains.get(zid)!.stun = skill.duration ?? 2;
+        break;
+      }
+      case "doves":
+        // THE MAGICIAN: gone in a flock of doves. Nothing can hurt him until he reappears.
+        p.barrier = skill.duration ?? 2;
+        break;
       case "frost": {
         // FROST SIGIL: a magic circle on the ground, a little way ahead. It waits for someone to step on it.
         const spot = this.move(p.x, p.y, Math.cos(p.aim) * FROST_SIGIL_REACH, Math.sin(p.aim) * FROST_SIGIL_REACH, 4);
@@ -1520,7 +1636,8 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
     const def = heroOf(hero);
     for (let i = 0; i < count; i++) {
       const c = this.make.player();
-      c.name = hero === owner.hero ? "Clone" : def.name;
+      const copy = hero === owner.hero;
+      c.name = copy ? owner.name : def.name; // a copy carries the real name: nobody can tell them apart
       c.hero = hero;
       c.owner = ownerId;
       c.color = owner.color;
@@ -1529,8 +1646,8 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       c.x = spot.x;
       c.y = spot.y;
       c.aim = owner.aim;
-      c.maxHp = Math.max(1, Math.round(owner.maxHp * hpShare));
-      c.hp = c.maxHp;
+      c.maxHp = copy ? owner.maxHp : Math.max(1, Math.round(owner.maxHp * hpShare));
+      c.hp = copy ? Math.max(1, Math.round(owner.hp)) : c.maxHp;
       const id = `c${this.nextId++}`;
       this.state.players.set(id, c);
       const brain = this.newBrain();
@@ -1637,9 +1754,22 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       if (brain.link) this.usePortal(id, z, brain.link);
       if (z.kind === "castle") this.walkCastle(z, brain, dt);
       if (z.kind === "frost") this.frostSigil(z, brain);
+      if (z.kind === "sticky" && brain.stick) {
+        // The bomb rides along on whatever it is stuck to.
+        const key = brain.stick;
+        const v = key.startsWith("p:") ? s.players.get(key.slice(2)) : s.enemies.get(key);
+        if (v && !(v as P).dead) [z.x, z.y] = [v.x, v.y];
+      }
       if (brain.tick <= 0) {
         brain.tick += brain.every;
-        if (z.kind === "hurricane") {
+        if (z.kind === "totem") {
+          // HEAL TOTEM: everyone on the healer's side near it heals a share of their max HP.
+          s.players.forEach((q, qid) => {
+            if (q.dead || Math.hypot(q.x - z.x, q.y - z.y) > z.radius) return;
+            if (this.pvpLive() && this.rootOf(qid) !== this.rootOf(brain.owner)) return;
+            q.hp = Math.min(q.maxHp, q.hp + q.maxHp * brain.damage);
+          });
+        } else if (z.kind === "hurricane") {
           this.sweep(brain.owner, z.x, z.y, 0, z.radius, Math.PI * 2, brain.damage);
         } else if (z.kind === "asgard" || z.kind === "city") {
           if (z.kind === "city") {
@@ -1659,6 +1789,17 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
           });
         }
       }
+      if (z.life <= 0 && z.kind === "trojan") {
+        // The horse bursts open: a huge blast that throws everything back.
+        this.sweep(brain.owner, z.x, z.y, 0, z.radius, Math.PI * 2, brain.damage, 2.5);
+        this.addZone("boom", z.x, z.y, z.radius, 0.5, { owner: brain.owner, every: Infinity, damage: 0 });
+      }
+      if (z.life <= 0 && z.kind === "palm") {
+        // The palm lands: crushed, and stunned under it.
+        this.sweep(brain.owner, z.x, z.y, 0, z.radius, Math.PI * 2, brain.damage);
+        this.stunAround(brain.owner, z.x, z.y, z.radius, brain.stun ?? 2);
+      }
+      if (z.life <= 0 && z.kind === "sticky") this.stickyBlast(z, brain);
       if (z.life <= 0 && z.kind === "truck") {
         // The truck lands: everything under it is crushed and thrown back.
         this.sweep(brain.owner, z.x, z.y, 0, z.radius, Math.PI * 2, brain.damage, 2);
@@ -2386,7 +2527,19 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       case "smash":
       case "storm":
       case "slashes":
+      case "sticky":
+      case "spinkick":
         return dist <= reach;
+      case "grapple":
+        return dist > 130;
+      case "trojan":
+        return dist < 140;
+      case "totem":
+        return hpLeft < 0.7;
+      case "palm":
+        return dist <= (skill.width ?? 150) + 40;
+      case "doves":
+        return hpLeft < 0.6 && dist < 150;
       case "titan":
         return dist < 120;
       case "diamond":

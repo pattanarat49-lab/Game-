@@ -56,11 +56,12 @@ interface PlayerView {
   skill2Seq: number;
   glitch?: Phaser.GameObjects.Image[]; // Yaotsu's "error" afterimages
   heroId: string; // a hero swap (PvP player select) rebuilds the view
+  spin?: number; // SPINNING KICK: seconds of the spin animation left
 }
 
 /** A short-lived swing, slash or shockwave drawn on top of the world. */
 interface Effect {
-  kind: "punch" | "sword" | "smash" | "muzzle" | "bolt" | "storm" | "blast" | "impact" | "heal" | "line" | "slashes" | "ripple" | "jab" | "gatling" | "rewind" | "kick" | "tkick" | "biglight";
+  kind: "punch" | "sword" | "smash" | "muzzle" | "bolt" | "storm" | "blast" | "impact" | "heal" | "line" | "slashes" | "ripple" | "jab" | "gatling" | "rewind" | "kick" | "tkick" | "biglight" | "spinkick";
   x: number;
   y: number;
   aim: number;
@@ -225,6 +226,7 @@ export class GameScene extends Phaser.Scene {
   private zoneFloor!: Phaser.GameObjects.Graphics;
   private zoneSky!: Phaser.GameObjects.Graphics;
   private zoneImages = new Map<string, Phaser.GameObjects.Image>();
+  private zoneTexts = new Map<string, Phaser.GameObjects.Text>(); // countdowns over zones (the Trojan Horse)
   private wasTimeStopped = false;
 
   constructor() {
@@ -556,7 +558,8 @@ export class GameScene extends Phaser.Scene {
           view.label.setColor("#ffd23f");
         }
         if (p.owner) {
-          view.label.setColor("#9fffb0");
+          // Helpers get a green name tag; the Trickster's copy looks exactly like him.
+          if (heroOf(p.hero).summon) view.label.setColor("#9fffb0");
           this.sparks.explode(16, p.x, p.y - 6);
           view.body.setScale(SUMMON_SCALE[p.hero] ?? 1);
           if (p.hero === "gunbot" || p.hero === "gladiator") view.label.setVisible(false); // a crowd of name tags would bury the squad
@@ -607,6 +610,18 @@ export class GameScene extends Phaser.Scene {
           this.sparks.explode(40, body.x, body.y - 20);
         } else this.sparks.explode(20, body.x, body.y - 6);
       }
+      if (view.spin && view.spin > 0) {
+        // SPINNING KICK: two quick turns on the spot (the sprite squashes through its edge-on frames).
+        view.spin = Math.max(0, view.spin - dt);
+        const turn = (1 - view.spin / (heroOf(p.hero).skill2?.duration ?? 0.45)) * Math.PI * 4;
+        body.setScale(body.scaleY * Math.cos(turn), body.scaleY);
+      }
+      // THE MAGICIAN: while he is a flock of doves, the hero himself is gone.
+      const doveForm = p.barrier > 0 && heroOf(p.hero).skill2?.kind === "doves" && !p.dead;
+      if (doveForm) {
+        body.setAlpha(0);
+        view.weapon?.setVisible(false);
+      }
       view.label.setPosition(body.x, body.y - (titanNow ? 66 : 18) * k);
       if (p.hero === "yaotsu") this.drawGlitch(view, p.dead);
       view.label.setDepth(1000);
@@ -617,9 +632,7 @@ export class GameScene extends Phaser.Scene {
       const stoppedHere = state.timeStop > 0 && state.timeStopBy !== id && !movesInStoppedTime(p.hero);
       if (view.hurtFlash > 0) body.setTintFill(0xff4040);
       else if (stoppedHere) body.setTint(0x8a93b8);
-      else if (p.owner && !helper) body.setTint(0xb8ffc8);
       else body.clearTint();
-      if (p.owner && !helper && !p.dead) body.setAlpha(0.8);
 
       view.bar.clear();
       if (!p.dead) {
@@ -631,7 +644,8 @@ export class GameScene extends Phaser.Scene {
           view.bar.lineStyle(1, 0xfff07a, 0.6).strokeEllipse(body.x, body.y + 1, 18 * k, 7 * k);
         }
         const pulse = 0.5 + 0.5 * Math.sin(this.time.now / 120);
-        if (p.barrier > 0) {
+        if (doveForm) this.drawDoves(view.bar, body.x, body.y - 12 * k);
+        else if (p.barrier > 0) {
           // IMMORTAL: a dark-violet barrier around the Demon Lord.
           view.bar.fillStyle(0x9a4aff, 0.18 + 0.1 * pulse).fillCircle(body.x, body.y - 9 * k, 17 * k);
           view.bar.lineStyle(2, 0xd8a8ff, 0.7 + 0.3 * pulse).strokeCircle(body.x, body.y - 9 * k, 17 * k);
@@ -653,7 +667,20 @@ export class GameScene extends Phaser.Scene {
           view.bar.fillStyle(0xffd23f, 0.8).fillCircle(tx, ty, 4 + Math.random() * 3);
           if (Math.random() < 0.3) this.sparks.explode(1, tx, ty);
         }
-        if (p.latch > 0 && Math.random() < 0.5) {
+        if (p.latch > 0 && heroOf(p.hero).skill2?.kind === "grapple") {
+          // ODM GEAR: the wire runs from his belt to the hook in the wall.
+          let hook: any;
+          let best = Infinity;
+          state.zones?.forEach((z: any) => {
+            const d = z.kind === "anchor" ? Math.hypot(z.x - p.x, z.y - p.y) : Infinity;
+            if (d < best) [best, hook] = [d, z];
+          });
+          if (hook) {
+            view.bar.lineStyle(2, 0x2a2a30, 0.9).lineBetween(body.x, body.y - 8 * k, hook.x, hook.y);
+            view.bar.lineStyle(1, 0xd8dce8, 0.9).lineBetween(body.x, body.y - 8 * k - 1, hook.x, hook.y - 1);
+          }
+          if (Math.random() < 0.5) this.sparks.explode(1, body.x, body.y - 4);
+        } else if (p.latch > 0 && Math.random() < 0.5) {
           // BLOOD LATCH: drops of blood fly off the bite.
           view.bar.fillStyle(0xe02a3a, 1).fillRect(body.x + (Math.random() - 0.5) * 14, body.y - 8 - Math.random() * 10, 2, 2);
         }
@@ -675,6 +702,21 @@ export class GameScene extends Phaser.Scene {
       this.players.delete(id);
       this.tracks.delete(`p${id}`);
     }
+  }
+
+  /** THE MAGICIAN: a flock of white doves fluttering where the Phantom Thief was. */
+  private drawDoves(g: Phaser.GameObjects.Graphics, x: number, y: number) {
+    const now = this.time.now;
+    for (let i = 0; i < 6; i++) {
+      const a = now / 260 + (i * Math.PI * 2) / 6;
+      const dx = Math.round(x + Math.cos(a) * (10 + (i % 3) * 4));
+      const dy = Math.round(y + Math.sin(a) * 5 - (i % 2) * 6 + Math.sin(now / 90 + i) * 2);
+      const up = Math.sin(now / 45 + i * 1.7) > 0;
+      g.fillStyle(0xffffff, 1).fillRect(dx - 2, dy, 5, 2); // body
+      g.fillStyle(0xe8ecf4, 1).fillRect(dx - 3, up ? dy - 2 : dy + 2, 3, 2).fillRect(dx + 1, up ? dy - 2 : dy + 2, 3, 2); // wings
+      g.fillStyle(0xffa040, 1).fillRect(Math.cos(a) > 0 ? dx - 3 : dx + 3, dy, 1, 1); // beak
+    }
+    if (Math.random() < 0.2) g.fillStyle(0xffffff, 0.8).fillRect(x + (Math.random() - 0.5) * 30, y + Math.random() * 14, 2, 1); // a falling feather
   }
 
   private destroyView(view: PlayerView) {
@@ -926,6 +968,30 @@ export class GameScene extends Phaser.Scene {
       case "fan":
         this.effects.push({ kind: "muzzle", x, y, aim, range: 10, arc: 0, age: 0, life: 0.1 });
         break;
+      case "grapple":
+        this.effects.push({ kind: "muzzle", x, y, aim, range: 10, arc: 0, age: 0, life: 0.12 });
+        break;
+      case "trojan":
+        this.sparks.explode(10, x + Math.cos(aim) * (skill.width ?? 60), y + Math.sin(aim) * (skill.width ?? 60));
+        break;
+      case "sticky":
+        this.effects.push({ kind: "ripple", x, y, aim, range: 22, arc: 0, age: 0, life: 0.2 });
+        break;
+      case "spinkick":
+        if (view) view.spin = skill.duration ?? 0.45;
+        this.effects.push({ kind: "spinkick", x, y: y + 2, aim, range: skill.radius, arc: 0, age: 0, life: skill.duration ?? 0.45, follow: view });
+        cam.shake(120, 0.006);
+        break;
+      case "totem":
+        this.effects.push({ kind: "heal", x, y: y + 5, aim, range: 30, arc: 0, age: 0, life: 0.5 });
+        break;
+      case "palm":
+        break; // the palm falls in the zone drawing
+      case "doves":
+        // THE MAGICIAN: a puff of smoke and he is gone.
+        this.effects.push({ kind: "ripple", x, y, aim, range: 34, arc: 0, age: 0, life: 0.35 });
+        this.sparks.explode(20, x, y);
+        break;
       case "biglight":
         // BIG LIGHT: a flashlight beam sweeps out ahead.
         this.effects.push({ kind: "biglight", x, y, aim, range: skill.radius, arc: skill.width ?? 0.6, age: 0, life: 0.5 });
@@ -1135,6 +1201,13 @@ export class GameScene extends Phaser.Scene {
         g.fillStyle(0xffffff, 0.3 * (1 - t));
         g.slice(e.x, e.y, e.range * 0.6, e.aim - e.arc * 0.4, e.aim + e.arc * 0.4);
         g.fillPath();
+      } else if (e.kind === "spinkick") {
+        // SPINNING KICK: the kicking leg's trail whirls around him, ending in a shockwave.
+        const turn = t * Math.PI * 4 + e.aim;
+        g.lineStyle(6, 0xf6f6f6, 0.35 * (1 - t)).beginPath().arc(e.x, e.y, e.range * 0.75, turn - 1.6, turn).strokePath();
+        g.lineStyle(3, 0xe8b48a, 1 - t * 0.5).beginPath().arc(e.x, e.y, e.range * 0.75, turn - 0.7, turn).strokePath();
+        g.fillStyle(0xffffff, 1 - t).fillCircle(e.x + Math.cos(turn) * e.range * 0.75, e.y + Math.sin(turn) * e.range * 0.75, 4);
+        if (t > 0.6) g.lineStyle(2, 0xffffff, (1 - t) * 2.5).strokeCircle(e.x, e.y, e.range * (0.6 + t * 0.5));
       } else if (e.kind === "tkick") {
         // A quick straight kick: a white streak with a snap at the end.
         const cos = Math.cos(e.aim);
@@ -1238,6 +1311,16 @@ export class GameScene extends Phaser.Scene {
       case "rush":
         lane(skill.radius, skill.width ?? 16);
         break;
+      case "grapple":
+        lane(skill.radius, 3);
+        break;
+      case "trojan":
+      case "palm": {
+        const w = skill.width ?? 60;
+        lane(w, 4);
+        area(x + cos * w, y + sin * w, skill.radius);
+        break;
+      }
       case "frost":
         lane(110, 4);
         area(x + cos * 110, y + sin * 110, skill.radius);
@@ -1290,6 +1373,7 @@ export class GameScene extends Phaser.Scene {
         g.strokePath();
         break;
       case "dashkick":
+      case "sticky":
       case "latch": {
         // A cone: the nearest target inside it gets bitten (or kicked).
         g.fillStyle(0xe02a3a, 0.12);
@@ -1641,6 +1725,65 @@ export class GameScene extends Phaser.Scene {
         floor.fillStyle(0x000000, 0.3).fillEllipse(nx, ny + 2, z.radius * 2.4, z.radius * 0.9);
         if (Math.random() < 0.4) this.sparks.explode(1, nx + (Math.random() - 0.5) * z.radius * 2, ny);
         if (Math.random() < 0.05) this.cameras.main.shake(80, 0.003);
+      } else if (z.kind === "trojan") {
+        // TROJAN HORSE: the wooden horse with its countdown; it shakes harder as the end nears.
+        let img = this.zoneImages.get(id);
+        if (!img) {
+          img = this.add.image(z.x, z.y, "trojan").setOrigin(0.5, 0.92).setScale(2.4);
+          this.zoneImages.set(id, img);
+          const label = this.add.text(z.x, z.y, "", { fontFamily: "monospace", fontSize: "32px", color: "#ffd23f", stroke: "#000000", strokeThickness: 6 });
+          this.zoneTexts.set(id, label.setOrigin(0.5, 1).setScale(0.5).setResolution(2).setDepth(1001));
+          this.sparks.explode(16, z.x, z.y);
+        }
+        const left = Math.ceil(z.life);
+        const shake = z.life < 3 ? (3 - z.life) * 1.2 : 0;
+        img.setPosition(z.x + (Math.random() - 0.5) * shake, z.y).setDepth(z.y);
+        if (z.life < 3 && Math.floor(now / 120) % 2 === 0) img.setTintFill(0xff6040);
+        else img.clearTint();
+        const label = this.zoneTexts.get(id)!;
+        label.setText(String(left)).setPosition(z.x, z.y - img.displayHeight - 2).setColor(z.life < 3 ? "#ff5040" : "#ffd23f");
+        floor.lineStyle(1, 0xff4040, 0.25 + (z.life < 3 ? 0.4 : 0)).strokeCircle(z.x, z.y, z.radius);
+      } else if (z.kind === "totem") {
+        // HEAL TOTEM: a carved post with green rings pulsing out over the healing area.
+        let img = this.zoneImages.get(id);
+        if (!img) {
+          img = this.add.image(z.x, z.y, "totem").setOrigin(0.5, 0.95).setScale(2);
+          this.zoneImages.set(id, img);
+        }
+        img.setDepth(z.y).setAlpha(fade);
+        const pulse = (now / 500) % 1;
+        floor.fillStyle(0x5aff8a, 0.1 * fade).fillCircle(z.x, z.y, z.radius);
+        floor.lineStyle(2, 0x5aff8a, 0.7 * fade).strokeCircle(z.x, z.y, z.radius);
+        floor.lineStyle(2, 0xb8ffc8, (1 - pulse) * fade).strokeCircle(z.x, z.y, z.radius * pulse);
+        if (Math.random() < 0.3) {
+          // little green crosses float up
+          const a = Math.random() * Math.PI * 2;
+          const r = Math.random() * z.radius;
+          const px = z.x + Math.cos(a) * r;
+          const py = z.y + Math.sin(a) * r - ((now / 10) % 12);
+          sky.fillStyle(0x5aff8a, 0.9 * fade).fillRect(px - 2, py, 5, 1).fillRect(px, py - 2, 1, 5);
+        }
+      } else if (z.kind === "palm") {
+        // GIANT PALM: a shadow grows while the huge hand comes down out of the sky.
+        const left = z.life / z.maxLife;
+        floor.fillStyle(0x000000, 0.4 * (1 - left)).fillEllipse(z.x, z.y, z.radius * 2 * (1.1 - left * 0.6), z.radius * (1.1 - left * 0.6));
+        floor.lineStyle(1, 0xffd23f, 0.7).strokeCircle(z.x, z.y, z.radius);
+        let img = this.zoneImages.get(id);
+        if (!img) {
+          img = this.add.image(z.x, z.y, "palm").setOrigin(0.5, 0.9).setScale(3.4).setData("slam", z.radius);
+          this.zoneImages.set(id, img);
+        }
+        img.setPosition(z.x, z.y - left * left * 380).setDepth(z.y + 50);
+      } else if (z.kind === "sticky") {
+        // STICKY BOMB: a little bomb with a blinking light, getting faster.
+        const blink = Math.floor(now / (40 + 160 * (z.life / z.maxLife))) % 2 === 0;
+        sky.fillStyle(0x2a2a30, 1).fillCircle(z.x, z.y - 8, 4);
+        sky.fillStyle(blink ? 0xff3030 : 0x601010, 1).fillRect(z.x - 1, z.y - 13, 2, 2);
+        if (blink) sky.lineStyle(1, 0xff3030, 0.6).strokeCircle(z.x, z.y - 8, 7);
+      } else if (z.kind === "anchor") {
+        // ODM GEAR: the hook bitten into the wall.
+        sky.fillStyle(0x8a8a92, 1).fillCircle(z.x, z.y - 6, 2.5);
+        sky.lineStyle(1, 0xffffff, 0.8).strokeCircle(z.x, z.y - 6, 4 * fade);
       } else if (z.kind === "solve") {
         // SOLVE IT: a lock-on reticle snaps shut around the target.
         const t = 1 - z.life / z.maxLife;
@@ -1698,6 +1841,12 @@ export class GameScene extends Phaser.Scene {
     });
     for (const [id, img] of this.zoneImages) {
       if (seen.has(id)) continue;
+      if (img.getData("slam")) {
+        // The giant palm hits the ground.
+        this.effects.push({ kind: "blast", x: img.x, y: img.y, aim: 0, range: img.getData("slam"), arc: 1, age: 0, life: 0.45 });
+        this.cameras.main.shake(300, 0.02);
+        this.sparks.explode(30, img.x, img.y);
+      }
       if (img.getData("truck")) {
         // The truck hits the ground.
         this.effects.push({ kind: "blast", x: img.x, y: img.y, aim: 0, range: 60, arc: 1, age: 0, life: 0.45 });
@@ -1706,6 +1855,11 @@ export class GameScene extends Phaser.Scene {
       }
       img.destroy();
       this.zoneImages.delete(id);
+    }
+    for (const [id, label] of this.zoneTexts) {
+      if (seen.has(id)) continue;
+      label.destroy();
+      this.zoneTexts.delete(id);
     }
   }
 

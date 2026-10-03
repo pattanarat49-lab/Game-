@@ -105,6 +105,13 @@ export type SkillKind =
   | "fan" // a fan of flying sword slashes
   | "castle" // a giant walking castle strides across the map, hitting and stunning whatever it walks into
   | "frost" // draw a frost sigil on the ground: whoever steps on it is frozen solid
+  | "grapple" // 3D maneuver gear: fire a wire into the wall ahead and zip along it
+  | "trojan" // a wooden horse that counts down, then bursts open in a huge blast
+  | "sticky" // dart up to the nearest target and stick a bomb on it: it blows them far away
+  | "spinkick" // spin on the spot and kick everything all around
+  | "totem" // a healing totem on the ground: allies near it heal a share of max HP every half second
+  | "palm" // a giant palm comes down from the sky and crushes (and stuns) the aimed spot
+  | "doves" // vanish into a flock of doves: no damage taken for a moment
   | "solve" // lock on to the nearest enemy anywhere in range and stun it
   | "biglight" // a flashlight beam: everything caught in it grows bigger (easier to hit) and slower
   | "diamond" // a diamond sword for a while: basic attacks become strong, fast, long sword swings
@@ -283,8 +290,8 @@ export const HEROES: Record<HeroId, HeroDef> = {
   healer: {
     name: "Holy Healer",
     role: "Support",
-    blurb: "Holy bolts from afar. HEAL restores 50% HP to every ally nearby.",
-    stars: 2,
+    blurb: "Holy bolts from afar. HEAL restores 50% HP to every ally nearby. HEAL TOTEM (E): a totem on the ground heals allies near it 5% HP every 0.5s for 5s.",
+    stars: 4,
     maxHp: 110,
     speed: 105,
     attack: "magic",
@@ -297,6 +304,8 @@ export const HEROES: Record<HeroId, HeroDef> = {
     pierce: 0,
     shot: "holy",
     skill: { kind: "heal", name: "HEAL", cooldown: 9, damage: 0.5, radius: 170 },
+    // TOTEM OF HEALING: allies within `radius` heal `damage` of max HP every 0.5s for `duration` seconds.
+    skill2: { kind: "totem", name: "HEAL TOTEM", cooldown: 14, damage: 0.05, radius: 90, duration: 5 },
   },
   deku: {
     name: "Green Rookie",
@@ -425,9 +434,9 @@ export const HEROES: Record<HeroId, HeroDef> = {
   titan: {
     name: "Giant Shifter",
     role: "Shifter",
-    blurb: "Very weak hits as a human. GIANT FORM turns him into a 50m giant for 10s: every hit smashes everything around him.",
-    stars: 3,
-    maxHp: 140,
+    blurb: "Very weak hits as a human. GIANT FORM turns him into a 50m giant for 10s: every hit smashes everything around him. ODM GEAR (E, 2s): fire a wire into the wall ahead and zip along it.",
+    stars: 4,
+    maxHp: 165,
     speed: 105,
     attack: "punch",
     attackCooldown: 0.5,
@@ -439,6 +448,8 @@ export const HEROES: Record<HeroId, HeroDef> = {
     pierce: 0,
     // In Titan form: damage and radius of each smash, and seconds between smashes.
     skill: { kind: "titan", name: "GIANT FORM", cooldown: 20, damage: 90, radius: 75, duration: 10 },
+    // ODM GEAR: the wire reaches `radius`; he zips to where it hits a wall (or its end).
+    skill2: { kind: "grapple", name: "ODM GEAR", cooldown: 2, damage: 0, radius: 260 },
   },
   yaotsu: {
     name: "Glitch God",
@@ -462,7 +473,7 @@ export const HEROES: Record<HeroId, HeroDef> = {
   loki: {
     name: "Trickster",
     role: "Trickster god",
-    blurb: "Magic shots. ILLUSION raises a golden city for 10s (enemies inside lose 7% HP/s). CLONE makes a copy that fights.",
+    blurb: "Magic shots. ILLUSION raises a golden city for 10s (enemies inside lose 7% HP/s). CLONE makes a copy that fights, and nobody can tell which one is real.",
     stars: 4,
     maxHp: 120,
     speed: 110,
@@ -476,13 +487,14 @@ export const HEROES: Record<HeroId, HeroDef> = {
     pierce: 0,
     shot: "loki",
     skill: { kind: "asgard", name: "ILLUSION", cooldown: 22, damage: 0.07, radius: 230, duration: 10 },
+    // CLONE: an exact copy (same name, HP and look) that fights on its own for `duration` seconds.
     skill2: { kind: "clone", name: "CLONE", cooldown: 12, damage: 0.25, radius: 0, duration: 20 },
   },
   sakamoto: {
     name: "Retired Hitman",
     role: "Hitman",
-    blurb: "Runs 1.2x faster. Quick knife slashes. SWAP MODE pulls out a machine gun that fires very fast; use it again to go back to the knife.",
-    stars: 3,
+    blurb: "Runs 1.2x faster. Quick knife slashes. SWAP MODE pulls out a machine gun that fires very fast; use it again to go back to the knife. STICKY BOMB (E): darts up to the nearest target and sticks a bomb on it that blows them far away.",
+    stars: 4,
     maxHp: 130,
     speed: 130,
     attack: "sword",
@@ -495,6 +507,8 @@ export const HEROES: Record<HeroId, HeroDef> = {
     pierce: 0,
     gun: { attackCooldown: 0.06, damage: 6, range: 240, shotSpeed: 520, spread: 0.08 },
     skill: { kind: "swap", name: "SWAP MODE", cooldown: 0.8, damage: 0, radius: 0 },
+    // STICKY BOMB: dart up to `radius` away; the bomb goes off after `duration` seconds and throws the target `width` knockbacks far.
+    skill2: { kind: "sticky", name: "STICKY BOMB", cooldown: 9, damage: 60, radius: 160, width: 5, duration: 0.8 },
   },
   joyboy: {
     name: "Rubber Pirate",
@@ -575,8 +589,8 @@ export const HEROES: Record<HeroId, HeroDef> = {
   kid: {
     name: "Phantom Thief",
     role: "Magician",
-    blurb: "Runs 1.3x faster, card-gun shots. DRAW CARD throws a random card 1-9: it takes 10-90% of the target's max HP (1-9% on bosses).",
-    stars: 4,
+    blurb: "Runs 1.3x faster, card-gun shots. DRAW CARD throws a random card 1-9: it takes 10-90% of the target's max HP (1-9% on bosses). THE MAGICIAN (E): vanishes into a flock of doves for 2s and takes no damage.",
+    stars: 3,
     maxHp: 115,
     speed: 143,
     attack: "magic",
@@ -589,24 +603,28 @@ export const HEROES: Record<HeroId, HeroDef> = {
     pierce: 0,
     shot: "bullet",
     skill: { kind: "card", name: "DRAW CARD", cooldown: 7, damage: 0.1, radius: 260 },
+    // THE MAGICIAN: a flock of doves for `duration` seconds: no damage taken, no attacks.
+    skill2: { kind: "doves", name: "THE MAGICIAN", cooldown: 12, damage: 0, radius: 0, duration: 2 },
   },
   hanuman: {
     name: "Hanuman",
     role: "Monkey god",
-    blurb: "Runs 1.5x faster, quick trident thrusts. REVIVE: for 5s after pressing it, falling brings him straight back up.",
-    stars: 4,
+    blurb: "Runs 1.5x faster, quick trident thrusts. REVIVE: for 5s after pressing it, falling brings him straight back up. GIANT PALM (E): a giant palm comes down from the sky, crushing the spot and stunning for 2s.",
+    stars: 5,
     maxHp: 130,
     speed: 165,
     attack: "sword",
     attackCooldown: 0.25,
     damage: 20,
-    range: 36,
-    arc: 0.9,
+    range: 44,
+    arc: 1.6,
     aoe: 0,
     shotSpeed: 0,
     pierce: 0,
     // REVIVE: if he falls within `duration` seconds, he gets back up with `damage` of his max HP.
     skill: { kind: "revive", name: "REVIVE", cooldown: 25, damage: 0.5, radius: 0, duration: 5 },
+    // GIANT PALM: lands up to `width` ahead, crushes everything within `radius` and stuns it `duration` seconds.
+    skill2: { kind: "palm", name: "GIANT PALM", cooldown: 12, damage: 80, radius: 70, width: 150, duration: 2 },
   },
   badigadi: {
     name: "Demon Lord",
@@ -628,8 +646,8 @@ export const HEROES: Record<HeroId, HeroDef> = {
   taekwondo: {
     name: "Taekwondo Master",
     role: "Kicker",
-    blurb: "Fast straight kicks that reach mid range. FLASH KICK darts in to kick the nearest target in front, stuns it for 1s, and lands back where he started.",
-    stars: 5,
+    blurb: "Fast straight kicks that reach mid range. FLASH KICK darts in to kick the nearest target in front, stuns it for 1s, and lands back where he started. SPINNING KICK (E): spins on the spot and kicks everything around him away.",
+    stars: 4,
     maxHp: 125,
     speed: 125,
     attack: "punch",
@@ -642,6 +660,7 @@ export const HEROES: Record<HeroId, HeroDef> = {
     shotSpeed: 0,
     pierce: 0,
     skill: { kind: "dashkick", name: "FLASH KICK", cooldown: 5, damage: 45, radius: 170, duration: 1 },
+    skill2: { kind: "spinkick", name: "SPINNING KICK", cooldown: 6, damage: 55, radius: 62, duration: 0.45 },
   },
   theworld: {
     name: "Time Emperor",
@@ -703,8 +722,8 @@ export const HEROES: Record<HeroId, HeroDef> = {
   agamemnon: {
     name: "Agamemnon",
     role: "King of kings",
-    blurb: "2x HP, bronze sword sweeps. SUMMON GLADIATORS calls 20 gladiators (10% of his HP each) to fight for 20 seconds.",
-    stars: 4,
+    blurb: "2x HP, bronze sword sweeps. SUMMON GLADIATORS calls 20 gladiators (10% of his HP each) to fight for 20 seconds. TROJAN HORSE (E): a wooden horse counts down 10s, then bursts open in a huge blast.",
+    stars: 3,
     maxHp: 220,
     speed: 105,
     attack: "sword",
@@ -716,6 +735,8 @@ export const HEROES: Record<HeroId, HeroDef> = {
     shotSpeed: 0,
     pierce: 0,
     skill: { kind: "summon", name: "GLADIATORS", cooldown: 30, damage: 0.1, radius: 0, count: 20, duration: 20, pet: "gladiator" },
+    // TROJAN HORSE: placed `width` ahead, it waits `duration` seconds, then blasts everything within `radius`.
+    skill2: { kind: "trojan", name: "TROJAN HORSE", cooldown: 20, damage: 150, radius: 120, width: 60, duration: 10 },
   },
   vampire: {
     name: "Vampire",
@@ -838,9 +859,9 @@ for (const def of Object.values(HEROES)) def.maxHp *= HP_SCALE;
  * The character select shows them in this order. Heroes missing here go at the end.
  */
 const PVP_RANKING: HeroId[] = [
-  "healer", "superman", "killua", "rick", "okita", "simo", "saitama", "vampire", "sakamoto", "steve",
-  "titan", "howl", "rudeus", "yaotsu", "rider", "agamemnon", "theworld", "kid", "loki", "gojo",
-  "joyboy", "ricardo", "deku", "hanuman", "starplatinum", "swordgod", "lawliet", "taekwondo", "trainer", "isekai",
+  "superman", "killua", "rick", "okita", "simo", "saitama", "vampire", "steve", "kid", "agamemnon",
+  "howl", "rudeus", "yaotsu", "rider", "healer", "taekwondo", "loki", "sakamoto", "titan", "theworld",
+  "gojo", "joyboy", "ricardo", "deku", "starplatinum", "swordgod", "hanuman", "lawliet", "trainer", "isekai",
   "badigadi", "doraemon", "thorfinn",
 ];
 export const HERO_IDS = [
@@ -857,19 +878,19 @@ export const DAMAGE_BALANCE: Partial<Record<HeroId, number>> = {
   theworld: 2.14,
   superman: 0.62,
   okita: 1.28,
-  healer: 2.07,
+  healer: 2.5,
   rick: 1.36,
   killua: 2.16,
   joyboy: 1.61,
   howl: 2.8,
-  agamemnon: 0.8,
+  agamemnon: 0.93,
   vampire: 1.98,
   deku: 1.36,
   rudeus: 1.8,
-  loki: 0.99,
-  sakamoto: 1.7,
+  loki: 1.12,
+  sakamoto: 1.4,
   simo: 0.55,
-  kid: 2.03,
+  kid: 1.6,
   rider: 1.42,
   starplatinum: 2.16,
   trainer: 5.05,
@@ -877,8 +898,8 @@ export const DAMAGE_BALANCE: Partial<Record<HeroId, number>> = {
   doraemon: 0.61,
   ricardo: 0.62,
   titan: 1.43,
-  taekwondo: 1.64,
-  hanuman: 1.75,
+  taekwondo: 1.25,
+  hanuman: 1.1,
   isekai: 3.16,
   gojo: 2.27,
   badigadi: 0.44,

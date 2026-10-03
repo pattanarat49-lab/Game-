@@ -1514,3 +1514,87 @@ export const MOVING_CASTLE: PixelSprite = {
   ],
   palette: { k: OUTLINE, s: "#5a5a64", b: "#8a7a6a", m: "#6a5a4a", r: "#c4452a", w: "#3a2a20", y: "#ffd23f", o: "#ff7a1a", g: "#4a8a5a", l: "#c8a45a", f: "#e8b84a" },
 };
+
+/** TROJAN HORSE: a big wooden horse on a wheeled platform. */
+export const TROJAN_HORSE: PixelSprite = {
+  grid: [
+    "..................kkk.....",
+    ".................kbbbk....",
+    "................kbbbbbk...",
+    "...............kbbwbbbbk..",
+    "...............kbbbbbbbbk.",
+    "..............kbbbbkkbbbbk",
+    ".............kbbbbk..kkkk.",
+    ".............kbbbk........",
+    "............kbbbbk........",
+    ".kkk.......kbbbbbk........",
+    "kddk......kbbbbbbk........",
+    "kdk.kkkkkkbbbbbbbk........",
+    "kdkkbbbbbbbbbbbbbk........",
+    ".kkbbbbbbbbbbbbbbk........",
+    "..kbbdbbbbdbbbbdbk........",
+    "..kbbbbbbbbbbbbbbk........",
+    "..kbbbbbbbbbbbbbbk........",
+    "..kbbdbbbbdbbbbdbk........",
+    "...kbbbbbbbbbbbbk.........",
+    "...kbbk.kbbk.kbbk.........",
+    "...kbbk.kbbk.kbbk.........",
+    "...kbbk.kbbk.kbbk.........",
+    ".kkkkkkkkkkkkkkkkkk.......",
+    ".kssssssssssssssssk.......",
+    ".kkkkkkkkkkkkkkkkkk.......",
+    "..kgk..kgk..kgk..kgk......",
+    "...k....k....k....k.......",
+  ],
+  palette: { k: OUTLINE, b: "#a8743a", d: "#7a4e22", w: "#f2e6c8", s: "#6a5a4a", g: "#3a3a42" },
+};
+
+/** HEAL TOTEM: a carved post with a glowing green crystal on top. */
+export const HEAL_TOTEM: PixelSprite = {
+  grid: [
+    "...kkk...",
+    "..kgggk..",
+    ".kgwggk..",
+    ".kgggggk.",
+    "..kgggk..",
+    "...kkk...",
+    "..kbbbk..",
+    ".kbybybk.",
+    ".kbbbbbk.",
+    ".kbrrrbk.",
+    ".kbbbbbk.",
+    "..kbbbk..",
+    ".kbybybk.",
+    ".kbbbbbk.",
+    ".kbrrrbk.",
+    "..kbbbk..",
+    "..kbbbk..",
+    ".kkbbbkk.",
+    "kddddddk.",
+    "kkkkkkkk.",
+  ],
+  palette: { k: OUTLINE, g: "#5aff8a", w: "#e8fff0", b: "#b8864a", y: "#ffd23f", r: "#d0402a", d: "#6a5a4a" },
+};
+
+/** GIANT PALM: Hanuman's huge golden hand, coming down palm first. */
+export const GIANT_PALM: PixelSprite = {
+  grid: [
+    ".....kk.kk.kk.......",
+    "....kyykyykyyk......",
+    "....kyykyykyyk.kk...",
+    "....kyykyykyykkyyk..",
+    "....kyykyykyykyyk...",
+    ".kk.kyykyykyykyyk...",
+    "kyyk.kyyyyyyyyyyk...",
+    "kyyykkyyyyyyyyyyk...",
+    ".kyyyyyyyyyyyyyyk...",
+    "..kyyyyyyoyyyyyk....",
+    "...kyyyyyyyyyyyk....",
+    "....kyyyyyyyyyk.....",
+    ".....kyyyyyyyyk.....",
+    ".....krrrrrrrrk.....",
+    ".....kyyyyyyyyk.....",
+    ".....kyyyyyyyyk.....",
+  ],
+  palette: { k: OUTLINE, y: "#f2c23a", o: "#d89a2a", r: "#d0402a" },
+};
