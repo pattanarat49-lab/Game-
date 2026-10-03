@@ -612,7 +612,8 @@ export class GameScene extends Phaser.Scene {
         view.weapon.setRotation(aim);
         view.weapon.setFlipY(Math.cos(aim) < 0);
         view.weapon.setDepth(body.y + 0.5);
-        view.weapon.setVisible(!p.dead && (!heroOf(p.hero).sword || p.buff > 0)); // the diamond sword only while crafted
+        // The diamond sword only while crafted; hand-made art already holds its own weapon.
+        view.weapon.setVisible(!p.dead && (!heroOf(p.hero).sword || p.buff > 0) && !hasHeroArt(p.hero));
       }
       this.playAttackEffects(view, p, body.x, body.y - 5 * k, aim);
       const helper = !!heroOf(p.hero).summon; // pets and gunner bots look like themselves, not ghostly clones

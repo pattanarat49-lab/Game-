@@ -17,6 +17,8 @@ interface ArtLayout {
 const LAYOUT: Record<string, ArtLayout> = {
   // 48x48 PixelLab frames; the figure stands about 46px tall with its feet on the bottom row.
   superman: { scale: 0.45, originY: 0.97 },
+  // 32x32 frames; about 30px tall.
+  hanuman: { scale: 0.7, originY: 0.95 },
 };
 
 export function hasHeroArt(hero: string): boolean {
@@ -52,7 +54,12 @@ export function heroPortrait(hero: string): HTMLCanvasElement {
   canvas.width = 48;
   canvas.height = 54;
   const img = new Image();
-  img.onload = () => canvas.getContext("2d")!.drawImage(img, 0, 6);
+  img.onload = () => {
+    // Pictures come in different sizes (48x48, 32x32...): draw them square with a gap on top.
+    canvas.width = img.width;
+    canvas.height = Math.round((img.width * 9) / 8);
+    canvas.getContext("2d")!.drawImage(img, 0, canvas.height - img.height);
+  };
   img.src = front;
   return canvas;
 }
