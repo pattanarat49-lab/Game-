@@ -48,7 +48,7 @@ export class HudScene extends Phaser.Scene {
       return;
     }
     this.add
-      .text(20, this.scale.height - 20, `WASD move  MOUSE aim/attack  SPACE dash  Q/RMB ${hero.skill.name}${hero.skill2 ? `  E ${hero.skill2.name}` : ""}  (hold to aim, release to cast)`, {
+      .text(20, this.scale.height - 20, `WASD move  MOUSE aim/attack  SPACE dash  Q/RMB ${hero.skill.name}${hero.skill2 ? `  E ${hero.skill2.name}` : ""}  (hold to aim, release to cast, Esc to cancel)`, {
         ...FONT,
         fontSize: "9px",
         color: "#c9b8c0",

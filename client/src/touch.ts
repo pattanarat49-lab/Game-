@@ -7,6 +7,7 @@ import Phaser from "phaser";
  * When only the left stick is used, your hero faces (and aims) where you walk.
  * Buttons in the bottom-right corner: DASH, the hero's skill, and a second skill if the hero has one.
  * Skill buttons work like small sticks: hold, drag to aim, and release to use the skill.
+ * While a skill is held a CANCEL spot appears above it: let go there and the skill is not used.
  */
 
 const STICK_RADIUS = 60;
@@ -33,6 +34,8 @@ interface Button {
   dragX: number;
   dragY: number;
   castUntil: number;
+  /** Skill buttons: the finger is over the CANCEL spot. */
+  overCancel: boolean;
 }
 
 export class TouchControls {
@@ -46,6 +49,9 @@ export class TouchControls {
   /** After a dragged skill is released, its direction holds until the cast has gone out. */
   private aimLockUntil = 0;
 
+  /** Where to drop a held skill to call it off. */
+  readonly cancelSpot: { x: number; y: number; r: number };
+  private cancelLabel: Phaser.GameObjects.Text;
   private gfx: Phaser.GameObjects.Graphics;
   private labels: Phaser.GameObjects.Text[] = [];
 
@@ -56,11 +62,17 @@ export class TouchControls {
   ) {
     scene.input.addPointer(3); // up to 4 fingers at once
     const { width, height } = scene.scale;
-    const button = (x: number, y: number, r: number, label: string): Button => ({ x, y, r, label, pointerId: null, dragX: 0, dragY: 0, castUntil: 0 });
+    const button = (x: number, y: number, r: number, label: string): Button => ({ x, y, r, label, pointerId: null, dragX: 0, dragY: 0, castUntil: 0, overCancel: false });
     this.dashButton = button(width - 170, height - 70, 42, "DASH");
     this.skillButton = button(width - 70, height - 150, 42, skillName);
     if (skill2Name) this.skill2Button = button(width - 165, height - 175, 38, skill2Name);
+    this.cancelSpot = { x: width - 70, y: Math.max(70, height - 310), r: 34 };
     this.gfx = scene.add.graphics().setDepth(100);
+    this.cancelLabel = scene.add
+      .text(this.cancelSpot.x, this.cancelSpot.y, "CANCEL", { fontFamily: '"Press Start 2P", monospace', fontSize: "8px", color: "#ffffff" })
+      .setOrigin(0.5)
+      .setDepth(101)
+      .setVisible(false);
     for (const b of this.buttons) {
       this.labels.push(
         scene.add
@@ -91,8 +103,8 @@ export class TouchControls {
 
   /** Which skill is being held and aimed right now (1 or 2), or 0. */
   get aimingSkill(): 0 | 1 | 2 {
-    if (this.skillButton.pointerId !== null) return 1;
-    if (this.skill2Button?.pointerId != null) return 2;
+    if (this.skillButton.pointerId !== null && !this.skillButton.overCancel) return 1;
+    if (this.skill2Button?.pointerId != null && !this.skill2Button.overCancel) return 2;
     return 0;
   }
 
@@ -151,7 +163,9 @@ export class TouchControls {
       }
       b.dragX = dx;
       b.dragY = dy;
-      if (len > SKILL_AIM_DEADZONE) this.aimAngle = Math.atan2(dy, dx);
+      const c = this.cancelSpot;
+      b.overCancel = Math.hypot(p.x - c.x, p.y - c.y) < c.r + 8;
+      if (len > SKILL_AIM_DEADZONE && !b.overCancel) this.aimAngle = Math.atan2(dy, dx);
     }
     for (const stick of [this.move, this.aim]) {
       if (stick.pointerId !== p.id) continue;
@@ -187,7 +201,9 @@ export class TouchControls {
     for (const b of this.buttons) {
       if (b.pointerId !== p.id) continue;
       b.pointerId = null;
-      if (b !== this.dashButton) {
+      if (b !== this.dashButton && b.overCancel) {
+        b.overCancel = false; // dropped on CANCEL: no skill
+      } else if (b !== this.dashButton) {
         b.castUntil = performance.now() + CAST_PULSE_MS; // release = cast
         // A dragged skill goes where it was aimed, not where you happen to be walking.
         if (Math.hypot(b.dragX, b.dragY) > SKILL_AIM_DEADZONE) {
@@ -214,6 +230,14 @@ export class TouchControls {
         stick.baseY + stick.dy * STICK_RADIUS,
         24,
       );
+    }
+    // While a skill is held, show the CANCEL spot (it lights up red under the finger).
+    const held = [this.skillButton, this.skill2Button].find((b) => b && b.pointerId !== null);
+    this.cancelLabel.setVisible(!!held);
+    if (held) {
+      const c = this.cancelSpot;
+      g.fillStyle(held.overCancel ? 0xd83a3a : 0x2a2028, held.overCancel ? 0.9 : 0.6).fillCircle(c.x, c.y, c.r);
+      g.lineStyle(2, held.overCancel ? 0xffffff : 0xd83a3a, 0.9).strokeCircle(c.x, c.y, c.r);
     }
     const buttons: [Button, number][] = [
       [this.dashButton, dashReady],

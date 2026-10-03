@@ -187,7 +187,8 @@ export class GameScene extends Phaser.Scene {
   pingMs = 0;
   private kbSeq = -1;
   private skillHeld = { 1: false, 2: false };
-  private skillCastUntil = { 1: 0, 2: 0 }; // last knockback we applied to our own hero
+  private skillCastUntil = { 1: 0, 2: 0 };
+  private skillCancelled = { 1: false, 2: false }; // last knockback we applied to our own hero
   private kbVel = { x: 0, y: 0 };
   private sendTimer = 0;
   private lastButtons = "";
@@ -235,7 +236,7 @@ export class GameScene extends Phaser.Scene {
     this.zoneFloor = this.add.graphics().setDepth(-3);
     this.zoneSky = this.add.graphics().setDepth(960);
 
-    this.keys = this.input.keyboard!.addKeys("W,A,S,D,UP,DOWN,LEFT,RIGHT,SPACE,Q,E,ONE,TWO") as Record<
+    this.keys = this.input.keyboard!.addKeys("W,A,S,D,UP,DOWN,LEFT,RIGHT,SPACE,Q,E,ONE,TWO,ESC") as Record<
       string,
       Phaser.Input.Keyboard.Key
     >;
@@ -340,10 +341,15 @@ export class GameScene extends Phaser.Scene {
   /**
    * Skills are aimed while their key is held (the mouse points the way) and go off when it is let go.
    * Heroes with two skills use E / 2 for the second one; otherwise E is another skill key.
+   * Pressing Esc while holding calls the skill off.
    */
   private castOnRelease(slot: 1 | 2, held: boolean): boolean {
     const now = performance.now();
-    if (this.skillHeld[slot] && !held) this.skillCastUntil[slot] = now + 160;
+    if (held && this.keys.ESC.isDown) this.skillCancelled[slot] = true;
+    if (this.skillHeld[slot] && !held) {
+      if (!this.skillCancelled[slot]) this.skillCastUntil[slot] = now + 160;
+      this.skillCancelled[slot] = false;
+    }
     this.skillHeld[slot] = held;
     return now < this.skillCastUntil[slot];
   }
@@ -352,7 +358,7 @@ export class GameScene extends Phaser.Scene {
   private aimingSkill(): 0 | 1 | 2 {
     const touch = (this.scene.get("Hud") as HudScene | undefined)?.touch;
     if (touch) return touch.aimingSkill;
-    return this.skillHeld[1] ? 1 : this.skillHeld[2] ? 2 : 0;
+    return this.skillHeld[1] && !this.skillCancelled[1] ? 1 : this.skillHeld[2] && !this.skillCancelled[2] ? 2 : 0;
   }
 
   private hasSkill2(me: any): boolean {
