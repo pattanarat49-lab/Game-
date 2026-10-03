@@ -44,7 +44,7 @@ import type { HudScene } from "./HudScene";
 import { LocalRoom } from "../localRoom";
 import { Lobby } from "../lobby";
 import { RiftSim, TITAN_ATTACK_COOLDOWN } from "../../../shared/sim";
-import { facingOf, hasHeroArt, heroArtLayout } from "../heroArt";
+import { attackArtLayout, attackFrame, facingOf, hasHeroArt, heroArtLayout, SWING_TIME } from "../heroArt";
 
 interface PlayerView {
   body: Phaser.GameObjects.Image;
@@ -63,6 +63,7 @@ interface PlayerView {
   look?: string; // the body's look without its facing, so turning around does not count as a transformation
   walkX?: number; // where the body was last frame, to tell walking from standing
   walkY?: number;
+  swing?: number; // seconds left of a hand-made basic-attack swing animation
 }
 
 /** A short-lived swing, slash or shockwave drawn on top of the world. */
@@ -627,13 +628,17 @@ export class GameScene extends Phaser.Scene {
       const look = humanized ? "human" : titanNow ? "titanform" : batNow ? "batform" : `hero_${p.hero}`;
       // Heroes with hand-made art turn to face where they aim (4 or 8 facings) instead of mirroring.
       const art = look === `hero_${p.hero}` && hasHeroArt(p.hero);
-      const texture = art ? `${look}_${facingOf(aim, p.hero)}` : look;
-      if (art) body.setFlipX(false);
-      const artScale = art ? heroArtLayout(p.hero).scale : 1;
+      // A basic attack plays the hero's hand-made swing frames, if he has them.
+      if (view.swing) view.swing = Math.max(0, view.swing - dt);
+      const swing = art && view.swing && !p.dead ? attackFrame(p.hero, aim, 1 - view.swing / SWING_TIME) : undefined;
+      const layout = swing ? attackArtLayout(p.hero) : art ? heroArtLayout(p.hero) : undefined;
+      const texture = swing ? swing.texture : art ? `${look}_${facingOf(aim, p.hero)}` : look;
+      if (art) body.setFlipX(!!swing?.flip);
+      const artScale = layout ? layout.scale : 1;
       body.setScale(k * artScale * (titanNow && !humanized ? 2.6 : humanized ? 1 : SUMMON_SCALE[p.hero] ?? 1));
       if (body.texture.key !== texture) {
         body.setTexture(texture);
-        body.setOrigin(0.5, art ? heroArtLayout(p.hero).originY : 0.85);
+        body.setOrigin(0.5, layout ? layout.originY : 0.85);
       }
       if (art) {
         // Walking: a little step bounce and sway while the hero moves.
@@ -846,6 +851,7 @@ export class GameScene extends Phaser.Scene {
     const isMe = p === this.room?.state.players.get(this.room.sessionId);
     if (p.attackSeq !== view.attackSeq) {
       view.attackSeq = p.attackSeq;
+      view.swing = SWING_TIME;
       // Online, our own swings were already drawn the moment we pressed attack.
       if (!(isMe && this.takePredicted(this.predictedAttacks))) this.playAttack(p, x, y, aim);
     }

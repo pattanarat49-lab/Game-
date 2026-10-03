@@ -2,7 +2,7 @@
 // Each one has a picture per facing (4, or 8 with diagonals): the game shows the one closest to where the hero aims.
 
 import { HERO_SPRITES, renderPixelSprite } from "./art";
-import { HERO_ART_DATA } from "./heroArt.data";
+import { HERO_ART_DATA, HERO_ATTACK_DATA } from "./heroArt.data";
 
 export type Facing = "south" | "east" | "north" | "west" | "south-east" | "north-east" | "north-west" | "south-west";
 
@@ -20,6 +20,13 @@ const LAYOUT: Record<string, ArtLayout> = {
   // 32x32 frames; about 30px tall.
   hanuman: { scale: 0.7, originY: 0.95 },
 };
+/** Same for the basic-attack swing frames, which can be a bigger canvas than the standing pictures. */
+const ATTACK_LAYOUT: Record<string, ArtLayout> = {
+  // 44x44 swing frames at the same pixel size as the 32x32 standing ones; feet on row 36.
+  hanuman: { scale: 0.7, originY: 0.84 },
+};
+/** How long a basic-attack swing animation plays, in seconds. */
+export const SWING_TIME = 0.25;
 
 export function hasHeroArt(hero: string): boolean {
   return !!HERO_ART_DATA[hero];
@@ -38,10 +45,45 @@ export function facingOf(aim: number, hero: string): Facing {
   return EIGHT[i];
 }
 
+export function attackArtLayout(hero: string): ArtLayout {
+  return ATTACK_LAYOUT[hero] ?? heroArtLayout(hero);
+}
+
+/**
+ * The swing frame to show `t` (0..1) through a basic attack aimed at `aim`, and whether to mirror it,
+ * or undefined if the hero has no swing frames. The front swing is used when he faces the camera;
+ * otherwise the side swing (the east one, mirrored for the west side when there is no west one).
+ */
+export function attackFrame(hero: string, aim: number, t: number): { texture: string; flip: boolean } | undefined {
+  const swing = HERO_ATTACK_DATA[hero];
+  if (!swing) return undefined;
+  const facing = facingOf(aim, hero);
+  const left = Math.cos(aim) < -0.01;
+  let dir: string | undefined;
+  let flip = false;
+  if (swing[facing]) dir = facing;
+  else if (facing === "south" && swing.south) dir = "south";
+  else if (left && swing.west) dir = "west";
+  else if (swing.east) {
+    dir = "east";
+    flip = left;
+  } else if (swing.west) {
+    dir = "west";
+    flip = !left;
+  } else dir = Object.keys(swing)[0];
+  if (!dir) return undefined;
+  const n = swing[dir]!.length;
+  const i = Math.min(n - 1, Math.floor(Math.max(0, t) * n));
+  return { texture: `hero_${hero}_atk_${dir}_${i}`, flip };
+}
+
 /** Load every facing picture as a Phaser texture named `hero_<id>_<facing>`. */
 export function loadHeroArt(load: Phaser.Loader.LoaderPlugin) {
   for (const [hero, frames] of Object.entries(HERO_ART_DATA)) {
     for (const [facing, uri] of Object.entries(frames)) load.image(`hero_${hero}_${facing}`, uri);
+  }
+  for (const [hero, swing] of Object.entries(HERO_ATTACK_DATA)) {
+    for (const [dir, list] of Object.entries(swing)) list!.forEach((uri, i) => load.image(`hero_${hero}_atk_${dir}_${i}`, uri));
   }
 }
 
