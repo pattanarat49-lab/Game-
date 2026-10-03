@@ -30,6 +30,7 @@ export class Player extends Schema {
   @type("float32") revive = 0;
   @type("float32") barrier = 0;
   @type("float32") latch = 0;
+  @type("boolean") ready = false;
   @type("float32") beam = 0;
   @type("float32") stun = 0;
 }
@@ -65,7 +66,7 @@ export class Zone extends Schema {
   @type("float32") maxLife = 0;
 }
 
-export type Phase = "intermission" | "fight" | "victory";
+export type Phase = "select" | "intermission" | "fight" | "victory";
 
 export class RiftState extends Schema {
   @type("string") stage = "lava";
@@ -78,6 +79,7 @@ export class RiftState extends Schema {
   @type("float32") reality = 0;
   @type("string") realityBy = "";
   @type("string") phase: Phase = "intermission";
+  @type("string") notice = "";
   @type("uint8") wave = 0;
   @type("float32") phaseTimer = 0;
   @type("float32") lavaRadius = 0;

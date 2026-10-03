@@ -29,6 +29,7 @@ import {
   SWORD_GOD,
   stageOf,
   ringStage,
+  EMPTY_INPUT,
   heroOf,
   inLava,
   inputDirection,
@@ -36,6 +37,7 @@ import {
 } from "../../../shared/game";
 import type { HudScene } from "./HudScene";
 import { LocalRoom } from "../localRoom";
+import { Lobby } from "../lobby";
 import { TITAN_ATTACK_COOLDOWN } from "../../../shared/sim";
 
 interface PlayerView {
@@ -49,6 +51,7 @@ interface PlayerView {
   skillSeq: number;
   skill2Seq: number;
   glitch?: Phaser.GameObjects.Image[]; // Yaotsu's "error" afterimages
+  heroId: string; // a hero swap (PvP player select) rebuilds the view
 }
 
 /** A short-lived swing, slash or shockwave drawn on top of the world. */
@@ -206,6 +209,7 @@ export class GameScene extends Phaser.Scene {
   private tracks = new Map<string, Track>();
   private cameraTarget!: Phaser.GameObjects.Zone;
   private aim = 0;
+  private lobby?: Lobby;
   private effects: Effect[] = [];
   private fx!: Phaser.GameObjects.Graphics;
   private aimGuide!: Phaser.GameObjects.Graphics;
@@ -283,6 +287,16 @@ export class GameScene extends Phaser.Scene {
     this.time.addEvent({ delay: 2000, loop: true, callback: ping });
     this.room.onLeave(() => this.game.events.emit("connection-error", new Error("Disconnected from server")));
     this.room.onStateChange((state: any) => this.recordSnapshot(state));
+    if (stage === "pvp") {
+      // PvP player select screen (both players pick, then READY).
+      const lobby = new Lobby(
+        (hero) => room.send("pick", hero),
+        (ready) => room.send("ready", ready),
+      );
+      this.lobby = lobby;
+      this.events.once(Phaser.Scenes.Events.DESTROY, () => lobby.destroy());
+      this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => lobby.destroy());
+    }
     this.scene.launch("Hud");
   }
 
@@ -293,7 +307,16 @@ export class GameScene extends Phaser.Scene {
     const state = room.state;
     if (room instanceof LocalRoom) room.step(dt);
 
-    const input = this.readInput();
+    this.lobby?.update(state, room.sessionId);
+    const selecting = state.phase === "select";
+    const me = state.players.get(room.sessionId);
+    if (me && me.hero !== this.registry.get("hero") && !selecting) {
+      // We picked a different hero on the select screen: rebuild the HUD and buttons for it.
+      this.registry.set("hero", me.hero);
+      this.scene.get("Hud").scene.restart();
+    }
+    // Nobody moves or attacks while picking heroes.
+    const input = selecting ? { ...EMPTY_INPUT, aim: this.aim } : this.readInput();
     this.predictLocal(input, dt);
     this.predictEffects(input, dt);
     this.sendInput(input, dt);
@@ -498,6 +521,11 @@ export class GameScene extends Phaser.Scene {
     state.players.forEach((p: any, id: string) => {
       seen.add(id);
       let view = this.players.get(id);
+      if (view && view.heroId !== p.hero) {
+        this.destroyView(view);
+        this.players.delete(id);
+        view = undefined;
+      }
       if (!view) {
         view = {
           body: this.add.image(p.x, p.y, `hero_${p.hero}`).setOrigin(0.5, 0.85),
@@ -513,6 +541,7 @@ export class GameScene extends Phaser.Scene {
           attackSeq: p.attackSeq,
           skillSeq: p.skillSeq,
           skill2Seq: p.skill2Seq,
+          heroId: p.hero,
         };
         if (id === this.room!.sessionId) {
           this.predicted = { x: p.x, y: p.y };
@@ -627,14 +656,18 @@ export class GameScene extends Phaser.Scene {
 
     for (const [id, view] of this.players) {
       if (seen.has(id)) continue;
-      view.body.destroy();
-      view.weapon?.destroy();
-      view.glitch?.forEach((g) => g.destroy());
-      view.label.destroy();
-      view.bar.destroy();
+      this.destroyView(view);
       this.players.delete(id);
       this.tracks.delete(`p${id}`);
     }
+  }
+
+  private destroyView(view: PlayerView) {
+    view.body.destroy();
+    view.weapon?.destroy();
+    view.glitch?.forEach((g) => g.destroy());
+    view.label.destroy();
+    view.bar.destroy();
   }
 
   /** Yaotsu looks like a rendering error: red and cyan copies jitter around the body. */

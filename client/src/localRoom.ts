@@ -22,6 +22,7 @@ export class LocalRoom {
     phaseTimer: 0,
     lavaRadius: 0,
     winner: "",
+    notice: "",
   };
   private sim: RiftSim<SimPlayer, SimEnemy, SimBullet>;
 
@@ -58,6 +59,7 @@ export class LocalRoom {
         barrier: 0,
         latch: 0,
         beam: 0,
+        ready: false,
         stun: 0,
       }),
       enemy: () => ({ kind: "cinderling", x: 0, y: 0, hp: 0, maxHp: 0, hitFlash: 0, beamState: 0, beamAngle: 0, move: 0, stun: 0 }),

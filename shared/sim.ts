@@ -125,6 +125,8 @@ export interface SimPlayer {
   latch: number;
   /** Seconds left of HEAT VISION: the eye laser fires along the hero's aim. */
   beam: number;
+  /** PvP player select: this player has locked in their hero. */
+  ready: boolean;
 }
 
 export interface SimEnemy {
@@ -195,6 +197,8 @@ export interface SimState<P extends SimPlayer, E extends SimEnemy, B extends Sim
   lavaRadius: number;
   /** PvP Arena: name of the player who won the round. */
   winner: string;
+  /** PvP Arena: a message for the player select screen (a voided match). */
+  notice: string;
 }
 
 export interface SimFactory<P, E, B, Z = SimZone> {
@@ -362,12 +366,79 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
   }
 
   removePlayer(id: string) {
-    this.state.players.delete(id);
+    const s = this.state;
+    const leaver = s.players.get(id);
+    // PvP: if a fighter leaves mid-match, the match is void and everyone goes back to player select.
+    const voids = !!leaver && !leaver.owner && s.stage === "pvp" && (s.phase === "intermission" || s.phase === "fight");
+    s.players.delete(id);
     this.brains.delete(id);
     // A player's clones vanish with them.
     this.state.players.forEach((p, cid) => {
       if (p.owner === id) this.removePlayer(cid);
     });
+    if (voids) {
+      this.startSelect();
+      s.notice = `MATCH VOID: ${leaver!.name} left`;
+    }
+  }
+
+  /** PvP player select: change hero (only before locking in). */
+  pickHero(id: string, hero: string) {
+    const p = this.state.players.get(id);
+    const def = HEROES[hero as keyof typeof HEROES];
+    if (!p || p.owner || p.ready || this.state.phase !== "select" || !def || def.summon) return;
+    p.hero = hero;
+    p.maxHp = def.maxHp;
+    p.hp = def.maxHp;
+    p.mode = 0;
+  }
+
+  /** PvP player select: lock in (or unlock) the current hero. */
+  setReady(id: string, ready: boolean) {
+    const p = this.state.players.get(id);
+    if (p && !p.owner && this.state.phase === "select") p.ready = !!ready;
+  }
+
+  /** PvP: back to player select; nobody is ready, everyone is healed and nothing is left on the floor. */
+  private startSelect() {
+    const s = this.state;
+    s.phase = "select";
+    s.phaseTimer = 0;
+    s.winner = "";
+    s.timeStop = 0;
+    s.reality = 0;
+    const helpers: string[] = [];
+    s.players.forEach((p, pid) => {
+      if (p.owner) return helpers.push(pid);
+      p.ready = false;
+      p.dead = false;
+      p.hp = p.maxHp;
+      p.titan = p.barrier = p.revive = p.latch = p.beam = p.stun = 0;
+    });
+    for (const h of helpers) this.removePlayer(h);
+    const shots: string[] = [];
+    s.bullets.forEach((_b, bid) => shots.push(bid));
+    for (const b of shots) this.removeBullet(b);
+    const zones: string[] = [];
+    s.zones.forEach((_z, zid) => zones.push(zid));
+    for (const z of zones) this.removeZone(z);
+  }
+
+  /** PvP: everyone is ready; fresh start positions and the countdown begins. */
+  private beginMatch() {
+    const s = this.state;
+    s.players.forEach((p, id) => {
+      p.score = 0;
+      p.dead = false;
+      p.hp = p.maxHp;
+      p.ready = false;
+      this.placeAtSpawn(p);
+      const brain = this.brains.get(id);
+      if (brain) brain.target = undefined;
+    });
+    s.notice = "";
+    s.phase = "intermission";
+    s.phaseTimer = PVP_COUNTDOWN;
   }
 
   /** Players actually connected (not clones). */
@@ -530,6 +601,12 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
     const s = this.state;
     s.phase = "intermission";
     s.wave = wave;
+    if (s.stage === "pvp") {
+      // PvP Arena: pick heroes and get ready before each match.
+      s.lavaRadius = 5000;
+      this.startSelect();
+      return;
+    }
     if (s.stage === "boss" || this.ring) {
       // No lava and no waves in the boss room or the arena.
       s.phaseTimer = this.ring ? PVP_COUNTDOWN : BOSS_INTRO_TIME;
@@ -545,7 +622,16 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
   /** PvP Arena: a countdown, then free-for-all until someone reaches the kill target. */
   private updatePvp(dt: number) {
     const s = this.state;
-    if (s.phase === "intermission") {
+    if (s.phase === "select") {
+      let fighters = 0;
+      let ready = 0;
+      s.players.forEach((p) => {
+        if (p.owner) return;
+        fighters++;
+        if (p.ready) ready++;
+      });
+      if (fighters >= 2 && ready === fighters) this.beginMatch();
+    } else if (s.phase === "intermission") {
       s.phaseTimer -= dt;
       if (s.phaseTimer <= 0) s.phase = "fight";
     } else if (s.phase === "victory") {
