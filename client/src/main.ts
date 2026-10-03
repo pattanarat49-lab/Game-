@@ -16,6 +16,8 @@ nameInput.value = localStorageGet("riftborn-name") ?? `Rift${Math.floor(100 + Ma
 let game: Phaser.Game | undefined;
 let selectedHero: HeroId = (localStorageGet("riftborn-hero") as HeroId) ?? "superman";
 if (!HERO_IDS.includes(selectedHero)) selectedHero = "superman";
+let selectedBot: HeroId = (localStorageGet("riftborn-bot") as HeroId) ?? "superman";
+if (!HERO_IDS.includes(selectedBot)) selectedBot = "superman";
 let selectedStage: StageId = (localStorageGet("riftborn-stage") as StageId) ?? "lava";
 if (!STAGE_IDS.includes(selectedStage)) selectedStage = "lava";
 buildStagePicker();
@@ -43,7 +45,8 @@ function buildStagePicker() {
     jungle: { floor: ["#3e4a36", "#43503a", "#5aa23a"], boss: renderPixelSprite(KINGKONG) },
     dojo: { floor: ["#8a5a32", "#9a6a40", "#4a2e18"], boss: renderPixelSprite(SWORD_GOD) },
     boss: { floor: ["#2a2f36", "#31373f", "#4a5562"], boss: renderPixelSprite(GODZILLA) },
-    pvp: { floor: ["#4a3b2c", "#544332", "#6b5842"], boss: versus() },
+    pvp: { floor: ["#3f5fa8", "#d42020", "#4a6ab4"], boss: versus() },
+    duel: { floor: ["#3f5fa8", "#2a6ad8", "#4a6ab4"], boss: versus() },
   };
   for (const id of STAGE_IDS) {
     const stage = STAGES[id];
@@ -62,7 +65,8 @@ function buildStagePicker() {
     for (let y = 0; y < 32; y += 4) {
       for (let x = 0; x < 48; x += 4) {
         // Lava creeps in from the edges; the boss room is plain concrete.
-        const edge = id === "lava" && (x < 8 || x > 36 || y < 4 || y > 24);
+        // The ring stages show the mat with ropes round the edge.
+        const edge = (id === "lava" || id === "pvp" || id === "duel") && (x < 8 || x > 36 || y < 4 || y > 24);
         ctx.fillStyle = edge ? floor[1 + ((x + y) % 8 === 0 ? 1 : 0)] : floor[(x * 7 + y * 3) % 3 === 0 && id !== "lava" ? 1 : 0];
         ctx.fillRect(x, y, 4, 4);
       }
@@ -74,9 +78,25 @@ function buildStagePicker() {
       selectedStage = id;
       localStorageSet("riftborn-stage", id);
       container.querySelectorAll(".stage").forEach((c) => c.setAttribute("aria-pressed", String(c === card)));
+      botPick.style.display = id === "duel" ? "block" : "none";
     });
     container.append(card);
   }
+  // Bot Duel: which hero the bot plays.
+  const botPick = document.createElement("label");
+  botPick.id = "bot-pick";
+  botPick.style.cssText = `display:${selectedStage === "duel" ? "block" : "none"};margin:8px 0;font-size:12px`;
+  botPick.textContent = "Bot plays: ";
+  const select = document.createElement("select");
+  select.id = "bot-hero";
+  select.style.cssText = "font:inherit;padding:4px;background:#241a20;color:#fff;border:2px solid #6b5842";
+  for (const id of HERO_IDS) select.add(new Option(HEROES[id].name, id, false, id === selectedBot));
+  select.addEventListener("change", () => {
+    selectedBot = select.value as HeroId;
+    localStorageSet("riftborn-bot", selectedBot);
+  });
+  botPick.append(select);
+  container.after(botPick);
 }
 
 /** The character select cards, built from the hero list in shared/game.ts. */
@@ -132,6 +152,10 @@ form.addEventListener("submit", async (event) => {
       : "PvP needs other players. Press PLAY ONLINE.";
     return;
   }
+  if (!solo && selectedStage === "duel") {
+    errorText.textContent = "Bot Duel is played solo. Press PLAY SOLO.";
+    return;
+  }
   const name = nameInput.value.trim().slice(0, 16) || "Riftborn";
   localStorageSet("riftborn-name", name);
   errorText.textContent = "";
@@ -161,6 +185,7 @@ form.addEventListener("submit", async (event) => {
   game.registry.set("solo", solo);
   game.registry.set("hero", selectedHero);
   game.registry.set("stage", selectedStage);
+  game.registry.set("botHero", selectedBot);
   game.events.on("connection-error", (err: Error) => {
     errorText.textContent = `Could not reach the rift: ${err?.message ?? err}. Is the server running?`;
     menu.classList.remove("hidden");

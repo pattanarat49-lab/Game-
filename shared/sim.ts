@@ -53,6 +53,7 @@ import {
   inLava,
   inputDirection,
   moveCircle,
+  ringStage,
 } from "./game";
 
 export const TICK_MS = 1000 / 30;
@@ -225,6 +226,8 @@ interface PlayerBrain {
   latchDy: number;
   latchTick: number;
   eyebeamTick: number;
+  /** Bot Duel: this player is driven by the simulation itself. */
+  bot?: { strafe: number; strafeTimer: number; think: number; aimErr: number };
   /** The portal we just came out of: it cannot send us back until we step off it. */
   portalLock?: string;
   cloneLife: number; // seconds a clone has left
@@ -294,6 +297,19 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
     this.startIntermission(0);
   }
 
+  /** Hero-against-hero stages are fought inside the boxing ring's ropes. */
+  private get ring() {
+    return ringStage(this.state.stage);
+  }
+
+  private move(x: number, y: number, dx: number, dy: number, r: number) {
+    return moveCircle(x, y, dx, dy, r, this.ring);
+  }
+
+  private blocked(x: number, y: number) {
+    return hitsRock(x, y, this.ring);
+  }
+
   addPlayer(id: string, name: string, hero: string): P {
     const def = heroOf(hero);
     const player = this.make.player();
@@ -306,6 +322,15 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
     this.state.players.set(id, player);
     this.brains.set(id, this.newBrain());
     return player;
+  }
+
+  /** Bot Duel: a computer-controlled hero that fights the other players. */
+  addBot(hero: string, id = "bot"): P {
+    const def = heroOf(hero);
+    const p = this.addPlayer(id, "BOT", hero);
+    p.name = `BOT ${def.name}`;
+    this.brains.get(id)!.bot = { strafe: 1, strafeTimer: 0, think: 0, aimErr: 0 };
+    return p;
   }
 
   private newBrain(): PlayerBrain {
@@ -414,7 +439,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
     }
 
     if (s.stage === "boss") this.updateBossRoom(dt);
-    else if (s.stage === "pvp") this.updatePvp(dt);
+    else if (this.ring) this.updatePvp(dt);
     else if (s.phase === "intermission") {
       s.phaseTimer -= dt;
       if (s.stage === "lava") s.lavaRadius = Math.min(LAVA_START_RADIUS, s.lavaRadius + LAVA_SHRINK_PER_SEC * 6 * dt);
@@ -505,9 +530,9 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
     const s = this.state;
     s.phase = "intermission";
     s.wave = wave;
-    if (s.stage === "boss" || s.stage === "pvp") {
+    if (s.stage === "boss" || this.ring) {
       // No lava and no waves in the boss room or the arena.
-      s.phaseTimer = s.stage === "pvp" ? PVP_COUNTDOWN : BOSS_INTRO_TIME;
+      s.phaseTimer = this.ring ? PVP_COUNTDOWN : BOSS_INTRO_TIME;
       s.lavaRadius = 5000;
       s.winner = "";
       return;
@@ -584,13 +609,14 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       if (only && id !== only) return;
       const brain = this.brains.get(id);
       if (!brain) return;
+      if (brain.bot) this.botThink(id, p, brain, dt);
       const input = brain.input;
       const hero = heroOf(p.hero);
       brain.hurtTimer = Math.max(0, brain.hurtTimer - dt);
       brain.attackTimer = Math.max(0, brain.attackTimer - dt);
       brain.kbExtra = Math.max(0, brain.kbExtra - KNOCKBACK_DISTANCE * 2 * dt);
       if (Math.abs(brain.kbx) + Math.abs(brain.kby) > 1) {
-        const pushed = moveCircle(p.x, p.y, brain.kbx * dt, brain.kby * dt, PLAYER_RADIUS);
+        const pushed = this.move(p.x, p.y, brain.kbx * dt, brain.kby * dt, PLAYER_RADIUS);
         p.x = pushed.x;
         p.y = pushed.y;
         const fade = Math.exp(-KNOCKBACK_DECAY * dt);
@@ -666,13 +692,13 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
         const dy = brain.target.y - p.y;
         const dist = Math.hypot(dx, dy);
         const step = Math.min(dist, brain.moveBudget);
-        moved = dist > 0 ? moveCircle(p.x, p.y, (dx / dist) * step, (dy / dist) * step, PLAYER_RADIUS) : { x: p.x, y: p.y };
+        moved = dist > 0 ? this.move(p.x, p.y, (dx / dist) * step, (dy / dist) * step, PLAYER_RADIUS) : { x: p.x, y: p.y };
         brain.moveBudget -= Math.hypot(moved.x - p.x, moved.y - p.y);
         if (step === dist && Math.hypot(moved.x - brain.target.x, moved.y - brain.target.y) < 0.5) p.mt = brain.target.t;
       } else if (dashingNow) {
-        moved = moveCircle(p.x, p.y, brain.dashX * DASH_SPEED * dt, brain.dashY * DASH_SPEED * dt, PLAYER_RADIUS);
+        moved = this.move(p.x, p.y, brain.dashX * DASH_SPEED * dt, brain.dashY * DASH_SPEED * dt, PLAYER_RADIUS);
       } else {
-        moved = moveCircle(p.x, p.y, dir.x * hero.speed * dt, dir.y * hero.speed * dt, PLAYER_RADIUS);
+        moved = this.move(p.x, p.y, dir.x * hero.speed * dt, dir.y * hero.speed * dt, PLAYER_RADIUS);
       }
       p.x = moved.x;
       p.y = moved.y;
@@ -854,7 +880,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
         break;
       case "rush": {
         // Dash straight ahead (rocks stop you), cutting through everything on the way.
-        const end = moveCircle(p.x, p.y, Math.cos(p.aim) * skill.radius, Math.sin(p.aim) * skill.radius, PLAYER_RADIUS);
+        const end = this.move(p.x, p.y, Math.cos(p.aim) * skill.radius, Math.sin(p.aim) * skill.radius, PLAYER_RADIUS);
         const len = Math.hypot(end.x - p.x, end.y - p.y);
         this.lineHit(id, p.x, p.y, p.aim, len, skill.width ?? 24, skill.damage);
         p.x = end.x;
@@ -925,7 +951,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
         break;
       case "kick": {
         // RIDER KICK: leap along the aim, kicking through everything and stunning it.
-        const end = moveCircle(p.x, p.y, Math.cos(p.aim) * skill.radius, Math.sin(p.aim) * skill.radius, PLAYER_RADIUS);
+        const end = this.move(p.x, p.y, Math.cos(p.aim) * skill.radius, Math.sin(p.aim) * skill.radius, PLAYER_RADIUS);
         const len = Math.hypot(end.x - p.x, end.y - p.y);
         this.lineHit(id, p.x, p.y, p.aim, len, skill.width ?? 30, skill.damage, skill.duration ?? 2);
         p.x = end.x;
@@ -968,7 +994,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       if (!v.dead && this.isFoe(id, vid)) consider(`p:${vid}`, v.x, v.y);
     });
     if (!pick) {
-      const end = moveCircle(p.x, p.y, Math.cos(p.aim) * skill.radius * 0.6, Math.sin(p.aim) * skill.radius * 0.6, PLAYER_RADIUS);
+      const end = this.move(p.x, p.y, Math.cos(p.aim) * skill.radius * 0.6, Math.sin(p.aim) * skill.radius * 0.6, PLAYER_RADIUS);
       p.x = end.x;
       p.y = end.y;
       p.warp = (p.warp + 1) % 256;
@@ -1010,7 +1036,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
 
   /** PORTAL GUN: the first shot opens a portal, the second opens its partner and links them. */
   private openPortal(id: string, p: P, skill: SkillDef) {
-    const end = moveCircle(p.x, p.y, Math.cos(p.aim) * skill.radius, Math.sin(p.aim) * skill.radius, PLAYER_RADIUS);
+    const end = this.move(p.x, p.y, Math.cos(p.aim) * skill.radius, Math.sin(p.aim) * skill.radius, PLAYER_RADIUS);
     const mine: string[] = [];
     let waiting: string | undefined;
     this.state.zones.forEach((z, zid) => {
@@ -1099,7 +1125,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       c.owner = ownerId;
       c.color = owner.color;
       const a = owner.aim + Math.PI / 2 + (i * Math.PI * 2) / count;
-      const spot = moveCircle(owner.x + Math.cos(a) * 20, owner.y + Math.sin(a) * 20, 0, 0, PLAYER_RADIUS);
+      const spot = this.move(owner.x + Math.cos(a) * 20, owner.y + Math.sin(a) * 20, 0, 0, PLAYER_RADIUS);
       c.x = spot.x;
       c.y = spot.y;
       c.aim = owner.aim;
@@ -1173,7 +1199,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
     });
     const len = Math.hypot(mx, my);
     if (len > 1) [mx, my] = [mx / len, my / len];
-    const moved = moveCircle(c.x, c.y, mx * hero.speed * dt, my * hero.speed * dt, PLAYER_RADIUS);
+    const moved = this.move(c.x, c.y, mx * hero.speed * dt, my * hero.speed * dt, PLAYER_RADIUS);
     c.x = moved.x;
     c.y = moved.y;
     if (inLava(c.x, c.y, this.state.lavaRadius)) this.damagePlayer(id, LAVA_DPS * dt, true);
@@ -1315,7 +1341,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
 
   /** True while players can hurt each other. */
   private pvpLive() {
-    return this.state.stage === "pvp" && this.state.phase === "fight";
+    return this.ring && this.state.phase === "fight";
   }
 
   private damagePlayer(id: string, amount: number, ignoreIframes = false, attacker?: string) {
@@ -1362,10 +1388,24 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
   }
 
   private placeAtSpawn(p: P) {
-    const a = Math.random() * Math.PI * 2;
+    let a = Math.random() * Math.PI * 2;
+    if (this.ring) {
+      // In the ring, start in the spot furthest from everyone already standing in it.
+      let bestGap = -1;
+      for (let i = 0; i < 8; i++) {
+        const ca = (i / 8) * Math.PI * 2;
+        const cx = CENTER_X + Math.cos(ca) * 110;
+        const cy = CENTER_Y + Math.sin(ca) * 110;
+        let gap = Infinity;
+        this.state.players.forEach((q) => {
+          if (q !== p && !q.dead && !q.owner) gap = Math.min(gap, Math.hypot(q.x - cx, q.y - cy));
+        });
+        if (gap > bestGap) [bestGap, a] = [gap, ca];
+      }
+    }
     // In the arena, spread players out so nobody spawns on top of an enemy player.
-    const r = this.state.stage === "pvp" ? 120 + Math.random() * 160 : 30;
-    const spot = moveCircle(CENTER_X + Math.cos(a) * r, CENTER_Y + Math.sin(a) * r, 0, 0, PLAYER_RADIUS);
+    const r = this.ring ? 110 : 30;
+    const spot = this.move(CENTER_X + Math.cos(a) * r, CENTER_Y + Math.sin(a) * r, 0, 0, PLAYER_RADIUS);
     p.x = spot.x;
     p.y = spot.y;
     p.warp = (p.warp + 1) % 256;
@@ -1388,7 +1428,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
         const r = Math.min(this.state.lavaRadius, 340) * (0.7 + Math.random() * 0.25);
         e.x = Math.min(WORLD_W - 20, Math.max(20, CENTER_X + Math.cos(a) * r));
         e.y = Math.min(WORLD_H - 20, Math.max(20, CENTER_Y + Math.sin(a) * r));
-        if (!hitsRock(e.x, e.y)) break;
+        if (!this.blocked(e.x, e.y)) break;
       }
     }
     const id = `e${this.nextId++}`;
@@ -1434,7 +1474,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       const brain = this.enemyBrains.get(id)!;
       e.hitFlash = Math.max(0, e.hitFlash - dt);
       if (Math.abs(brain.kbx) + Math.abs(brain.kby) > 1) {
-        const pushed = moveCircle(e.x, e.y, brain.kbx * dt, brain.kby * dt, def.radius);
+        const pushed = this.move(e.x, e.y, brain.kbx * dt, brain.kby * dt, def.radius);
         e.x = pushed.x;
         e.y = pushed.y;
         const fade = Math.exp(-KNOCKBACK_DECAY * dt);
@@ -1473,7 +1513,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
         dirX = -dirX;
         dirY = -dirY;
       }
-      const moved = moveCircle(e.x, e.y, dirX * def.speed * dt, dirY * def.speed * dt, def.radius);
+      const moved = this.move(e.x, e.y, dirX * def.speed * dt, dirY * def.speed * dt, def.radius);
       e.x = moved.x;
       e.y = moved.y;
 
@@ -1549,7 +1589,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
     // Striking.
     if (e.move === 1) {
       const d = SWORD_GOD.dash;
-      const moved = moveCircle(e.x, e.y, Math.cos(e.beamAngle) * d.speed * dt, Math.sin(e.beamAngle) * d.speed * dt, def.radius);
+      const moved = this.move(e.x, e.y, Math.cos(e.beamAngle) * d.speed * dt, Math.sin(e.beamAngle) * d.speed * dt, def.radius);
       e.x = moved.x;
       e.y = moved.y;
       this.swordGodCut(e, brain, def.radius + d.width / 2, Math.PI * 2, d.damage);
@@ -1561,7 +1601,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
         brain.cutTimer = f.active / f.cuts;
         brain.hit = new Set(); // every cut can land
         e.beamAngle = Math.atan2(dy, dx);
-        const moved = moveCircle(e.x, e.y, Math.cos(e.beamAngle) * f.lunge, Math.sin(e.beamAngle) * f.lunge, def.radius);
+        const moved = this.move(e.x, e.y, Math.cos(e.beamAngle) * f.lunge, Math.sin(e.beamAngle) * f.lunge, def.radius);
         e.x = moved.x;
         e.y = moved.y;
         this.swordGodCut(e, brain, f.range, f.arc, f.damage);
@@ -1613,7 +1653,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       return true;
     }
     const def = ENEMIES[e.kind as EnemyKind];
-    const moved = moveCircle(e.x, e.y, Math.cos(e.beamAngle) * KONG_CHARGE_SPEED * dt, Math.sin(e.beamAngle) * KONG_CHARGE_SPEED * dt, def.radius);
+    const moved = this.move(e.x, e.y, Math.cos(e.beamAngle) * KONG_CHARGE_SPEED * dt, Math.sin(e.beamAngle) * KONG_CHARGE_SPEED * dt, def.radius);
     e.x = moved.x;
     e.y = moved.y;
     this.state.players.forEach((p, pid) => {
@@ -1706,7 +1746,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       b.y += b.vy * dt;
       brain.life -= dt;
       // Sword waves and missiles fly over rocks; bullets do not.
-      const blocked = b.kind !== "wave" && b.kind !== "missile" && hitsRock(b.x, b.y);
+      const blocked = b.kind !== "wave" && b.kind !== "missile" && this.blocked(b.x, b.y);
       if (brain.life <= 0 || b.x < 0 || b.y < 0 || b.x > WORLD_W || b.y > WORLD_H || blocked) {
         if (brain.blast > 0) this.sweep(brain.owner ?? "", b.x, b.y, 0, brain.blast, Math.PI * 2, brain.damage);
         this.removeBullet(id);
@@ -1785,5 +1825,100 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
     const turn = Math.max(-MISSILE_TURN * dt, Math.min(MISSILE_TURN * dt, diff));
     b.vx = Math.cos(now + turn) * speed;
     b.vy = Math.sin(now + turn) * speed;
+  }
+
+  // ----------------------------------------------------------------- bot
+
+  /** Bot Duel: decide this tick's input like a player would (close in or keep range, circle, attack, use skills). */
+  private botThink(id: string, p: P, brain: PlayerBrain, dt: number) {
+    const bot = brain.bot!;
+    const hero = heroOf(p.hero);
+    const input: PlayerInput = { ...EMPTY_INPUT, aim: p.aim };
+    let foe: P | undefined;
+    let dist = Infinity;
+    this.state.players.forEach((v, vid) => {
+      if (v.dead || this.rootOf(vid) === id) return;
+      const d = Math.hypot(v.x - p.x, v.y - p.y);
+      if (d < dist) [dist, foe] = [d, v];
+    });
+    if (!foe || p.dead || !this.pvpLive()) {
+      brain.input = input;
+      return;
+    }
+    const ux = (foe.x - p.x) / (dist || 1);
+    const uy = (foe.y - p.y) / (dist || 1);
+    bot.strafeTimer -= dt;
+    if (bot.strafeTimer <= 0) {
+      // Every so often change which way to circle, and wobble the aim a little: no perfect shots.
+      bot.strafe = Math.random() < 0.5 ? -1 : 1;
+      bot.strafeTimer = 0.8 + Math.random() * 1.2;
+      bot.aimErr = (Math.random() - 0.5) * 0.16;
+    }
+    const gun = !!hero.gun && p.mode === 1;
+    const melee = p.titan > 0 || (!gun && (hero.attack === "punch" || hero.attack === "sword"));
+    const reach = p.titan > 0 ? hero.skill.radius : gun ? hero.gun!.range : hero.attack === "lightning" ? hero.range + hero.aoe : hero.range;
+    const want = melee ? Math.max(6, reach * 0.6) : Math.min(reach * 0.7, 200);
+    let mx = 0;
+    let my = 0;
+    const fleeing = p.hp < p.maxHp * 0.25 && dist < 90 && !melee;
+    if (fleeing || (!melee && dist < want - 20)) [mx, my] = [-ux, -uy];
+    else if (dist > want + 8) [mx, my] = [ux, uy];
+    mx += -uy * bot.strafe * 0.7;
+    my += ux * bot.strafe * 0.7;
+    input.left = mx < -0.3;
+    input.right = mx > 0.3;
+    input.up = my < -0.3;
+    input.down = my > 0.3;
+    input.aim = Math.atan2(uy, ux) + bot.aimErr;
+    input.shoot = dist <= reach + PLAYER_RADIUS + 6;
+    if (p.dashCooldown <= 0 && Math.random() < dt * 0.8 && ((melee && dist > 120) || fleeing)) input.dash = true;
+    bot.think -= dt;
+    if (bot.think <= 0) {
+      bot.think = 0.25 + Math.random() * 0.35; // reaction time
+      if (p.skillCooldown <= 0 && this.botWants(hero.skill, p, dist)) input.skill = true;
+      else if (hero.skill2 && p.skill2Cooldown <= 0 && this.botWants(hero.skill2, p, dist)) input.skill2 = true;
+    }
+    brain.input = input;
+  }
+
+  /** Would the bot use this skill now, `dist` away from its opponent? */
+  private botWants(skill: SkillDef, p: P, dist: number): boolean {
+    const hpLeft = p.hp / p.maxHp;
+    const reach = skill.radius * 0.95 + PLAYER_RADIUS;
+    switch (skill.kind) {
+      case "passive":
+      case "portal":
+        return false;
+      case "heal":
+      case "rewind":
+        return hpLeft < 0.5;
+      case "revive":
+        return hpLeft < 0.35;
+      case "immortal":
+        return hpLeft < 0.55 && dist < 150;
+      case "swap":
+        return p.mode === 1 ? dist < 40 : dist > 90;
+      case "wave":
+      case "line":
+      case "jab":
+      case "rush":
+      case "kick":
+      case "cross":
+      case "gatling":
+      case "card":
+      case "latch":
+      case "eyebeam":
+      case "onepunch":
+      case "smash":
+      case "storm":
+      case "slashes":
+        return dist <= reach;
+      case "titan":
+        return dist < 120;
+      case "hurricane":
+        return dist > 60 && dist < 220;
+      default:
+        return dist < 260;
+    }
   }
 }

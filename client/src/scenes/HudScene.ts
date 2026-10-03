@@ -1,5 +1,5 @@
 import Phaser from "phaser";
-import { DASH_COOLDOWN, PVP_KILLS_TO_WIN, WAVE_COUNT, heroOf } from "../../../shared/game";
+import { DASH_COOLDOWN, PVP_KILLS_TO_WIN, WAVE_COUNT, heroOf, ringStage } from "../../../shared/game";
 import { PLAYER_COATS } from "../art";
 import type { GameScene } from "./GameScene";
 import { TouchControls, isTouchDevice } from "../touch";
@@ -91,8 +91,8 @@ export class HudScene extends Phaser.Scene {
 
     const waveLabel = state.wave >= WAVE_COUNT ? "BOSS" : `${state.wave}/${WAVE_COUNT}`;
     let banner = "";
-    if (state.stage === "pvp") {
-      this.waveText.setText(`PVP ARENA  FIRST TO ${PVP_KILLS_TO_WIN} KILLS`);
+    if (ringStage(state.stage)) {
+      this.waveText.setText(`${state.stage === "duel" ? "BOT DUEL" : "PVP ARENA"}  FIRST TO ${PVP_KILLS_TO_WIN} KILLS`);
       if (state.phase === "victory") banner = `${state.winner} WINS!\nNext round in ${Math.ceil(state.phaseTimer)}`;
       else if (me?.dead) banner = `YOU FELL\nRespawning in ${Math.ceil(me.respawnIn)}`;
       else if (state.phase === "intermission") banner = `FIGHT!\nin ${Math.ceil(state.phaseTimer)}`;
@@ -160,7 +160,7 @@ export class HudScene extends Phaser.Scene {
       if (p.owner) return; // Loki's clones are not players
       count++;
       const marker = id === room!.sessionId ? ">" : " ";
-      rows.push(`${marker}${p.name}  ${p.score}${state.stage === "pvp" ? " KO" : ""}`);
+      rows.push(`${marker}${p.name}  ${p.score}${ringStage(state.stage) ? " KO" : ""}`);
     });
     this.scores.setText(`RIFTBORN ${count}/4\n${rows.join("\n")}`);
     let i = 0;

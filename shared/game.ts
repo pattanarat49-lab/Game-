@@ -897,8 +897,25 @@ export function inputDirection(input: PlayerInput): { x: number; y: number } {
   return { x, y };
 }
 
-/** Move a circle by (dx, dy), keeping it inside the world and out of rocks. */
-export function moveCircle(x: number, y: number, dx: number, dy: number, r: number): { x: number; y: number } {
+/** The boxing ring the PvP Arena and Bot Duel are fought in: a small square with no cover. */
+export const RING = { x: CENTER_X, y: CENTER_Y, half: 150 };
+
+/** Stages fought in the boxing ring (hero against hero). */
+export function ringStage(stage: string): boolean {
+  return stage === "pvp" || stage === "duel";
+}
+
+/**
+ * Move a circle by (dx, dy), keeping it inside the world and out of rocks; in the boxing ring
+ * (`ring`), inside the ropes instead.
+ */
+export function moveCircle(x: number, y: number, dx: number, dy: number, r: number, ring = false): { x: number; y: number } {
+  if (ring) {
+    return {
+      x: Math.min(RING.x + RING.half - r, Math.max(RING.x - RING.half + r, x + dx)),
+      y: Math.min(RING.y + RING.half - r, Math.max(RING.y - RING.half + r, y + dy)),
+    };
+  }
   let nx = Math.min(WORLD_W - r, Math.max(r, x + dx));
   let ny = Math.min(WORLD_H - r, Math.max(r, y + dy));
   for (const rock of ROCKS) {
@@ -914,7 +931,9 @@ export function moveCircle(x: number, y: number, dx: number, dy: number, r: numb
   return { x: nx, y: ny };
 }
 
-export function hitsRock(x: number, y: number): boolean {
+/** True if a shot at (x, y) hits a rock (or, in the boxing ring, the ropes). */
+export function hitsRock(x: number, y: number, ring = false): boolean {
+  if (ring) return Math.abs(x - RING.x) > RING.half || Math.abs(y - RING.y) > RING.half;
   return ROCKS.some((rock) => Math.hypot(x - rock.x, y - rock.y) < rock.r);
 }
 
@@ -923,7 +942,7 @@ export function inLava(x: number, y: number, lavaRadius: number): boolean {
 }
 
 // Stages
-export type StageId = "lava" | "jungle" | "dojo" | "boss" | "pvp";
+export type StageId = "lava" | "jungle" | "dojo" | "boss" | "pvp" | "duel";
 
 export interface StageDef {
   name: string;
@@ -935,7 +954,8 @@ export const STAGES: Record<StageId, StageDef> = {
   jungle: { name: "Stage 2: Jungle Temple", blurb: "Harder! Hordes of monkeys, banana throwers, then the Ape King." },
   dojo: { name: "Stage 3: Sword Dojo", blurb: "Much harder! Sword students in white, then the Sword God himself." },
   boss: { name: "Boss Room", blurb: "No waves. Fight the Atomic Kaiju straight away. Dodge the atomic beam!" },
-  pvp: { name: "PvP Arena", blurb: "Players fight each other. First to 3 kills wins. Online only." },
+  pvp: { name: "PvP Arena", blurb: "Players fight each other in a small boxing ring. First to 3 kills wins. Online only." },
+  duel: { name: "Bot Duel", blurb: "1v1 in the boxing ring against a bot playing the hero you pick. First to 3 KOs. Solo." },
 };
 
 export const STAGE_IDS = Object.keys(STAGES) as StageId[];

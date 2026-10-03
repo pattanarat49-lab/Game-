@@ -1,5 +1,5 @@
 import Phaser from "phaser";
-import { CENTER_X, CENTER_Y, MAP_COLS, MAP_ROWS, ROCKS, TILE, WORLD_H, WORLD_W } from "../../../shared/game";
+import { CENTER_X, CENTER_Y, MAP_COLS, MAP_ROWS, RING, ROCKS, TILE, WORLD_H, WORLD_W } from "../../../shared/game";
 import {
   BRUTE,
   CALCIFER,
@@ -165,7 +165,8 @@ export class BootScene extends Phaser.Scene {
     this.addCanvas("spark", renderPixelSprite(SPARK));
     this.addCanvas("ground_lava", this.drawGround(LAVA_THEME));
     this.addCanvas("ground_boss", this.drawGround(BOSS_THEME));
-    this.addCanvas("ground_pvp", this.drawGround(ARENA_THEME));
+    this.addCanvas("ground_pvp", this.drawRing());
+    this.addCanvas("ground_duel", this.drawRing());
     this.addCanvas("godzilla", renderPixelSprite(GODZILLA));
     this.addCanvas("lava", this.drawLavaTiles());
 
@@ -175,6 +176,65 @@ export class BootScene extends Phaser.Scene {
   private addCanvas(key: string, canvas: HTMLCanvasElement) {
     if (this.textures.exists(key)) this.textures.remove(key);
     this.textures.addCanvas(key, canvas);
+  }
+
+  /** The boxing ring: a canvas mat inside three ropes, corner posts, and a dark crowd all around. */
+  private drawRing(): HTMLCanvasElement {
+    const rand = seeded(77);
+    const canvas = document.createElement("canvas");
+    canvas.width = WORLD_W;
+    canvas.height = WORLD_H;
+    const ctx = canvas.getContext("2d")!;
+    ctx.fillStyle = "#16121a";
+    ctx.fillRect(0, 0, WORLD_W, WORLD_H);
+    // The crowd: rows of little heads in the dark, lit by camera flashes here and there.
+    for (let i = 0; i < 2600; i++) {
+      const x = Math.floor(rand() * WORLD_W);
+      const y = Math.floor(rand() * WORLD_H);
+      if (Math.abs(x - RING.x) < RING.half + 40 && Math.abs(y - RING.y) < RING.half + 40) continue;
+      ctx.fillStyle = ["#2a2230", "#3a2e3a", "#4a3a44", "#5a4a3a"][Math.floor(rand() * 4)];
+      ctx.fillRect(x, y, 3, 3);
+      if (rand() < 0.01) {
+        ctx.fillStyle = "#fff6c2";
+        ctx.fillRect(x, y, 2, 2);
+      }
+    }
+    const l = RING.x - RING.half;
+    const t = RING.y - RING.half;
+    const size = RING.half * 2;
+    // apron and shadow
+    ctx.fillStyle = "#0a080c";
+    ctx.fillRect(l - 22, t - 22, size + 44, size + 44);
+    ctx.fillStyle = "#2a3a6a";
+    ctx.fillRect(l - 16, t - 16, size + 32, size + 32);
+    // the mat, with a faint canvas weave and the logo in the middle
+    ctx.fillStyle = "#3f5fa8";
+    ctx.fillRect(l, t, size, size);
+    for (let i = 0; i < 900; i++) {
+      ctx.fillStyle = rand() < 0.5 ? "#4a6ab4" : "#38559a";
+      ctx.fillRect(l + Math.floor(rand() * size), t + Math.floor(rand() * size), 2, 1);
+    }
+    ctx.fillStyle = "rgba(255,255,255,0.12)";
+    this.pixelCircle(ctx, RING.x, RING.y, 40);
+    ctx.fillStyle = "#3f5fa8";
+    this.pixelCircle(ctx, RING.x, RING.y, 36);
+    // three ropes on each side: red, white, blue
+    ["#d42020", "#f4f4f4", "#2a6ad8"].forEach((color, i) => {
+      const o = 4 + i * 4;
+      ctx.fillStyle = color;
+      ctx.fillRect(l - o, t - o, size + o * 2, 2);
+      ctx.fillRect(l - o, t + size + o - 2, size + o * 2, 2);
+      ctx.fillRect(l - o, t - o, 2, size + o * 2);
+      ctx.fillRect(l + size + o - 2, t - o, 2, size + o * 2);
+    });
+    // corner posts (red and blue corners)
+    [[l, t, "#d42020"], [l + size, t, "#f4f4f4"], [l, t + size, "#f4f4f4"], [l + size, t + size, "#2a6ad8"]].forEach(([x, y, c]) => {
+      ctx.fillStyle = "#1a0f14";
+      ctx.fillRect((x as number) - 8, (y as number) - 8, 16, 16);
+      ctx.fillStyle = c as string;
+      ctx.fillRect((x as number) - 6, (y as number) - 6, 12, 12);
+    });
+    return canvas;
   }
 
   /** A stage floor: tiles with pebbles, occasional cracks, and the pillars from ROCKS. */

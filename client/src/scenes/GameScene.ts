@@ -28,6 +28,7 @@ import {
   ROCKS,
   SWORD_GOD,
   stageOf,
+  ringStage,
   heroOf,
   inLava,
   inputDirection,
@@ -259,7 +260,7 @@ export class GameScene extends Phaser.Scene {
     cam.setRoundPixels(true);
 
     if (this.registry.get("solo")) {
-      this.room = new LocalRoom(this.registry.get("playerName"), this.registry.get("hero"), stage);
+      this.room = new LocalRoom(this.registry.get("playerName"), this.registry.get("hero"), stage, this.registry.get("botHero"));
       this.scene.launch("Hud");
       return;
     }
@@ -443,7 +444,7 @@ export class GameScene extends Phaser.Scene {
         this.kbVel.x *= fade;
         this.kbVel.y *= fade;
       }
-      this.predicted = moveCircle(this.predicted.x, this.predicted.y, vx * dt, vy * dt, PLAYER_RADIUS);
+      this.predicted = moveCircle(this.predicted.x, this.predicted.y, vx * dt, vy * dt, PLAYER_RADIUS, ringStage(state.stage));
 
       // Safety net: if the server keeps us somewhere else, ease back to it.
       const err = Math.hypot(me.x - this.predicted.x, me.y - this.predicted.y);
@@ -555,7 +556,7 @@ export class GameScene extends Phaser.Scene {
       // Titan form: a giant body for the duration.
       const titanNow = p.titan > 0 && !p.dead;
       // Under Yaotsu's reality change, rival players are ordinary humans too.
-      const humanized = state.reality > 0 && state.stage === "pvp" && (p.owner || id) !== state.realityBy && !p.dead;
+      const humanized = state.reality > 0 && ringStage(state.stage) && (p.owner || id) !== state.realityBy && !p.dead;
       const texture = humanized ? "human" : titanNow ? "titanform" : `hero_${p.hero}`;
       if (body.texture.key !== texture) {
         body.setTexture(texture).setScale(titanNow && !humanized ? 2.6 : humanized ? 1 : SUMMON_SCALE[p.hero] ?? 1);
@@ -712,7 +713,7 @@ export class GameScene extends Phaser.Scene {
       this.playAttack(me, x, y, this.aim);
     }
     // Ordinary humans (a rival's reality change) cannot use skills.
-    if (state.reality > 0 && state.realityBy !== room.sessionId && state.stage === "pvp") return;
+    if (state.reality > 0 && state.realityBy !== room.sessionId && ringStage(state.stage)) return;
     // Lock the button until the server's cooldown has had time to reach us.
     const lock = Math.max(0.4, (this.pingMs * 1.5) / 1000);
     if (input.skill && me.skillCooldown <= 0 && this.localSkillLock <= 0 && hero.skill.kind !== "passive") {

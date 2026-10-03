@@ -25,7 +25,7 @@ export class LocalRoom {
   };
   private sim: RiftSim<SimPlayer, SimEnemy, SimBullet>;
 
-  constructor(name: string, hero: string, stage: StageId) {
+  constructor(name: string, hero: string, stage: StageId, botHero = "superman") {
     this.sim = new RiftSim(this.state, {
       player: () => ({
         name: "",
@@ -65,6 +65,7 @@ export class LocalRoom {
       zone: () => ({ kind: "", x: 0, y: 0, radius: 0, life: 0, maxLife: 0 }),
     }, stage);
     this.sim.addPlayer(this.sessionId, name, hero);
+    if (stage === "duel") this.sim.addBot(botHero); // Bot Duel: the computer plays the hero you picked for it
   }
 
   /** Advance the world. Called from the game's render loop so every frame shows a fresh state. */
