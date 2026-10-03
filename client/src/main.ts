@@ -4,7 +4,7 @@ import { GameScene } from "./scenes/GameScene";
 import { HudScene } from "./scenes/HudScene";
 import { isTouchDevice } from "./touch";
 import { HEROES, HERO_IDS, HeroId, STAGES, STAGE_IDS, StageId } from "../../shared/game";
-import { GODZILLA, KINGKONG, HERO_SPRITES, WARDEN, renderPixelSprite } from "./art";
+import { GODZILLA, KINGKONG, SWORD_GOD, HERO_SPRITES, WARDEN, renderPixelSprite } from "./art";
 
 const menu = document.getElementById("menu")!;
 const form = document.getElementById("join-form") as HTMLFormElement;
@@ -41,6 +41,7 @@ function buildStagePicker() {
   const previews: Record<StageId, { floor: string[]; boss: HTMLCanvasElement }> = {
     lava: { floor: ["#2b2026", "#e5501b", "#ff8a1f"], boss: renderPixelSprite(WARDEN) },
     jungle: { floor: ["#3e4a36", "#43503a", "#5aa23a"], boss: renderPixelSprite(KINGKONG) },
+    dojo: { floor: ["#8a5a32", "#9a6a40", "#4a2e18"], boss: renderPixelSprite(SWORD_GOD) },
     boss: { floor: ["#2a2f36", "#31373f", "#4a5562"], boss: renderPixelSprite(GODZILLA) },
     pvp: { floor: ["#4a3b2c", "#544332", "#6b5842"], boss: versus() },
   };

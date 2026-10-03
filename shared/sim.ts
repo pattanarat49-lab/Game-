@@ -44,6 +44,7 @@ import {
   KONG_CHARGE_SPEED,
   KONG_CHARGE_WIDTH,
   KNOCKBACK_DECAY,
+  SWORD_GOD,
   KNOCKBACK_DISTANCE,
   WORLD_H,
   WORLD_W,
@@ -114,9 +115,11 @@ export interface SimEnemy {
   /** Godzilla's beam: 0 = idle, 1 = charging (warning line), 2 = firing. */
   beamState: number;
   beamAngle: number;
+  /** The Sword God's current move (index into SWORD_GOD_MOVES; 0 = none). */
+  move: number;
 }
 
-export type BulletKind = "snipe" | "wave" | "magic" | "fireball" | "enemy" | "banana" | "boulder" | "holy" | "stone" | "loki" | "glitch" | "bullet";
+export type BulletKind = "snipe" | "wave" | "magic" | "fireball" | "enemy" | "banana" | "boulder" | "holy" | "stone" | "loki" | "glitch" | "bullet" | "slash";
 
 /** A lasting area on the map: a storm cloud, an illusion kingdom, a domain. */
 export interface SimZone {
@@ -202,6 +205,10 @@ interface EnemyBrain {
   beamTimer: number; // counts down to the next beam phase
   kbx: number; // knockback push (pixels/s), fading out
   kby: number;
+  /** Sword God: players already cut by the current strike, and cuts of a flurry still to come. */
+  hit?: Set<string>;
+  cutsLeft?: number;
+  cutTimer?: number;
 }
 
 interface ZoneBrain {
@@ -986,7 +993,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
     e.kind = kind;
     e.hp = def.hp * this.hpScale();
     e.maxHp = e.hp;
-    if (kind === "warden" || kind === "godzilla" || kind === "kingkong") {
+    if (ENEMIES[kind].boss) {
       e.x = CENTER_X;
       e.y = CENTER_Y - 170;
     } else {
@@ -1056,12 +1063,17 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       const dist = Math.hypot(dx, dy) || 1;
 
       const human = this.state.reality > 0;
-      if (human) e.beamState = 0; // ordinary humans have no atomic breath
+      if (human) {
+        // ordinary humans have no atomic breath or sword arts
+        e.beamState = 0;
+        e.move = 0;
+      }
       if (e.kind === "godzilla" && !human && this.updateBeam(e, brain, dx, dy, dt)) {
         if (dist < def.radius + PLAYER_RADIUS) this.damagePlayer(targetId, def.touchDamage, false, ENEMY);
         return;
       }
       if (e.kind === "kingkong" && !human && this.updateCharge(e, brain, dx, dy, dt)) return;
+      if (e.kind === "swordgod" && !human && this.updateSwordGod(e, brain, dx, dy, dist, dt)) return;
 
       // Ranged enemies keep their distance; everyone else charges.
       let dirX = dx / dist;
@@ -1097,10 +1109,96 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
             // Three boulders hurled in a spread.
             for (const off of [-0.25, 0, 0.25]) this.spawnBullet("boulder", e.x, e.y, aim + off, ENEMY_SHOT_SPEED * 1.2, shot);
           } else {
-            this.spawnBullet(def.shot ?? "enemy", e.x, e.y, aim, ENEMY_SHOT_SPEED * (def.shot === "banana" ? 1.15 : 1), shot);
+            this.spawnBullet(def.shot ?? "enemy", e.x, e.y, aim, ENEMY_SHOT_SPEED * (def.shot === "banana" ? 1.15 : def.shot === "slash" ? 1.6 : 1), shot);
           }
         }
       }
+    });
+  }
+
+  /**
+   * The Sword God. Rests (chasing) between moves, then picks one that suits the distance:
+   * far away a dash or a fan of flying slashes, up close a spin or a flurry of cuts.
+   * Each move winds up first (beamState 1) so it can be dodged, then strikes (beamState 2).
+   * Returns true while a move is underway.
+   */
+  private updateSwordGod(e: E, brain: EnemyBrain, dx: number, dy: number, dist: number, dt: number): boolean {
+    const def = ENEMIES[e.kind as EnemyKind];
+    brain.beamTimer -= dt;
+    if (e.beamState === 0) {
+      if (brain.beamTimer > 0) return false;
+      const far = dist > 150;
+      const pick = far ? (Math.random() < 0.55 ? 1 : 3) : Math.random() < 0.5 ? 2 : 4;
+      e.move = Math.random() < 0.15 ? 1 + Math.floor(Math.random() * 4) : pick; // sometimes a surprise
+      e.beamState = 1;
+      e.beamAngle = Math.atan2(dy, dx);
+      brain.beamTimer = [0, SWORD_GOD.dash.windup, SWORD_GOD.whirl.windup, SWORD_GOD.waves.windup, SWORD_GOD.flurry.windup][e.move];
+      return true;
+    }
+    if (e.beamState === 1) {
+      // Keep tracking the target a little during the wind-up, except for the dash (its lane is locked).
+      if (e.move !== 1) e.beamAngle = Math.atan2(dy, dx);
+      if (brain.beamTimer > 0) return true;
+      e.beamState = 2;
+      brain.hit = new Set();
+      brain.beamTimer = [0, SWORD_GOD.dash.active, SWORD_GOD.whirl.active, SWORD_GOD.waves.active, SWORD_GOD.flurry.active][e.move];
+      if (e.move === 2) this.swordGodCut(e, brain, SWORD_GOD.whirl.radius, Math.PI * 2, SWORD_GOD.whirl.damage);
+      if (e.move === 3) {
+        const w = SWORD_GOD.waves;
+        const shot = { damage: w.damage, pierce: 0, life: 2.5 };
+        for (let i = 0; i < w.count; i++) {
+          this.spawnBullet("slash", e.x, e.y, e.beamAngle + (i - (w.count - 1) / 2) * w.spread, w.speed, shot);
+        }
+      }
+      if (e.move === 4) {
+        brain.cutsLeft = SWORD_GOD.flurry.cuts;
+        brain.cutTimer = 0;
+      }
+      return true;
+    }
+    // Striking.
+    if (e.move === 1) {
+      const d = SWORD_GOD.dash;
+      const moved = moveCircle(e.x, e.y, Math.cos(e.beamAngle) * d.speed * dt, Math.sin(e.beamAngle) * d.speed * dt, def.radius);
+      e.x = moved.x;
+      e.y = moved.y;
+      this.swordGodCut(e, brain, def.radius + d.width / 2, Math.PI * 2, d.damage);
+    } else if (e.move === 4) {
+      const f = SWORD_GOD.flurry;
+      brain.cutTimer = (brain.cutTimer ?? 0) - dt;
+      if ((brain.cutsLeft ?? 0) > 0 && brain.cutTimer <= 0) {
+        brain.cutsLeft = (brain.cutsLeft ?? 0) - 1;
+        brain.cutTimer = f.active / f.cuts;
+        brain.hit = new Set(); // every cut can land
+        e.beamAngle = Math.atan2(dy, dx);
+        const moved = moveCircle(e.x, e.y, Math.cos(e.beamAngle) * f.lunge, Math.sin(e.beamAngle) * f.lunge, def.radius);
+        e.x = moved.x;
+        e.y = moved.y;
+        this.swordGodCut(e, brain, f.range, f.arc, f.damage);
+      }
+    }
+    if (brain.beamTimer <= 0) {
+      e.beamState = 0;
+      e.move = 0;
+      brain.beamTimer = SWORD_GOD.rest;
+    }
+    return true;
+  }
+
+  /** One Sword God cut: hits each player in range (and arc) once per strike. Dashing dodges it. */
+  private swordGodCut(e: E, brain: EnemyBrain, range: number, arc: number, damage: number) {
+    this.state.players.forEach((p, pid) => {
+      if (p.dead || brain.hit?.has(pid)) return;
+      const dx = p.x - e.x;
+      const dy = p.y - e.y;
+      if (Math.hypot(dx, dy) > range + PLAYER_RADIUS) return;
+      if (arc < Math.PI * 2) {
+        let diff = Math.atan2(dy, dx) - e.beamAngle;
+        diff = Math.atan2(Math.sin(diff), Math.cos(diff));
+        if (Math.abs(diff) > arc / 2) return;
+      }
+      brain.hit?.add(pid);
+      this.damagePlayer(pid, damage, true, ENEMY);
     });
   }
 
@@ -1196,7 +1294,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
     b.y = y;
     b.vx = Math.cos(angle) * speed;
     b.vy = Math.sin(angle) * speed;
-    b.hostile = kind === "enemy" || kind === "banana" || kind === "boulder";
+    b.hostile = kind === "enemy" || kind === "banana" || kind === "boulder" || kind === "slash";
     const id = `b${this.nextId++}`;
     this.state.bullets.set(id, b);
     this.bulletBrains.set(id, { owner: opts.owner, damage: opts.damage, pierceLeft: opts.pierce, life: opts.life, hit: new Set(), blast: opts.blast ?? 0 });

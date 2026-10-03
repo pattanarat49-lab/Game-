@@ -55,7 +55,7 @@ export class LocalRoom {
         kbSeq: 0,
         mode: 0,
       }),
-      enemy: () => ({ kind: "cinderling", x: 0, y: 0, hp: 0, maxHp: 0, hitFlash: 0, beamState: 0, beamAngle: 0 }),
+      enemy: () => ({ kind: "cinderling", x: 0, y: 0, hp: 0, maxHp: 0, hitFlash: 0, beamState: 0, beamAngle: 0, move: 0 }),
       bullet: () => ({ kind: "snipe", x: 0, y: 0, vx: 0, vy: 0, hostile: false }),
       zone: () => ({ kind: "", x: 0, y: 0, radius: 0, life: 0, maxLife: 0 }),
     }, stage);

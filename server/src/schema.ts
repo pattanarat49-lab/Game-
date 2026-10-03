@@ -38,6 +38,7 @@ export class Enemy extends Schema {
   @type("float32") hitFlash = 0;
   @type("uint8") beamState = 0;
   @type("float32") beamAngle = 0;
+  @type("uint8") move = 0;
 }
 
 export class Bullet extends Schema {

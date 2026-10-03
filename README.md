@@ -38,6 +38,7 @@ Design doc: see `docs/game-design-foundation.md`.
 - **Online:** your own attacks and skills show the moment you press them, and the HUD shows your ping to the server in the top-right corner.
 - **Enemies:** Cinderlings (fast), Magma Brutes (tanky), Ash Casters (ranged), and the **Pyre Warden** boss on wave 5
 - **Stage 2: Jungle Temple** (harder than the Lava Stage, no lava): bigger waves of fast Monkeys and Banana Monkeys that throw bananas from range, then the **Ape King** on wave 5. The Ape King hurls boulders and, every few seconds, winds up (a red warning lane shows) and charges along it.
+- **Stage 3: Sword Dojo** (much harder than the Jungle Temple): a wooden training hall with straw dummies as obstacles. Waves of Sword Students in white and Sword Masters who throw flying slashes, then the **Sword God** on wave 5: player-sized but deadly, with four sword moves (a lightning dash, a spinning cut, a fan of flying slashes and a three-cut flurry). Every move shows a red warning first; dash through it to dodge.
 - **Co-op for up to 4 players.** Enemies get tougher with more players. Fallen players respawn after 5 seconds.
 - **Smooth multiplayer:** your own hero moves on your device at full frame rate and the server follows it (never faster than the hero can run), so there is no rubber-banding. The server still decides hits, damage and spawns. Other players and enemies are drawn ~60-150 ms in the past, blended between timestamped updates (30 a second), so they glide even when the network is jittery.
 

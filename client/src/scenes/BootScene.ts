@@ -1,5 +1,5 @@
 import Phaser from "phaser";
-import { MAP_COLS, MAP_ROWS, ROCKS, TILE, WORLD_H, WORLD_W } from "../../../shared/game";
+import { CENTER_X, CENTER_Y, MAP_COLS, MAP_ROWS, ROCKS, TILE, WORLD_H, WORLD_W } from "../../../shared/game";
 import {
   BRUTE,
   CALCIFER,
@@ -21,6 +21,11 @@ import {
   WATER_ORB,
   RIFLE,
   SNIPE_SHOT,
+  SWORDSMAN,
+  SWORDMASTER,
+  SWORD_GOD,
+  SLASH_SHOT,
+  DUMMY,
   KNIFE,
   MACHINE_GUN,
   MG_SHOT,
@@ -122,6 +127,12 @@ export class BootScene extends Phaser.Scene {
     this.addCanvas("banana", renderPixelSprite(BANANA));
     this.addCanvas("boulder", renderPixelSprite(BOULDER));
     this.addCanvas("ground_jungle", this.drawGround(JUNGLE_THEME));
+    this.addCanvas("ground_dojo", this.drawDojo());
+    this.addCanvas("swordsman", renderPixelSprite(SWORDSMAN));
+    this.addCanvas("swordmaster", renderPixelSprite(SWORDMASTER));
+    this.addCanvas("swordgod", renderPixelSprite(SWORD_GOD));
+    this.addCanvas("slash", renderPixelSprite(SLASH_SHOT));
+    this.addCanvas("dummy", renderPixelSprite(DUMMY));
     this.addCanvas("glitchshot", renderPixelSprite(GLITCH_ORB));
     this.addCanvas("city", this.drawCity());
     this.addCanvas("cinderling", renderPixelSprite(CINDERLING));
@@ -209,6 +220,66 @@ export class BootScene extends Phaser.Scene {
       this.pixelCircle(ctx, rock.x - rock.r / 4, rock.y - rock.r / 4, rock.r / 2);
       ctx.fillStyle = theme.pillar[3];
       ctx.fillRect(Math.round(rock.x), Math.round(rock.y - 2), 1, 5);
+    }
+    return canvas;
+  }
+
+  /** The Sword Dojo: a wooden hall with polished plank floors, a dark wall frame and dummy bases. */
+  private drawDojo(): HTMLCanvasElement {
+    const rand = seeded(1868);
+    const canvas = document.createElement("canvas");
+    canvas.width = WORLD_W;
+    canvas.height = WORLD_H;
+    const ctx = canvas.getContext("2d")!;
+    const woods = ["#8a5a32", "#93613a", "#7e5230", "#9a6a40", "#86562f"];
+    const PLANK = 8;
+    for (let y = 0; y < WORLD_H; y += PLANK) {
+      // Each row of planks is cut into boards of different lengths.
+      let x = -Math.floor(rand() * 60);
+      while (x < WORLD_W) {
+        const len = 60 + Math.floor(rand() * 90);
+        ctx.fillStyle = woods[Math.floor(rand() * woods.length)];
+        ctx.fillRect(x, y, len, PLANK);
+        // wood grain
+        ctx.fillStyle = "rgba(60,30,10,0.25)";
+        for (let i = 0; i < 3; i++) ctx.fillRect(x + Math.floor(rand() * len), y + 2 + Math.floor(rand() * 4), 6 + Math.floor(rand() * 14), 1);
+        ctx.fillStyle = "rgba(255,220,170,0.08)";
+        ctx.fillRect(x, y, len, 1); // polished edge
+        ctx.fillStyle = "#4a2e18";
+        ctx.fillRect(x + len - 1, y, 1, PLANK); // board joint
+        x += len;
+      }
+      ctx.fillStyle = "#4a2e18";
+      ctx.fillRect(0, y + PLANK - 1, WORLD_W, 1); // seam between rows
+    }
+    // A pale training square marked out in the middle of the hall.
+    ctx.strokeStyle = "rgba(240,230,200,0.35)";
+    ctx.lineWidth = 2;
+    ctx.strokeRect(CENTER_X - 220, CENTER_Y - 170, 440, 340);
+    // Dark wooden walls with pillars around the edge.
+    const WALL = 14;
+    ctx.fillStyle = "#3a2414";
+    ctx.fillRect(0, 0, WORLD_W, WALL);
+    ctx.fillRect(0, WORLD_H - WALL, WORLD_W, WALL);
+    ctx.fillRect(0, 0, WALL, WORLD_H);
+    ctx.fillRect(WORLD_W - WALL, 0, WALL, WORLD_H);
+    ctx.fillStyle = "#5a3820";
+    for (let x = 0; x < WORLD_W; x += 96) {
+      ctx.fillRect(x, 0, 10, WALL + 4);
+      ctx.fillRect(x, WORLD_H - WALL - 4, 10, WALL + 4);
+    }
+    for (let y = 0; y < WORLD_H; y += 96) {
+      ctx.fillRect(0, y, WALL + 4, 10);
+      ctx.fillRect(WORLD_W - WALL - 4, y, WALL + 4, 10);
+    }
+    // Wooden bases under the training dummies (the dummies stand on them in game).
+    for (const rock of ROCKS) {
+      ctx.fillStyle = "rgba(0,0,0,0.3)";
+      this.pixelCircle(ctx, rock.x + 2, rock.y + 3, rock.r - 4);
+      ctx.fillStyle = "#4a2e18";
+      this.pixelCircle(ctx, rock.x, rock.y, rock.r - 4);
+      ctx.fillStyle = "#6a4426";
+      this.pixelCircle(ctx, rock.x, rock.y, rock.r - 6);
     }
     return canvas;
   }

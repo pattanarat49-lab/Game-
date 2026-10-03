@@ -873,3 +873,116 @@ export function renderPixelSprite(sprite: PixelSprite): HTMLCanvasElement {
   });
   return canvas;
 }
+// Sword Dojo: a sword student in a white training uniform.
+export const SWORDSMAN: PixelSprite = {
+  grid: [
+    "....kkkk...d..",
+    "...khhhhk..d..",
+    "...khsshk..d..",
+    "...kseesk.....",
+    "....kssk..dd..",
+    "..kwwwwwwk.d..",
+    ".kwWwwwwWwkd..",
+    ".kswwwwwwsnk..",
+    "..kbbbbbbk.k..",
+    "..kwwwwwwk....",
+    "..kWwwkwwWk...",
+    "..kWWk.kWWk...",
+    "..kssk.kssk...",
+    "..kkkk.kkkk...",
+  ],
+  palette: { k: OUTLINE, h: "#2a1a14", s: "#f0c8a0", e: "#1a1a1a", w: "#f4f4f4", W: "#c8ccd4", b: "#222222", d: "#d8dde8", n: "#3a2a20" },
+};
+
+// Sword Dojo: a senior student (red headband, dark hakama) who throws flying slashes.
+export const SWORDMASTER: PixelSprite = {
+  grid: [
+    "....kkkk...d..",
+    "...khhhhk..d..",
+    "...krrrrk..d..",
+    "...kseesk.....",
+    "....kssk..dd..",
+    "..kwwwwwwk.d..",
+    ".kwWwwwwWwkd..",
+    ".kswwwwwwsnk..",
+    "..kbbbbbbk.k..",
+    "..kggggggk....",
+    "..kgGggkggGk..",
+    "..kGGk.kGGk...",
+    "..kssk.kssk...",
+    "..kkkk.kkkk...",
+  ],
+  palette: { k: OUTLINE, h: "#2a1a14", s: "#f0c8a0", e: "#1a1a1a", w: "#f4f4f4", W: "#c8ccd4", b: "#222222", d: "#d8dde8", n: "#3a2a20", r: "#d83a3a", g: "#2a2f4a", G: "#1c2034" },
+};
+
+// The Sword God, boss of the Sword Dojo: blue hair, fur-collared coat, a curved blade over his shoulder.
+export const SWORD_GOD: PixelSprite = {
+  grid: [
+    "dd....k.k.k.....",
+    "ddd..kbkbkbk....",
+    ".ddd.kbBbbBbk...",
+    "..ddkbbbbbbbbk..",
+    "...dkbsssssbbk..",
+    "...dkseSsseskk..",
+    "...nksSsssssk...",
+    "..nnkssgggssk...",
+    ".kffkkggsggkk...",
+    "kffffkkkkkkffk..",
+    "kcFffwrwwrwfFck.",
+    "kccFwwrwrwwFcck.",
+    "kcccwwwrwwwccck.",
+    "kcccwwrwrwwccsk.",
+    "kcccLLLnLLLccck.",
+    "kcccpppppppccck.",
+    ".kccpppkpppcck..",
+    ".kccppk.kppcck..",
+    "..kkook.kookk...",
+    "...kook.kook....",
+    "...kkkk.kkkk....",
+  ],
+  palette: { k: OUTLINE, b: "#3a6ad8", B: "#7aa8ff", s: "#c8946a", S: "#8a3a2a", e: "#1a1a1a", g: "#3a6ad8", f: "#f0f0f0", F: "#c8c8c8", c: "#3a3a44", w: "#e8e8e8", r: "#7a4a2a", L: "#6a4428", p: "#2a2a30", o: "#151012", d: "#e0e6f0", n: "#c9a24a" },
+};
+
+// A flying sword slash thrown by dojo fighters.
+export const SLASH_SHOT: PixelSprite = {
+  grid: [
+    "kk......",
+    ".krk....",
+    "..krk...",
+    "..kwrk..",
+    "...kwrk.",
+    "...kwwrk",
+    "...kwwrk",
+    "...kwrk.",
+    "..kwrk..",
+    "..krk...",
+    ".krk....",
+    "kk......",
+  ],
+  palette: { k: "#6a1010", r: "#ff4a4a", w: "#ffffff" },
+};
+
+// A straw training dummy on a wooden post: the obstacles of the Sword Dojo.
+export const DUMMY: PixelSprite = {
+  grid: [
+    "......kkkk......",
+    ".....kTTTTk.....",
+    ".....kTttTk.....",
+    "......kkkk......",
+    "kkkkkkkWWkkkkkkk",
+    "kWWWWWkTTkWWWWWk",
+    "kkkkkkTTTTkkkkkk",
+    ".....kTttTk.....",
+    ".....kTTTTk.....",
+    ".....krrrrk.....",
+    ".....kTTTTk.....",
+    ".....kTttTk.....",
+    "......kWWk......",
+    "......kWWk......",
+    "......kWWk......",
+    ".....kkWWkk.....",
+    "....kWWWWWWk....",
+    "....kkkkkkkk....",
+  ],
+  palette: { k: OUTLINE, T: "#d8b86a", t: "#b8944a", W: "#8a5a32", r: "#6a3a1a" },
+};

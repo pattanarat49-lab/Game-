@@ -451,7 +451,7 @@ export const LAVA_DPS = 25;
 export const WAVE_COUNT = 5; // last wave is the boss
 export const INTERMISSION_TIME = 6;
 
-export type EnemyKind = "cinderling" | "brute" | "caster" | "warden" | "godzilla" | "monkey" | "bananamonkey" | "kingkong";
+export type EnemyKind = "cinderling" | "brute" | "caster" | "warden" | "godzilla" | "monkey" | "bananamonkey" | "kingkong" | "swordsman" | "swordmaster" | "swordgod";
 
 export interface EnemyDef {
   hp: number;
@@ -461,7 +461,7 @@ export interface EnemyDef {
   score: number;
   shootEvery?: number; // seconds between shots
   shotDamage?: number; // damage per shot (default ENEMY_SHOT_DAMAGE)
-  shot?: "banana" | "boulder"; // what it throws (default: a fireball)
+  shot?: "banana" | "boulder" | "slash"; // what it throws (default: a fireball)
   keepAway?: number; // ranged enemies back off when closer than this
   boss?: boolean; // bosses shrug off knockback
 }
@@ -478,6 +478,10 @@ export const ENEMIES: Record<EnemyKind, EnemyDef> = {
   monkey: { hp: 34, speed: 100, radius: 5, touchDamage: 11, score: 12 },
   bananamonkey: { hp: 45, speed: 55, radius: 6, touchDamage: 8, score: 22, shootEvery: 1.6, shotDamage: 14, shot: "banana", keepAway: 130 },
   kingkong: { hp: 5000, speed: 42, radius: 22, touchDamage: 40, score: 1500, shootEvery: 2.4, shotDamage: 24, shot: "boulder", boss: true },
+  // Sword Dojo: sword students in white training clothes, far tougher than the jungle, and the Sword God.
+  swordsman: { hp: 70, speed: 95, radius: 6, touchDamage: 16, score: 20 },
+  swordmaster: { hp: 80, speed: 70, radius: 6, touchDamage: 14, score: 35, shootEvery: 1.7, shotDamage: 20, shot: "slash", keepAway: 90 },
+  swordgod: { hp: 6000, speed: 80, radius: 8, touchDamage: 30, score: 3000, boss: true },
   godzilla: { hp: 7000, speed: 24, radius: 22, touchDamage: 105, score: 2000, shootEvery: 3, shotDamage: ENEMY_SHOT_DAMAGE_BASE * 3, boss: true },
 };
 
@@ -493,6 +497,28 @@ export const JUNGLE_WAVES: Partial<Record<EnemyKind, number>>[] = [
   { monkey: 18, bananamonkey: 8 },
   { kingkong: 1, monkey: 8, bananamonkey: 4 },
 ];
+
+// Sword Dojo waves: much harder than the Jungle Temple, with the Sword God at the end.
+export const DOJO_WAVES: Partial<Record<EnemyKind, number>>[] = [
+  { swordsman: 12 },
+  { swordsman: 14, swordmaster: 5 },
+  { swordsman: 18, swordmaster: 8 },
+  { swordsman: 22, swordmaster: 11 },
+  { swordgod: 1, swordsman: 8, swordmaster: 5 },
+];
+
+/**
+ * The Sword God's moves. Each one winds up (beamState 1, a red warning shows) and then strikes
+ * (beamState 2). `windup` and `active` are seconds; damage is per hit.
+ */
+export const SWORD_GOD = {
+  rest: 1.1, // seconds between moves, chasing you with the blade
+  dash: { windup: 0.55, active: 0.3, speed: 650, width: 26, damage: 60 }, // a lightning-fast lunge in a straight line
+  whirl: { windup: 0.5, active: 0.3, radius: 66, damage: 55 }, // a full spin cutting everything around him
+  waves: { windup: 0.45, active: 0.2, count: 5, spread: 0.24, speed: 270, damage: 26 }, // a fan of flying sword slashes
+  flurry: { windup: 0.35, active: 0.9, cuts: 3, range: 58, arc: 1.7, lunge: 26, damage: 32 }, // three quick forward cuts
+};
+export const SWORD_GOD_MOVES = ["", "dash", "whirl", "waves", "flurry"] as const;
 
 // King Kong's charge: he winds up (a warning lane shows), then rushes along it.
 export const KONG_CHARGE_EVERY = 5;
@@ -595,7 +621,7 @@ export function inLava(x: number, y: number, lavaRadius: number): boolean {
 }
 
 // Stages
-export type StageId = "lava" | "jungle" | "boss" | "pvp";
+export type StageId = "lava" | "jungle" | "dojo" | "boss" | "pvp";
 
 export interface StageDef {
   name: string;
@@ -605,6 +631,7 @@ export interface StageDef {
 export const STAGES: Record<StageId, StageDef> = {
   lava: { name: "Stage 1: Lava Stage", blurb: "Survive 4 waves while lava creeps in, then slay the Pyre Warden." },
   jungle: { name: "Stage 2: Jungle Temple", blurb: "Harder! Hordes of monkeys, banana throwers, then the Ape King." },
+  dojo: { name: "Stage 3: Sword Dojo", blurb: "Much harder! Sword students in white, then the Sword God himself." },
   boss: { name: "Boss Room", blurb: "No waves. Fight the Atomic Kaiju straight away. Dodge the atomic beam!" },
   pvp: { name: "PvP Arena", blurb: "Players fight each other. First to 3 kills wins. Online only." },
 };
@@ -613,7 +640,7 @@ export const STAGE_IDS = Object.keys(STAGES) as StageId[];
 
 /** Wave stages: which enemies come in each wave. */
 export function wavesOf(stage: string): Partial<Record<EnemyKind, number>>[] {
-  return stage === "jungle" ? JUNGLE_WAVES : WAVES;
+  return stage === "jungle" ? JUNGLE_WAVES : stage === "dojo" ? DOJO_WAVES : WAVES;
 }
 
 export function stageOf(id: string): StageId {

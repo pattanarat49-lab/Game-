@@ -25,6 +25,8 @@ import {
   DASH_SPEED,
   DASH_TIME,
   KNOCKBACK_DECAY,
+  ROCKS,
+  SWORD_GOD,
   stageOf,
   heroOf,
   inLava,
@@ -74,6 +76,7 @@ const BULLET_TEXTURE: Record<string, string> = {
   banana: "banana",
   boulder: "boulder",
   bullet: "bullet",
+  slash: "slash",
 };
 const PLAYER_MARKERS = [0x3b7dd8, 0xd84b3b, 0x3bd87a, 0xc93bd8];
 
@@ -145,6 +148,9 @@ const ENEMY_SCALE: Record<EnemyKind, number> = {
   monkey: 1,
   bananamonkey: 1,
   kingkong: 2.2,
+  swordsman: 1,
+  swordmaster: 1,
+  swordgod: 1.3,
 };
 
 export function serverUrl(): string {
@@ -204,6 +210,10 @@ export class GameScene extends Phaser.Scene {
   async create() {
     const stage = stageOf(this.registry.get("stage"));
     this.add.image(0, 0, `ground_${stage}`).setOrigin(0).setDepth(-10);
+    if (stage === "dojo") {
+      // Straw training dummies stand where the other stages have pillars.
+      for (const rock of ROCKS) this.add.image(rock.x, rock.y + rock.r * 0.4, "dummy").setOrigin(0.5, 1).setScale(rock.r / 8).setDepth(rock.y);
+    }
 
     const map = this.make.tilemap({ tileWidth: TILE, tileHeight: TILE, width: MAP_COLS, height: MAP_ROWS });
     const tiles = map.addTilesetImage("lava", "lava", TILE, TILE, 0, 0)!;
@@ -944,6 +954,7 @@ export class GameScene extends Phaser.Scene {
       if (e.beamState > 0) {
         s.setFlipX(Math.cos(e.beamAngle) < 0);
         if (e.kind === "kingkong") this.drawCharge(s.x, s.y, e.beamAngle, e.beamState);
+        else if (e.kind === "swordgod") this.drawSwordGod(s.x, s.y, e.beamAngle, e.beamState, e.move);
         else this.drawBeam(s.x, s.y - 14, e.beamAngle, e.beamState);
       }
       view.x = e.x;
@@ -961,8 +972,9 @@ export class GameScene extends Phaser.Scene {
 
     for (const [id, view] of this.enemies) {
       if (seen.has(id)) continue;
-      this.sparks.explode(view.sprite.scale > 2 ? 60 : 14, view.sprite.x, view.sprite.y - 4);
-      if (view.sprite.scale > 2) this.cameras.main.shake(400, 0.01);
+      const big = view.sprite.scale > 2 || view.sprite.texture.key === "swordgod";
+      this.sparks.explode(big ? 60 : 14, view.sprite.x, view.sprite.y - 4);
+      if (big) this.cameras.main.shake(400, 0.01);
       view.sprite.destroy();
       view.ghost?.destroy();
       view.bar.destroy();
@@ -993,6 +1005,69 @@ export class GameScene extends Phaser.Scene {
       g.fillStyle(0xc8b48a, 0.4 - i * 0.08).fillCircle(x - cos * i * 12 + (Math.random() - 0.5) * 6, y - sin * i * 12, 8 - i);
     }
     if (Math.random() < 0.4) this.cameras.main.shake(60, 0.004);
+  }
+
+  /**
+   * The Sword God's moves: a red warning while he winds up (where the cut will land),
+   * then white sword light as it strikes.
+   */
+  private drawSwordGod(x: number, y: number, angle: number, state: number, move: number) {
+    const g = this.beams;
+    const cos = Math.cos(angle);
+    const sin = Math.sin(angle);
+    const pulse = 0.18 + 0.14 * Math.sin(this.time.now / 45);
+    y -= 4;
+    if (move === 1) {
+      // Dash: a straight lane.
+      const d = SWORD_GOD.dash;
+      const len = d.speed * d.active;
+      const w = d.width / 2 + 6;
+      if (state === 1) {
+        const pts = [
+          { x: x - sin * w, y: y + cos * w },
+          { x: x + cos * len - sin * w, y: y + sin * len + cos * w },
+          { x: x + cos * len + sin * w, y: y + sin * len - cos * w },
+          { x: x + sin * w, y: y - cos * w },
+        ];
+        g.fillStyle(0xff3030, pulse).fillPoints(pts, true);
+        g.lineStyle(1, 0xff6040, 0.8).strokePoints(pts, true);
+      } else {
+        for (let i = 1; i <= 5; i++) g.lineStyle(4 - i * 0.6, 0xffffff, 0.7 - i * 0.12).lineBetween(x - cos * i * 10, y - sin * i * 10, x - cos * (i + 1) * 10, y - sin * (i + 1) * 10);
+      }
+    } else if (move === 2) {
+      // Whirl: everything around him.
+      const r = SWORD_GOD.whirl.radius;
+      if (state === 1) {
+        g.fillStyle(0xff3030, pulse).fillCircle(x, y, r);
+        g.lineStyle(1, 0xff6040, 0.8).strokeCircle(x, y, r);
+      } else {
+        const spin = this.time.now / 40;
+        g.lineStyle(4, 0xbcd4ff, 0.8).beginPath().arc(x, y, r - 4, spin, spin + 2.6).strokePath();
+        g.lineStyle(2, 0xffffff, 1).beginPath().arc(x, y, r - 8, spin + Math.PI, spin + Math.PI + 2.6).strokePath();
+      }
+    } else if (move === 3 && state === 1) {
+      // Waves: the fan the slashes will fly along.
+      const w = SWORD_GOD.waves;
+      g.lineStyle(2, 0xff4040, 0.35 + pulse);
+      for (let i = 0; i < w.count; i++) {
+        const a = angle + (i - (w.count - 1) / 2) * w.spread;
+        g.lineBetween(x + Math.cos(a) * 12, y + Math.sin(a) * 12, x + Math.cos(a) * 90, y + Math.sin(a) * 90);
+      }
+    } else if (move === 4) {
+      // Flurry: a cone in front of him.
+      const f = SWORD_GOD.flurry;
+      if (state === 1) {
+        const pts = [{ x, y }];
+        for (let i = 0; i <= 12; i++) {
+          const a = angle - f.arc / 2 + (f.arc * i) / 12;
+          pts.push({ x: x + Math.cos(a) * f.range, y: y + Math.sin(a) * f.range });
+        }
+        g.fillStyle(0xff3030, pulse).fillPoints(pts, true);
+        g.lineStyle(1, 0xff6040, 0.8).strokePoints(pts, true);
+      } else if (Math.floor(this.time.now / 60) % 2 === 0) {
+        g.lineStyle(3, 0xffffff, 0.9).beginPath().arc(x, y, f.range - 6, angle - f.arc / 2, angle + f.arc / 2).strokePath();
+      }
+    }
   }
 
   /** Godzilla's atomic beam: a flickering warning line, then a thick glowing beam. */
@@ -1114,7 +1189,7 @@ export class GameScene extends Phaser.Scene {
       if (!sprite) {
         const texture = BULLET_TEXTURE[b.kind] ?? "snipe";
         sprite = this.add.image(b.x, b.y, texture).setDepth(900).setData("kind", b.kind);
-        if (b.kind === "wave" || b.kind === "snipe" || b.kind === "bullet") sprite.setRotation(Math.atan2(b.vy, b.vx));
+        if (b.kind === "wave" || b.kind === "snipe" || b.kind === "bullet" || b.kind === "slash") sprite.setRotation(Math.atan2(b.vy, b.vx));
         if (b.kind === "wave") sprite.setScale(1.6);
         if (b.kind === "fireball") sprite.setScale(1.6);
         if (b.kind === "stone") sprite.setScale(1.2);
@@ -1140,7 +1215,7 @@ export class GameScene extends Phaser.Scene {
         if (big) this.cameras.main.shake(180, 0.01);
       }
       // Enemy shots burst into sparks when they hit something or get cut down by a melee swing.
-      if (kind === "enemy" || kind === "banana" || kind === "boulder") this.sparks.explode(5, sprite.x, sprite.y);
+      if (kind === "enemy" || kind === "banana" || kind === "boulder" || kind === "slash") this.sparks.explode(5, sprite.x, sprite.y);
       sprite.destroy();
       this.bullets.delete(id);
     }
