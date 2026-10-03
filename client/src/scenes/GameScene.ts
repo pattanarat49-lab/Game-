@@ -838,6 +838,13 @@ export class GameScene extends Phaser.Scene {
       case "revive":
         this.effects.push({ kind: "heal", x, y: y + 5, aim, range: 30, arc: 0, age: 0, life: 0.6 });
         break;
+      case "cross":
+        // DEATH CROSS: a huge red straight with a shockwave where it lands.
+        this.effects.push({ kind: "jab", x, y, aim, range: skill.radius, arc: skill.width ?? 26, age: 0, life: 0.3 });
+        this.effects.push({ kind: "impact", x: x + Math.cos(aim) * skill.radius * 0.6, y: y + Math.sin(aim) * skill.radius * 0.6, aim, range: skill.radius * 0.8, arc: 1.2, age: 0, life: 0.35 });
+        cam.shake(220, 0.016);
+        this.sparks.explode(18, x + Math.cos(aim) * skill.radius, y + Math.sin(aim) * skill.radius);
+        break;
       case "eyebeam":
         this.effects.push({ kind: "muzzle", x, y: y - 8, aim, range: 6, arc: 0, age: 0, life: 0.15 });
         break;
@@ -1146,6 +1153,7 @@ export class GameScene extends Phaser.Scene {
         lane(skill.radius, 8);
         break;
       case "kick":
+      case "cross":
       case "eyebeam":
         lane(skill.radius, skill.width ?? 30);
         break;

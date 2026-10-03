@@ -776,6 +776,9 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
         this.sweep(id, p.x, p.y, 0, skill.radius, Math.PI * 2, skill.damage);
         if (skill.duration) this.stunAround(id, p.x, p.y, skill.radius, skill.duration);
         break;
+      case "cross": // DEATH CROSS: crushing damage down a short lane, and everything hit goes flying
+        this.lineHit(id, p.x, p.y, p.aim, skill.radius, skill.width ?? 26, skill.damage, 0, skill.duration ?? 4);
+        break;
       case "eyebeam":
         p.beam = skill.duration ?? 2.5;
         brain.eyebeamTick = 0;
@@ -1052,7 +1055,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
   }
 
   /** Hit everything in a wide straight line (Deku's 100% SMASH). */
-  private lineHit(owner: string, x: number, y: number, angle: number, length: number, width: number, damage: number, stun = 0) {
+  private lineHit(owner: string, x: number, y: number, angle: number, length: number, width: number, damage: number, stun = 0, knock = 0) {
     const cos = Math.cos(angle);
     const sin = Math.sin(angle);
     const inLine = (tx: number, ty: number, r: number) => {
@@ -1065,11 +1068,13 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       if (!inLine(e.x, e.y, def.radius)) return;
       this.damageEnemy(eid, damage, owner);
       if (stun > 0 && !def.boss) e.stun = Math.max(e.stun, stun); // bosses shrug it off
+      if (knock > 0 && !def.boss) this.knockEnemy(eid, cos, sin, knock); // sent flying along the line
     });
     this.state.players.forEach((v, vid) => {
       if (v.dead || !this.isFoe(owner, vid) || !inLine(v.x, v.y, PLAYER_RADIUS)) return;
       this.damagePlayer(vid, damage * PVP_DAMAGE_SCALE, true, owner);
       if (stun > 0 && !v.dead) v.stun = Math.max(v.stun, stun);
+      if (knock > 0) this.knockPlayer(vid, cos, sin, knock);
     });
   }
 
@@ -1280,28 +1285,28 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
   }
 
   /** Push an enemy away along (dx, dy). */
-  private knockEnemy(eid: string, dx: number, dy: number) {
+  private knockEnemy(eid: string, dx: number, dy: number, scale = 1) {
     const brain = this.enemyBrains.get(eid);
     if (!brain) return; // it died from the hit
     const d = Math.hypot(dx, dy) || 1;
-    brain.kbx = (dx / d) * KNOCKBACK_DISTANCE * KNOCKBACK_DECAY;
-    brain.kby = (dy / d) * KNOCKBACK_DISTANCE * KNOCKBACK_DECAY;
+    brain.kbx = (dx / d) * KNOCKBACK_DISTANCE * scale * KNOCKBACK_DECAY;
+    brain.kby = (dy / d) * KNOCKBACK_DISTANCE * scale * KNOCKBACK_DECAY;
   }
 
   /**
    * Push a player away along (dx, dy). Real players move on their own device, so the push is sent
    * to it (kbSeq) and the server lets them move that much further; clones are pushed here.
    */
-  private knockPlayer(id: string, dx: number, dy: number) {
+  private knockPlayer(id: string, dx: number, dy: number, scale = 1) {
     const p = this.state.players.get(id);
     const brain = this.brains.get(id);
     if (!p || !brain || p.dead) return;
     const d = Math.hypot(dx, dy) || 1;
-    p.kbx = (dx / d) * KNOCKBACK_DISTANCE * KNOCKBACK_DECAY;
-    p.kby = (dy / d) * KNOCKBACK_DISTANCE * KNOCKBACK_DECAY;
+    p.kbx = (dx / d) * KNOCKBACK_DISTANCE * scale * KNOCKBACK_DECAY;
+    p.kby = (dy / d) * KNOCKBACK_DISTANCE * scale * KNOCKBACK_DECAY;
     p.kbSeq = (p.kbSeq + 1) % 256;
-    brain.kbExtra = KNOCKBACK_DISTANCE;
-    brain.moveBudget += KNOCKBACK_DISTANCE;
+    brain.kbExtra = KNOCKBACK_DISTANCE * scale;
+    brain.moveBudget += KNOCKBACK_DISTANCE * scale;
     if (p.owner || !brain.target) {
       brain.kbx = p.kbx;
       brain.kby = p.kby;
