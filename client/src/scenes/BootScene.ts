@@ -8,7 +8,12 @@ import {
   GODZILLA,
   ENEMY_SHOT,
   HERO_SPRITES,
+  BANANA,
+  BANANA_MONKEY,
+  BOULDER,
   GLITCH_ORB,
+  KINGKONG,
+  MONKEY,
   HOLY_ORB,
   HUMAN,
   LOKI_ORB,
@@ -43,6 +48,7 @@ interface GroundTheme {
   cracks: [string, string];
   crackChance: number;
   pillar: [string, string, string, string]; // outline, body, highlight, glow
+  leaves?: string[]; // grass tufts and fallen leaves scattered on the floor
 }
 
 const LAVA_THEME: GroundTheme = {
@@ -74,6 +80,17 @@ const ARENA_THEME: GroundTheme = {
   pillar: ["#2a2018", "#8a7556", "#a89070", "#ffd23f"],
 };
 
+// Jungle Temple: mossy temple flagstones, overgrown pillars and leaves.
+const JUNGLE_THEME: GroundTheme = {
+  seed: 404,
+  shades: ["#3e4a36", "#43503a", "#47553d", "#3b4733"],
+  pebbles: ["#56664a", "#2c3626"],
+  cracks: ["#2a3322", "#6a8a4a"],
+  crackChance: 0.12,
+  pillar: ["#1e2618", "#6a7458", "#8a9472", "#7adf5a"],
+  leaves: ["#5aa23a", "#3f8a2a", "#8acb4a", "#a07a2a"],
+};
+
 export class BootScene extends Phaser.Scene {
   constructor() {
     super("Boot");
@@ -93,6 +110,12 @@ export class BootScene extends Phaser.Scene {
     this.addCanvas("asgard", this.drawAsgard());
     this.addCanvas("titanform", renderPixelSprite(TITAN_FORM));
     this.addCanvas("human", renderPixelSprite(HUMAN));
+    this.addCanvas("monkey", renderPixelSprite(MONKEY));
+    this.addCanvas("bananamonkey", renderPixelSprite(BANANA_MONKEY));
+    this.addCanvas("kingkong", renderPixelSprite(KINGKONG));
+    this.addCanvas("banana", renderPixelSprite(BANANA));
+    this.addCanvas("boulder", renderPixelSprite(BOULDER));
+    this.addCanvas("ground_jungle", this.drawGround(JUNGLE_THEME));
     this.addCanvas("glitchshot", renderPixelSprite(GLITCH_ORB));
     this.addCanvas("city", this.drawCity());
     this.addCanvas("cinderling", renderPixelSprite(CINDERLING));
@@ -150,6 +173,20 @@ export class BootScene extends Phaser.Scene {
             cy += 1;
           }
         }
+      }
+    }
+
+    if (theme.leaves) {
+      for (let i = 0; i < 900; i++) {
+        const x = Math.floor(rand() * WORLD_W);
+        const y = Math.floor(rand() * WORLD_H);
+        ctx.fillStyle = theme.leaves[Math.floor(rand() * theme.leaves.length)];
+        if (rand() < 0.6) {
+          // a grass tuft
+          ctx.fillRect(x, y, 1, 3);
+          ctx.fillRect(x - 1, y + 1, 1, 2);
+          ctx.fillRect(x + 1, y + 1, 1, 2);
+        } else ctx.fillRect(x, y, 2, 1); // a leaf
       }
     }
 

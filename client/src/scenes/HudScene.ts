@@ -107,13 +107,26 @@ export class HudScene extends Phaser.Scene {
       else if (state.phase === "intermission") banner = `GODZILLA APPROACHES\nin ${Math.ceil(state.phaseTimer)}`;
       else if (state.phase === "victory") banner = `GODZILLA DEFEATED!\nRematch in ${Math.ceil(state.phaseTimer)}`;
     } else {
-      this.waveText.setText(`EMBERFALL  WAVE ${state.wave === 0 ? "-" : waveLabel}  ENEMIES ${state.enemies.size}`);
+      const jungle = state.stage === "jungle";
+      this.waveText.setText(`${jungle ? "JUNGLE TEMPLE" : "EMBERFALL"}  WAVE ${state.wave === 0 ? "-" : waveLabel}  ENEMIES ${state.enemies.size}`);
+      if (jungle) {
+        // King Kong gets a big health bar.
+        state.enemies.forEach((e: any) => {
+          if (e.kind !== "kingkong") return;
+          const w = Math.min(500, this.scale.width - 480);
+          const x = (this.scale.width - w) / 2;
+          this.bars.fillStyle(0x000000, 0.7).fillRect(x - 4, 36, w + 8, 14);
+          this.bars.fillStyle(0x3a2a1a, 1).fillRect(x, 40, w, 6);
+          this.bars.fillStyle(0xff9a3a, 1).fillRect(x, 40, w * Math.max(0, e.hp / e.maxHp), 6);
+        });
+      }
       if (me?.dead) banner = `YOU FELL\nRespawning in ${Math.ceil(me.respawnIn)}`;
       else if (state.phase === "intermission") {
         const next = state.wave + 1;
-        banner = `${next === WAVE_COUNT ? "THE PYRE WARDEN AWAKENS" : `WAVE ${next}`}\nin ${Math.ceil(state.phaseTimer)}`;
-        if (state.wave > 0) banner = `Wave cleared! The lava cools...\n\n${banner}`;
-      } else if (state.phase === "victory") banner = `EMBERFALL STABILISED!\nNew run in ${Math.ceil(state.phaseTimer)}`;
+        const boss = jungle ? "KING KONG AWAKENS" : "THE PYRE WARDEN AWAKENS";
+        banner = `${next === WAVE_COUNT ? boss : `WAVE ${next}`}\nin ${Math.ceil(state.phaseTimer)}`;
+        if (state.wave > 0) banner = `Wave cleared! ${jungle ? "The jungle goes quiet..." : "The lava cools..."}\n\n${banner}`;
+      } else if (state.phase === "victory") banner = `${jungle ? "JUNGLE TEMPLE CONQUERED!" : "EMBERFALL STABILISED!"}\nNew run in ${Math.ceil(state.phaseTimer)}`;
     }
     this.banner.setText(banner);
 

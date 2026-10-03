@@ -36,8 +36,13 @@ import {
   PLAYER_RADIUS,
   PlayerInput,
   RESPAWN_TIME,
-  WAVES,
   WAVE_COUNT,
+  wavesOf,
+  KONG_CHARGE_EVERY,
+  KONG_CHARGE_WINDUP,
+  KONG_CHARGE_TIME,
+  KONG_CHARGE_SPEED,
+  KONG_CHARGE_WIDTH,
   WORLD_H,
   WORLD_W,
   heroOf,
@@ -102,7 +107,7 @@ export interface SimEnemy {
   beamAngle: number;
 }
 
-export type BulletKind = "snipe" | "wave" | "magic" | "fireball" | "enemy" | "holy" | "stone" | "loki" | "glitch";
+export type BulletKind = "snipe" | "wave" | "magic" | "fireball" | "enemy" | "banana" | "boulder" | "holy" | "stone" | "loki" | "glitch";
 
 /** A lasting area on the map: a storm cloud, an illusion kingdom, a domain. */
 export interface SimZone {
@@ -328,10 +333,10 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
     else if (s.stage === "pvp") this.updatePvp(dt);
     else if (s.phase === "intermission") {
       s.phaseTimer -= dt;
-      s.lavaRadius = Math.min(LAVA_START_RADIUS, s.lavaRadius + LAVA_SHRINK_PER_SEC * 6 * dt);
+      if (s.stage === "lava") s.lavaRadius = Math.min(LAVA_START_RADIUS, s.lavaRadius + LAVA_SHRINK_PER_SEC * 6 * dt);
       if (s.phaseTimer <= 0) this.startWave(s.wave + 1);
     } else if (s.phase === "fight") {
-      s.lavaRadius = Math.max(LAVA_MIN_RADIUS, s.lavaRadius - LAVA_SHRINK_PER_SEC * dt);
+      if (s.stage === "lava") s.lavaRadius = Math.max(LAVA_MIN_RADIUS, s.lavaRadius - LAVA_SHRINK_PER_SEC * dt);
       if (s.enemies.size === 0) {
         if (s.wave >= WAVE_COUNT) {
           s.phase = "victory";
@@ -367,7 +372,8 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       return;
     }
     s.phaseTimer = INTERMISSION_TIME;
-    if (wave === 0) s.lavaRadius = LAVA_START_RADIUS;
+    if (s.stage !== "lava") s.lavaRadius = 5000; // the jungle has no lava
+    else if (wave === 0) s.lavaRadius = LAVA_START_RADIUS;
   }
 
   /** PvP Arena: a countdown, then free-for-all until someone reaches the kill target. */
@@ -422,7 +428,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
     s.phase = "fight";
     s.wave = wave;
     s.phaseTimer = 0;
-    const counts = WAVES[wave - 1] ?? {};
+    const counts = wavesOf(s.stage)[wave - 1] ?? {};
     for (const [kind, count] of Object.entries(counts) as [EnemyKind, number][]) {
       for (let i = 0; i < count; i++) this.spawnEnemy(kind);
     }
@@ -892,7 +898,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
     e.kind = kind;
     e.hp = def.hp * this.hpScale();
     e.maxHp = e.hp;
-    if (kind === "warden" || kind === "godzilla") {
+    if (kind === "warden" || kind === "godzilla" || kind === "kingkong") {
       e.x = CENTER_X;
       e.y = CENTER_Y - 170;
     } else {
@@ -959,11 +965,13 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
         if (dist < def.radius + PLAYER_RADIUS) this.damagePlayer(targetId, def.touchDamage, false, ENEMY);
         return;
       }
+      if (e.kind === "kingkong" && !human && this.updateCharge(e, brain, dx, dy, dt)) return;
 
-      // Casters keep their distance; everyone else charges.
+      // Ranged enemies keep their distance; everyone else charges.
       let dirX = dx / dist;
       let dirY = dy / dist;
-      if (e.kind === "caster" && dist < 110) {
+      const keepAway = e.kind === "caster" ? 110 : def.keepAway ?? 0;
+      if (dist < keepAway) {
         dirX = -dirX;
         dirY = -dirY;
       }
@@ -989,12 +997,49 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
               this.spawnBullet("enemy", e.x, e.y, brain.burstAngle + (i * Math.PI * 2) / 14, ENEMY_SHOT_SPEED * 0.8, shot);
             }
             for (const off of [-0.15, 0, 0.15]) this.spawnBullet("enemy", e.x, e.y, aim + off, ENEMY_SHOT_SPEED * 1.3, shot);
+          } else if (e.kind === "kingkong") {
+            // Three boulders hurled in a spread.
+            for (const off of [-0.25, 0, 0.25]) this.spawnBullet("boulder", e.x, e.y, aim + off, ENEMY_SHOT_SPEED * 1.2, shot);
           } else {
-            this.spawnBullet("enemy", e.x, e.y, aim, ENEMY_SHOT_SPEED, shot);
+            this.spawnBullet(def.shot ?? "enemy", e.x, e.y, aim, ENEMY_SHOT_SPEED * (def.shot === "banana" ? 1.15 : 1), shot);
           }
         }
       }
     });
+  }
+
+  /**
+   * King Kong's charge. Returns true while busy. Idle -> winding up (beamState 1, a warning lane
+   * toward the target) -> charging along that lane (beamState 2), trampling anyone in the way.
+   */
+  private updateCharge(e: E, brain: EnemyBrain, dx: number, dy: number, dt: number): boolean {
+    brain.beamTimer -= dt;
+    if (e.beamState === 0) {
+      if (brain.beamTimer > 0) return false;
+      e.beamState = 1;
+      e.beamAngle = Math.atan2(dy, dx);
+      brain.beamTimer = KONG_CHARGE_WINDUP;
+      return true;
+    }
+    if (e.beamState === 1) {
+      if (brain.beamTimer <= 0) {
+        e.beamState = 2;
+        brain.beamTimer = KONG_CHARGE_TIME;
+      }
+      return true;
+    }
+    const def = ENEMIES[e.kind as EnemyKind];
+    const moved = moveCircle(e.x, e.y, Math.cos(e.beamAngle) * KONG_CHARGE_SPEED * dt, Math.sin(e.beamAngle) * KONG_CHARGE_SPEED * dt, def.radius);
+    e.x = moved.x;
+    e.y = moved.y;
+    this.state.players.forEach((p, pid) => {
+      if (Math.hypot(p.x - e.x, p.y - e.y) < def.radius + KONG_CHARGE_WIDTH / 2) this.damagePlayer(pid, def.touchDamage * 1.5, false, ENEMY);
+    });
+    if (brain.beamTimer <= 0) {
+      e.beamState = 0;
+      brain.beamTimer = KONG_CHARGE_EVERY;
+    }
+    return true;
   }
 
   /**
@@ -1055,7 +1100,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
     b.y = y;
     b.vx = Math.cos(angle) * speed;
     b.vy = Math.sin(angle) * speed;
-    b.hostile = kind === "enemy";
+    b.hostile = kind === "enemy" || kind === "banana" || kind === "boulder";
     const id = `b${this.nextId++}`;
     this.state.bullets.set(id, b);
     this.bulletBrains.set(id, { owner: opts.owner, damage: opts.damage, pierceLeft: opts.pierce, life: opts.life, hit: new Set(), blast: opts.blast ?? 0 });

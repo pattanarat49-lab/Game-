@@ -34,6 +34,7 @@ Design doc: see `docs/game-design-foundation.md`.
   - **Yaotsu (6 stars, special):** Superman's HP (300), moves 2x faster, hard-hitting glitch shots, and glitches like a rendering error. CREATOR builds a whole city (bigger than Asgard) for 15 seconds; enemies inside lose 10% of their max HP per second and Yaotsu heals 10% per second. REALITY CHANGE (E) turns every enemy into an ordinary human for 10 seconds: they hit for 1 and cannot use any skill (no beam, no fireballs).
 - Controls: attack with left mouse, aim with the mouse, dash with Space, use your skill with Q or right mouse (E too, unless the hero has a second skill, which E uses)
 - **Enemies:** Cinderlings (fast), Magma Brutes (tanky), Ash Casters (ranged), and the **Pyre Warden** boss on wave 5
+- **Stage 2: Jungle Temple** (harder than the Lava Stage, no lava): bigger waves of fast Monkeys and Banana Monkeys that throw bananas from range, then **King Kong** on wave 5. King Kong hurls boulders and, every few seconds, winds up (a red warning lane shows) and charges along it.
 - **Co-op for up to 4 players.** Enemies get tougher with more players. Fallen players respawn after 5 seconds.
 - **Smooth multiplayer:** your own hero moves on your device at full frame rate and the server follows it (never faster than the hero can run), so there is no rubber-banding. The server still decides hits, damage and spawns. Other players and enemies are drawn ~60-150 ms in the past, blended between timestamped updates (30 a second), so they glide even when the network is jittery.
 

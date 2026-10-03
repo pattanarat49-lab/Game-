@@ -15,6 +15,9 @@ import {
   WORLD_H,
   WORLD_W,
   BEAM_LENGTH,
+  KONG_CHARGE_SPEED,
+  KONG_CHARGE_TIME,
+  KONG_CHARGE_WIDTH,
   BEAM_WIDTH,
   HEROES,
   SkillDef,
@@ -66,6 +69,8 @@ const BULLET_TEXTURE: Record<string, string> = {
   stone: "stone",
   loki: "lokishot",
   glitch: "glitchshot",
+  banana: "banana",
+  boulder: "boulder",
 };
 const PLAYER_MARKERS = [0x3b7dd8, 0xd84b3b, 0x3bd87a, 0xc93bd8];
 
@@ -128,7 +133,16 @@ class Track {
   }
 }
 
-const ENEMY_SCALE: Record<EnemyKind, number> = { cinderling: 1, brute: 1.3, caster: 1, warden: 2.4, godzilla: 2.4 };
+const ENEMY_SCALE: Record<EnemyKind, number> = {
+  cinderling: 1,
+  brute: 1.3,
+  caster: 1,
+  warden: 2.4,
+  godzilla: 2.4,
+  monkey: 1,
+  bananamonkey: 1,
+  kingkong: 2.2,
+};
 
 export function serverUrl(): string {
   const env = import.meta.env.VITE_SERVER_URL as string | undefined;
@@ -837,7 +851,8 @@ export class GameScene extends Phaser.Scene {
       else s.clearTint();
       if (e.beamState > 0) {
         s.setFlipX(Math.cos(e.beamAngle) < 0);
-        this.drawBeam(s.x, s.y - 14, e.beamAngle, e.beamState);
+        if (e.kind === "kingkong") this.drawCharge(s.x, s.y, e.beamAngle, e.beamState);
+        else this.drawBeam(s.x, s.y - 14, e.beamAngle, e.beamState);
       }
       view.x = e.x;
       view.y = e.y;
@@ -862,6 +877,30 @@ export class GameScene extends Phaser.Scene {
       this.enemies.delete(id);
       this.tracks.delete(`e${id}`);
     }
+  }
+
+  /** King Kong's charge: a flashing warning lane, then dust trailing behind him. */
+  private drawCharge(x: number, y: number, angle: number, state: number) {
+    const g = this.beams;
+    const len = KONG_CHARGE_SPEED * KONG_CHARGE_TIME;
+    const cos = Math.cos(angle);
+    const sin = Math.sin(angle);
+    const w = KONG_CHARGE_WIDTH / 2 + 10;
+    if (state === 1) {
+      const pts = [
+        { x: x - sin * w, y: y + cos * w },
+        { x: x + cos * len - sin * w, y: y + sin * len + cos * w },
+        { x: x + cos * len + sin * w, y: y + sin * len - cos * w },
+        { x: x + sin * w, y: y - cos * w },
+      ];
+      g.fillStyle(0xff3030, 0.15 + 0.15 * Math.sin(this.time.now / 50)).fillPoints(pts, true);
+      g.lineStyle(1, 0xff6040, 0.8).strokePoints(pts, true);
+      return;
+    }
+    for (let i = 1; i <= 4; i++) {
+      g.fillStyle(0xc8b48a, 0.4 - i * 0.08).fillCircle(x - cos * i * 12 + (Math.random() - 0.5) * 6, y - sin * i * 12, 8 - i);
+    }
+    if (Math.random() < 0.4) this.cameras.main.shake(60, 0.004);
   }
 
   /** Godzilla's atomic beam: a flickering warning line, then a thick glowing beam. */
@@ -987,6 +1026,7 @@ export class GameScene extends Phaser.Scene {
         if (b.kind === "wave") sprite.setScale(1.6);
         if (b.kind === "fireball") sprite.setScale(1.6);
         if (b.kind === "stone") sprite.setScale(1.2);
+        if (b.kind === "boulder") sprite.setScale(1.6);
         this.bullets.set(id, sprite);
       }
       // Bullets fly in straight lines, so extrapolate locally and drift toward the server.
@@ -994,6 +1034,7 @@ export class GameScene extends Phaser.Scene {
         sprite.x += b.vx * dt;
         sprite.y += b.vy * dt;
       }
+      if (b.kind === "banana" || b.kind === "boulder") sprite.rotation += dt * 12; // spinning throws
       sprite.x += (b.x - sprite.x) * 0.2;
       sprite.y += (b.y - sprite.y) * 0.2;
     });

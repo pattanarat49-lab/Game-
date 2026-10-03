@@ -516,6 +516,79 @@ export const TITAN_FORM: PixelSprite = {
     palette: { k: OUTLINE, h: "#2a1a12", s: "#d9a07a", S: "#a8704e", G: "#4dff9a", r: "#7a2a1a", w: "#fff4e0", t: "#3a1a10", R: "#c97a5a" },
   };
 
+// Jungle Temple enemies.
+export const MONKEY: PixelSprite = {
+  grid: [
+    "..kkk..kkk..",
+    ".kbbbkkbbbk.",
+    ".kbttbbttbk.",
+    "..kbtttttbk.",
+    "..ktetttetk.",
+    "..kbtmmmtbk.",
+    "...kbbbbbk..",
+    "..kbbttbbbk.",
+    ".kbkbttbkbk.",
+    ".kbkbbbbkbkk",
+    "...kbkkbk.kb",
+    "...kk..kk..k",
+  ],
+  palette: { k: OUTLINE, b: "#7a4a24", t: "#e2b07a", e: "#1a0f14", m: "#a0604a" },
+};
+
+export const BANANA_MONKEY: PixelSprite = {
+  grid: [
+    "..kkk..kkk...",
+    ".kbbbkkbbbk..",
+    ".kbttbbttbk..",
+    "..kbtttttbk.y",
+    "..ktetttetk.y",
+    "..kbtmmmtbkyy",
+    "...kbbbbbkyy.",
+    "..kbbttbbbk..",
+    ".kbkbttbbbk..",
+    ".kbkbbbbbbk..",
+    "...kbkkbk....",
+    "...kk..kk....",
+  ],
+  palette: { k: OUTLINE, b: "#5a3a1c", t: "#d8a46a", e: "#1a0f14", m: "#a0604a", y: "#ffe14a" },
+};
+
+export const KINGKONG: PixelSprite = {
+  grid: [
+    ".......kkkkkkkk.........",
+    "......kffffffffk........",
+    ".....kffffffffffk.......",
+    ".....kfggggggggfk.......",
+    ".....kgeggggggeg k......".replace(" ", "k"),
+    ".....kgggggggggk........",
+    ".....kgmmmmmmmgk........",
+    "...kkkkgwwwwwgkkkk......",
+    "..kffffkgggggkffffk.....",
+    ".kffffffkkkkkffffffk....",
+    "kffffffgggggggffffffk...",
+    "kfffffggggggggggffffk...",
+    "kffffkgggggggggkffffk...",
+    "kfffk.kgggggggk.kfffk...",
+    "kfffk.kfffffffk.kfffk...",
+    "kgggk.kfffffffk.kgggk...",
+    ".kkk..kfffkfffk..kkk....",
+    "......kfffkfffk.........",
+    ".....kffffkffffk........",
+    ".....kkkkkkkkkkk........",
+  ],
+  palette: { k: OUTLINE, f: "#2e2a2c", g: "#6a5a54", e: "#ffb000", m: "#3a1a1a", w: "#f2ead8" },
+};
+
+export const BANANA: PixelSprite = {
+  grid: ["k.....k", "yk...ky", ".yyyyy.", "..kkk.."],
+  palette: { k: "#5a4a10", y: "#ffe14a" },
+};
+
+export const BOULDER: PixelSprite = {
+  grid: [".kkkk.", "kggGgk", "kgGggk", "kggggk", "kgggGk", ".kkkk."],
+  palette: { k: "#1a1418", g: "#7a6e66", G: "#a09488" },
+};
+
 // An ordinary person: what monsters turn into under Yaotsu's REALITY CHANGE.
 export const HUMAN: PixelSprite = {
   grid: [

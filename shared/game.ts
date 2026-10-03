@@ -426,7 +426,7 @@ export const LAVA_DPS = 25;
 export const WAVE_COUNT = 5; // last wave is the boss
 export const INTERMISSION_TIME = 6;
 
-export type EnemyKind = "cinderling" | "brute" | "caster" | "warden" | "godzilla";
+export type EnemyKind = "cinderling" | "brute" | "caster" | "warden" | "godzilla" | "monkey" | "bananamonkey" | "kingkong";
 
 export interface EnemyDef {
   hp: number;
@@ -436,6 +436,8 @@ export interface EnemyDef {
   score: number;
   shootEvery?: number; // seconds between shots
   shotDamage?: number; // damage per shot (default ENEMY_SHOT_DAMAGE)
+  shot?: "banana" | "boulder"; // what it throws (default: a fireball)
+  keepAway?: number; // ranged enemies back off when closer than this
 }
 
 const ENEMY_SHOT_DAMAGE_BASE = 12;
@@ -446,6 +448,10 @@ export const ENEMIES: Record<EnemyKind, EnemyDef> = {
   caster: { hp: 35, speed: 45, radius: 6, touchDamage: 6, score: 20, shootEvery: 2.2 },
   warden: { hp: 1400, speed: 30, radius: 18, touchDamage: 30, score: 500, shootEvery: 1.6 },
   // Godzilla: basic attacks (stomp and fireballs) hit 3x harder than other bosses; the beam is BEAM_DAMAGE.
+  // Jungle Temple: faster, tougher monkeys, and King Kong.
+  monkey: { hp: 34, speed: 100, radius: 5, touchDamage: 11, score: 12 },
+  bananamonkey: { hp: 45, speed: 55, radius: 6, touchDamage: 8, score: 22, shootEvery: 1.6, shotDamage: 14, shot: "banana", keepAway: 130 },
+  kingkong: { hp: 5000, speed: 42, radius: 22, touchDamage: 40, score: 1500, shootEvery: 2.4, shotDamage: 24, shot: "boulder" },
   godzilla: { hp: 7000, speed: 24, radius: 22, touchDamage: 105, score: 2000, shootEvery: 3, shotDamage: ENEMY_SHOT_DAMAGE_BASE * 3 },
 };
 
@@ -453,6 +459,22 @@ export const ENEMY_SHOT_SPEED = 140;
 export const ENEMY_SHOT_DAMAGE = ENEMY_SHOT_DAMAGE_BASE;
 
 // Waves: how many of each enemy type spawn.
+// Jungle Temple waves: more enemies than the Lava Stage, and King Kong at the end.
+export const JUNGLE_WAVES: Partial<Record<EnemyKind, number>>[] = [
+  { monkey: 10 },
+  { monkey: 12, bananamonkey: 4 },
+  { monkey: 14, bananamonkey: 6 },
+  { monkey: 18, bananamonkey: 8 },
+  { kingkong: 1, monkey: 8, bananamonkey: 4 },
+];
+
+// King Kong's charge: he winds up (a warning lane shows), then rushes along it.
+export const KONG_CHARGE_EVERY = 5;
+export const KONG_CHARGE_WINDUP = 0.8;
+export const KONG_CHARGE_TIME = 0.6;
+export const KONG_CHARGE_SPEED = 280;
+export const KONG_CHARGE_WIDTH = 30;
+
 export const WAVES: Partial<Record<EnemyKind, number>>[] = [
   { cinderling: 6 },
   { cinderling: 8, caster: 2 },
@@ -547,7 +569,7 @@ export function inLava(x: number, y: number, lavaRadius: number): boolean {
 }
 
 // Stages
-export type StageId = "lava" | "boss" | "pvp";
+export type StageId = "lava" | "jungle" | "boss" | "pvp";
 
 export interface StageDef {
   name: string;
@@ -555,12 +577,18 @@ export interface StageDef {
 }
 
 export const STAGES: Record<StageId, StageDef> = {
-  lava: { name: "Lava Stage", blurb: "Survive 4 waves while lava creeps in, then slay the Pyre Warden." },
+  lava: { name: "Stage 1: Lava Stage", blurb: "Survive 4 waves while lava creeps in, then slay the Pyre Warden." },
+  jungle: { name: "Stage 2: Jungle Temple", blurb: "Harder! Hordes of monkeys, banana throwers, then King Kong." },
   boss: { name: "Boss Room", blurb: "No waves. Fight Godzilla straight away. Dodge the atomic beam!" },
   pvp: { name: "PvP Arena", blurb: "Players fight each other. First to 3 kills wins. Online only." },
 };
 
 export const STAGE_IDS = Object.keys(STAGES) as StageId[];
+
+/** Wave stages: which enemies come in each wave. */
+export function wavesOf(stage: string): Partial<Record<EnemyKind, number>>[] {
+  return stage === "jungle" ? JUNGLE_WAVES : WAVES;
+}
 
 export function stageOf(id: string): StageId {
   return id in STAGES ? (id as StageId) : "lava";
