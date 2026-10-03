@@ -172,7 +172,7 @@ export const HEROES: Record<HeroId, HeroDef> = {
     name: "Ricardo Martinez",
     role: "Boxer",
     blurb: "His jab has no cooldown, but his reach is very short.",
-    stars: 3,
+    stars: 1,
     maxHp: 170,
     speed: 115,
     attack: "punch",
