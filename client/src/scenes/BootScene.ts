@@ -1,4 +1,5 @@
 import Phaser from "phaser";
+import { loadHeroArt } from "../heroArt";
 import { CENTER_X, CENTER_Y, MAP_COLS, MAP_ROWS, RING, ROCKS, TILE, WORLD_H, WORLD_W } from "../../../shared/game";
 import {
   BRUTE,
@@ -127,6 +128,10 @@ const JUNGLE_THEME: GroundTheme = {
 export class BootScene extends Phaser.Scene {
   constructor() {
     super("Boot");
+  }
+
+  preload() {
+    loadHeroArt(this.load);
   }
 
   create() {

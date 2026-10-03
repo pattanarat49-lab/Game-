@@ -5,6 +5,7 @@ import { HudScene } from "./scenes/HudScene";
 import { isTouchDevice } from "./touch";
 import { HEROES, HERO_IDS, HP_SCALE, HeroId, STAGES, STAGE_IDS, StageId } from "../../shared/game";
 import { GODZILLA, KINGKONG, SWORD_GOD, HERO_SPRITES, WARDEN, renderPixelSprite } from "./art";
+import { heroPortrait } from "./heroArt";
 
 const menu = document.getElementById("menu")!;
 const form = document.getElementById("join-form") as HTMLFormElement;
@@ -128,7 +129,7 @@ function buildHeroPicker() {
         <span>MOVE</span>${bars(hero.speed / 320)}
       </div>
       <span class="blurb">${hero.blurb}</span>`;
-    card.prepend(renderPixelSprite(HERO_SPRITES[id]));
+    card.prepend(heroPortrait(id));
     if (hero.stars > 5) card.classList.add("special");
     card.addEventListener("click", () => {
       selectedHero = id;

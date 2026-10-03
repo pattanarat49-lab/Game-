@@ -44,6 +44,7 @@ import type { HudScene } from "./HudScene";
 import { LocalRoom } from "../localRoom";
 import { Lobby } from "../lobby";
 import { RiftSim, TITAN_ATTACK_COOLDOWN } from "../../../shared/sim";
+import { facingOf, hasHeroArt, heroArtLayout } from "../heroArt";
 
 interface PlayerView {
   body: Phaser.GameObjects.Image;
@@ -59,6 +60,9 @@ interface PlayerView {
   heroId: string; // a hero swap (PvP player select) rebuilds the view
   spin?: number; // SPINNING KICK: seconds of the spin animation left
   bike?: Phaser.GameObjects.Image; // MOTORCYCLE: the bike under the Hopper Rider
+  look?: string; // the body's look without its facing, so turning around does not count as a transformation
+  walkX?: number; // where the body was last frame, to tell walking from standing
+  walkY?: number;
 }
 
 /** A short-lived swing, slash or shockwave drawn on top of the world. */
@@ -619,11 +623,34 @@ export class GameScene extends Phaser.Scene {
       const humanized = state.reality > 0 && ringStage(state.stage) && (p.owner || id) !== state.realityBy && !p.dead;
       const skill2 = heroOf(p.hero).skill2;
       const batNow = !p.dead && p.active2 > 0 && skill2?.kind === "bat";
-      const texture = humanized ? "human" : titanNow ? "titanform" : batNow ? "batform" : `hero_${p.hero}`;
-      body.setScale(k * (titanNow && !humanized ? 2.6 : humanized ? 1 : SUMMON_SCALE[p.hero] ?? 1));
+      const look = humanized ? "human" : titanNow ? "titanform" : batNow ? "batform" : `hero_${p.hero}`;
+      // Heroes with hand-made art turn to face where they aim (4 facings) instead of mirroring.
+      const art = look === `hero_${p.hero}` && hasHeroArt(p.hero);
+      const texture = art ? `${look}_${facingOf(aim)}` : look;
+      if (art) body.setFlipX(false);
+      const artScale = art ? heroArtLayout(p.hero).scale : 1;
+      body.setScale(k * artScale * (titanNow && !humanized ? 2.6 : humanized ? 1 : SUMMON_SCALE[p.hero] ?? 1));
       if (body.texture.key !== texture) {
         body.setTexture(texture);
-        if (titanNow) {
+        body.setOrigin(0.5, art ? heroArtLayout(p.hero).originY : 0.85);
+      }
+      if (art) {
+        // Walking: a little step bounce and sway while the hero moves.
+        const moved = Math.hypot(body.x - (view.walkX ?? body.x), body.y - (view.walkY ?? body.y));
+        view.walkX = body.x;
+        view.walkY = body.y;
+        const step = this.time.now / 85;
+        if (moved > 0.15 && !p.dead) {
+          body.y -= Math.abs(Math.sin(step)) * 1.2 * k;
+          body.setRotation(Math.sin(step) * 0.06);
+        } else body.setRotation(0);
+      }
+      if (view.look !== look) {
+        const first = view.look === undefined;
+        view.look = look;
+        if (first) {
+          // nothing to celebrate on the first frame
+        } else if (titanNow) {
           this.effects.push({ kind: "bolt", x: body.x, y: body.y, aim: 0, range: 60, arc: 0, age: 0, life: 0.5 });
           this.cameras.main.shake(400, 0.02);
           this.cameras.main.flash(150, 255, 230, 160);

@@ -4,6 +4,7 @@
 
 import { HEROES, HERO_IDS, HeroId, heroOf } from "../../shared/game";
 import { HERO_SPRITES, renderPixelSprite } from "./art";
+import { heroPortrait } from "./heroArt";
 
 const CSS = `
 #lobby { position: fixed; inset: 0; z-index: 20; display: flex; flex-direction: column; align-items: center;
@@ -86,7 +87,7 @@ export class Lobby {
       tile.type = "button";
       tile.className = "tile";
       tile.title = HEROES[id].name;
-      tile.append(renderPixelSprite(HERO_SPRITES[id]));
+      tile.append(heroPortrait(id));
       tile.addEventListener("click", () => this.pick(id));
       grid.append(tile);
       this.tiles.set(id, tile);
