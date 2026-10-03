@@ -63,6 +63,7 @@ const OKITA_SLASHES = 8;
 const ONE_PUNCH_DAMAGE = 1e9; // "infinity", but still a number the network can send
 const MAX_CLONES = 2;
 export const TITAN_ATTACK_COOLDOWN = 0.6;
+const BULLET_CUT_SLACK = 8; // shots are small and fast, so melee reaches them a little further out
 const ENEMY = "#enemy"; // attacker id for damage dealt by monsters
 const CLONE_SIGHT = 300;
 
@@ -837,6 +838,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
   }
   /** Hit every enemy inside a slice of a circle (a punch, a sword swing, or a full circle). */
   private sweep(owner: string, x: number, y: number, aim: number, range: number, arc: number, damage: number, knock = false) {
+    if (knock) this.cutBullets(owner, x, y, aim, range, arc);
     this.state.enemies.forEach((e, eid) => {
       const def = ENEMIES[e.kind as EnemyKind];
       const dx = e.x - x;
@@ -864,6 +866,25 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       this.damagePlayer(vid, damage * PVP_DAMAGE_SCALE, true, owner);
       if (knock) this.knockPlayer(vid, dx, dy);
     });
+  }
+
+  /** A melee swing also cuts down hostile shots (and, in PvP, a rival's shots) inside its arc. */
+  private cutBullets(owner: string, x: number, y: number, aim: number, range: number, arc: number) {
+    const cut: string[] = [];
+    this.state.bullets.forEach((b, id) => {
+      const brain = this.bulletBrains.get(id);
+      if (!brain || !(b.hostile || this.isFoe(brain.owner, owner))) return;
+      const dx = b.x - x;
+      const dy = b.y - y;
+      if (Math.hypot(dx, dy) > range + BULLET_CUT_SLACK) return;
+      if (arc < Math.PI * 2) {
+        let diff = Math.atan2(dy, dx) - aim;
+        diff = Math.atan2(Math.sin(diff), Math.cos(diff));
+        if (Math.abs(diff) > arc / 2) return;
+      }
+      cut.push(id);
+    });
+    for (const id of cut) this.removeBullet(id);
   }
 
   /** Push an enemy away along (dx, dy). */

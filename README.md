@@ -33,7 +33,7 @@ Design doc: see `docs/game-design-foundation.md`.
   - **Giant Shifter:** very weak hits as a human. Skill GIANT FORM turns him into a 50m giant for 10 seconds; every attack smashes everything around him.
   - **Glitch God (6 stars, special):** Captain Steel's HP (300), moves 2x faster, hard-hitting glitch shots, and glitches like a rendering error. CREATOR builds a whole city (bigger than the golden city) for 15 seconds; enemies inside lose 10% of their max HP per second and he heals 10% per second. REALITY CHANGE (E) turns every enemy into an ordinary human for 10 seconds: they hit for 1 and cannot use any skill (no beam, no fireballs).
 - Controls: attack with left mouse, aim with the mouse, dash with Space, use your skill with Q or right mouse (E too, unless the hero has a second skill, which E uses)
-- **Knockback:** basic hits from melee heroes (punch and sword) push monsters and rival players back. Bosses do not budge.
+- **Knockback and parry:** basic hits from melee heroes (punch and sword) push monsters and rival players back (bosses do not budge) and cut down enemy shots, and rival shots in PvP, inside the swing.
 - **Online:** your own attacks and skills show the moment you press them, and the HUD shows your ping to the server in the top-right corner.
 - **Enemies:** Cinderlings (fast), Magma Brutes (tanky), Ash Casters (ranged), and the **Pyre Warden** boss on wave 5
 - **Stage 2: Jungle Temple** (harder than the Lava Stage, no lava): bigger waves of fast Monkeys and Banana Monkeys that throw bananas from range, then the **Ape King** on wave 5. The Ape King hurls boulders and, every few seconds, winds up (a red warning lane shows) and charges along it.

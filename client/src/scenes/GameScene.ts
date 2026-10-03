@@ -1132,6 +1132,8 @@ export class GameScene extends Phaser.Scene {
         this.effects.push({ kind: "blast", x: sprite.x, y: sprite.y, aim: 0, range: radius, arc: big ? 1 : 0, age: 0, life: big ? 0.45 : 0.3 });
         if (big) this.cameras.main.shake(180, 0.01);
       }
+      // Enemy shots burst into sparks when they hit something or get cut down by a melee swing.
+      if (kind === "enemy" || kind === "banana" || kind === "boulder") this.sparks.explode(5, sprite.x, sprite.y);
       sprite.destroy();
       this.bullets.delete(id);
     }
