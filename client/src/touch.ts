@@ -6,10 +6,14 @@ import Phaser from "phaser";
  * Right half: floating joystick to aim; your hero attacks in that direction while it is held.
  * When only the left stick is used, your hero faces (and aims) where you walk.
  * Buttons in the bottom-right corner: DASH, the hero's skill, and a second skill if the hero has one.
+ * Skill buttons work like small sticks: hold, drag to aim, and release to use the skill.
  */
 
 const STICK_RADIUS = 60;
 const DEADZONE = 0.2;
+const SKILL_DRAG = 46; // how far a skill button's knob can be dragged
+const SKILL_AIM_DEADZONE = 10; // a tap (or tiny drag) keeps the current aim
+const CAST_PULSE_MS = 160; // how long the skill "button" stays pressed after release, so the server sees it
 
 interface Stick {
   pointerId: number | null;
@@ -25,6 +29,10 @@ interface Button {
   r: number;
   label: string;
   pointerId: number | null;
+  /** Skill buttons: how far the finger has dragged from the button, and when the last release cast it. */
+  dragX: number;
+  dragY: number;
+  castUntil: number;
 }
 
 export class TouchControls {
@@ -46,9 +54,10 @@ export class TouchControls {
   ) {
     scene.input.addPointer(3); // up to 4 fingers at once
     const { width, height } = scene.scale;
-    this.dashButton = { x: width - 170, y: height - 70, r: 42, label: "DASH", pointerId: null };
-    this.skillButton = { x: width - 70, y: height - 150, r: 42, label: skillName, pointerId: null };
-    if (skill2Name) this.skill2Button = { x: width - 165, y: height - 175, r: 38, label: skill2Name, pointerId: null };
+    const button = (x: number, y: number, r: number, label: string): Button => ({ x, y, r, label, pointerId: null, dragX: 0, dragY: 0, castUntil: 0 });
+    this.dashButton = button(width - 170, height - 70, 42, "DASH");
+    this.skillButton = button(width - 70, height - 150, 42, skillName);
+    if (skill2Name) this.skill2Button = button(width - 165, height - 175, 38, skill2Name);
     this.gfx = scene.add.graphics().setDepth(100);
     for (const b of this.buttons) {
       this.labels.push(
@@ -69,12 +78,20 @@ export class TouchControls {
     return this.dashButton.pointerId !== null;
   }
 
+  /** True for a moment after a skill button is released: that is when the skill goes off. */
   get skilling() {
-    return this.skillButton.pointerId !== null;
+    return performance.now() < this.skillButton.castUntil;
   }
 
   get skilling2() {
-    return !!this.skill2Button && this.skill2Button.pointerId !== null;
+    return !!this.skill2Button && performance.now() < this.skill2Button.castUntil;
+  }
+
+  /** Which skill is being held and aimed right now (1 or 2), or 0. */
+  get aimingSkill(): 0 | 1 | 2 {
+    if (this.skillButton.pointerId !== null) return 1;
+    if (this.skill2Button?.pointerId != null) return 2;
+    return 0;
   }
 
   private get buttons(): Button[] {
@@ -106,6 +123,8 @@ export class TouchControls {
     const button = this.hitButton(p);
     if (button) {
       button.pointerId = p.id;
+      button.dragX = 0;
+      button.dragY = 0;
       return;
     }
     const stick = p.x < this.scene.scale.width / 2 ? this.move : this.aim;
@@ -118,6 +137,20 @@ export class TouchControls {
   }
 
   private onMove(p: Phaser.Input.Pointer) {
+    for (const b of [this.skillButton, this.skill2Button]) {
+      if (!b || b.pointerId !== p.id) continue;
+      // Dragging a skill button aims the skill.
+      let dx = p.x - b.x;
+      let dy = p.y - b.y;
+      const len = Math.hypot(dx, dy);
+      if (len > SKILL_DRAG) {
+        dx = (dx / len) * SKILL_DRAG;
+        dy = (dy / len) * SKILL_DRAG;
+      }
+      b.dragX = dx;
+      b.dragY = dy;
+      if (len > SKILL_AIM_DEADZONE) this.aimAngle = Math.atan2(dy, dx);
+    }
     for (const stick of [this.move, this.aim]) {
       if (stick.pointerId !== p.id) continue;
       let dx = p.x - stick.baseX;
@@ -133,7 +166,7 @@ export class TouchControls {
       stick.dx = dx / STICK_RADIUS;
       stick.dy = dy / STICK_RADIUS;
       const pushed = Math.hypot(stick.dx, stick.dy) > DEADZONE;
-      if (pushed && (stick === this.aim || this.aim.pointerId === null)) {
+      if (pushed && (stick === this.aim || this.aim.pointerId === null) && !this.aimingSkill) {
         // The aim stick wins; otherwise face where you walk.
         this.aimAngle = Math.atan2(stick.dy, stick.dx);
       }
@@ -149,7 +182,11 @@ export class TouchControls {
       }
     }
     for (const b of this.buttons) {
-      if (b.pointerId === p.id) b.pointerId = null;
+      if (b.pointerId !== p.id) continue;
+      b.pointerId = null;
+      if (b !== this.dashButton) b.castUntil = performance.now() + CAST_PULSE_MS; // release = cast
+      b.dragX = 0;
+      b.dragY = 0;
     }
   }
 
@@ -176,6 +213,11 @@ export class TouchControls {
     for (const [b, ready] of buttons) {
       const pressed = b.pointerId !== null;
       g.fillStyle(ready >= 1 ? 0xf07a22 : 0x5a4a50, pressed ? 0.9 : 0.55).fillCircle(b.x, b.y, b.r);
+      if (pressed && b !== this.dashButton) {
+        // An aiming ring and a knob that follows the finger.
+        g.lineStyle(2, 0xffffff, 0.4).strokeCircle(b.x, b.y, b.r + SKILL_DRAG - 20);
+        g.fillStyle(0xffd23f, 0.75).fillCircle(b.x + b.dragX, b.y + b.dragY, 14);
+      }
       if (ready < 1) {
         g.lineStyle(4, 0xffd23f, 0.9);
         g.beginPath();

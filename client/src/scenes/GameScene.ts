@@ -185,7 +185,9 @@ export class GameScene extends Phaser.Scene {
   private predictedSkills2: number[] = [];
   /** Round trip to the server in ms (online only), shown on the HUD. */
   pingMs = 0;
-  private kbSeq = -1; // last knockback we applied to our own hero
+  private kbSeq = -1;
+  private skillHeld = { 1: false, 2: false };
+  private skillCastUntil = { 1: 0, 2: 0 }; // last knockback we applied to our own hero
   private kbVel = { x: 0, y: 0 };
   private sendTimer = 0;
   private lastButtons = "";
@@ -330,10 +332,27 @@ export class GameScene extends Phaser.Scene {
       aim: Math.round(this.aim * 1000) / 1000,
       shoot: alive && pointer.leftButtonDown(),
       dash: alive && k.SPACE.isDown,
-      // Heroes with two skills use E / 2 for the second one; otherwise E is another skill key.
-      skill: alive && (k.Q.isDown || k.ONE.isDown || pointer.rightButtonDown() || (!this.hasSkill2(me) && k.E.isDown)),
-      skill2: alive && this.hasSkill2(me) && (k.E.isDown || k.TWO.isDown),
+      skill: alive && this.castOnRelease(1, k.Q.isDown || k.ONE.isDown || pointer.rightButtonDown() || (!this.hasSkill2(me) && k.E.isDown)),
+      skill2: alive && this.hasSkill2(me) && this.castOnRelease(2, k.E.isDown || k.TWO.isDown),
     };
+  }
+
+  /**
+   * Skills are aimed while their key is held (the mouse points the way) and go off when it is let go.
+   * Heroes with two skills use E / 2 for the second one; otherwise E is another skill key.
+   */
+  private castOnRelease(slot: 1 | 2, held: boolean): boolean {
+    const now = performance.now();
+    if (this.skillHeld[slot] && !held) this.skillCastUntil[slot] = now + 160;
+    this.skillHeld[slot] = held;
+    return now < this.skillCastUntil[slot];
+  }
+
+  /** Which skill is being held and aimed (1 or 2), or 0. */
+  private aimingSkill(): 0 | 1 | 2 {
+    const touch = (this.scene.get("Hud") as HudScene | undefined)?.touch;
+    if (touch) return touch.aimingSkill;
+    return this.skillHeld[1] ? 1 : this.skillHeld[2] ? 2 : 0;
   }
 
   private hasSkill2(me: any): boolean {
@@ -922,6 +941,12 @@ export class GameScene extends Phaser.Scene {
     const hero = heroOf(me.hero);
     const x = this.predicted.x;
     const y = this.predicted.y - 5;
+    const aiming = this.aimingSkill();
+    const skill = aiming === 2 ? hero.skill2 : aiming === 1 ? hero.skill : undefined;
+    if (skill) {
+      this.drawSkillGuide(g, skill, hero.range, x, y);
+      return;
+    }
     if (hero.attack === "lightning") {
       const tx = x + Math.cos(this.aim) * hero.range;
       const ty = y + 5 + Math.sin(this.aim) * hero.range;
@@ -940,6 +965,50 @@ export class GameScene extends Phaser.Scene {
       g.beginPath();
       g.arc(x, y, hero.range, this.aim - hero.arc / 2, this.aim + hero.arc / 2);
       g.strokePath();
+    }
+  }
+
+  /** While a skill is held: where it will land (a lane for straight skills, an area for the rest). */
+  private drawSkillGuide(g: Phaser.GameObjects.Graphics, skill: SkillDef, heroRange: number, x: number, y: number) {
+    const cos = Math.cos(this.aim);
+    const sin = Math.sin(this.aim);
+    const lane = (len: number, width: number) => {
+      const w = width / 2;
+      const pts = [
+        { x: x - sin * w, y: y + cos * w },
+        { x: x + cos * len - sin * w, y: y + sin * len + cos * w },
+        { x: x + cos * len + sin * w, y: y + sin * len - cos * w },
+        { x: x + sin * w, y: y - cos * w },
+      ];
+      g.fillStyle(0xffd23f, 0.16).fillPoints(pts, true);
+      g.lineStyle(1, 0xffd23f, 0.7).strokePoints(pts, true);
+    };
+    const area = (cx: number, cy: number, r: number) => {
+      g.fillStyle(0xffd23f, 0.12).fillCircle(cx, cy, r);
+      g.lineStyle(1, 0xffd23f, 0.7).strokeCircle(cx, cy, r);
+    };
+    switch (skill.kind) {
+      case "wave":
+      case "line":
+      case "jab":
+      case "rush":
+        lane(skill.radius, skill.width ?? 16);
+        break;
+      case "fireball":
+      case "burst":
+        lane(heroRange, skill.kind === "fireball" ? 14 : 6);
+        break;
+      case "onepunch":
+        lane(skill.radius * 1.5, skill.radius * 1.4);
+        break;
+      case "hurricane":
+        lane(120, 4);
+        area(x + cos * 120, y + sin * 120, skill.radius);
+        break;
+      default:
+        // Skills that hit all around you: show their reach (map-wide ones just get an arrow).
+        if (skill.radius > 0 && skill.radius < 500) area(x, y + 5, skill.radius);
+        lane(40, 4);
     }
   }
 
