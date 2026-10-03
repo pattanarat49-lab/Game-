@@ -59,6 +59,8 @@ export class LocalRoom {
         barrier: 0,
         latch: 0,
         beam: 0,
+        buff: 0,
+        power: 1,
         ready: false,
         stun: 0,
       }),

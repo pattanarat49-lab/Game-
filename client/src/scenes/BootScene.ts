@@ -8,6 +8,11 @@ import {
   GODZILLA,
   ENEMY_SHOT,
   HERO_SPRITES,
+  DIAMOND_SWORD,
+  DIRT_BLOCK,
+  TNT_BLOCK,
+  CRAFT_BLOCK,
+  TRUCK,
   TRIDENT,
   BRONZE_SWORD,
   GLADIUS,
@@ -126,6 +131,11 @@ export class BootScene extends Phaser.Scene {
     this.addCanvas("bullet", renderPixelSprite(MG_SHOT));
     this.addCanvas("trident", renderPixelSprite(TRIDENT));
     this.addCanvas("bronzesword", renderPixelSprite(BRONZE_SWORD));
+    this.addCanvas("diamondsword", renderPixelSprite(DIAMOND_SWORD));
+    this.addCanvas("dirtblock", renderPixelSprite(DIRT_BLOCK));
+    this.addCanvas("tntblock", renderPixelSprite(TNT_BLOCK));
+    this.addCanvas("craftblock", renderPixelSprite(CRAFT_BLOCK));
+    this.addCanvas("truck", renderPixelSprite(TRUCK));
     this.addCanvas("gladius", renderPixelSprite(GLADIUS));
     this.addCanvas("raygun", renderPixelSprite(RAYGUN));
     this.addCanvas("pistol", renderPixelSprite(PISTOL));

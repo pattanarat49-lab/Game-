@@ -55,7 +55,10 @@ export type HeroId =
   | "agamemnon"
   | "vampire"
   | "rider"
-  | "gladiator";
+  | "gladiator"
+  | "taekwondo"
+  | "theworld"
+  | "steve";
 export type AttackStyle = "punch" | "sword" | "rifle" | "lightning" | "magic";
 export type SkillKind =
   | "smash"
@@ -90,6 +93,10 @@ export type SkillKind =
   | "latch" // leap onto a target, cling to it and drink its blood
   | "kick" // a flying kick along a line that stuns whoever it hits
   | "cross" // a huge straight punch that knocks targets far away
+  | "dashkick" // dart in, kick and stun the nearest target in front, then hop back
+  | "truck" // stop time, then drop a truck on the aimed spot
+  | "diamond" // a diamond sword for a while: basic attacks become strong, fast, long sword swings
+  | "build" // place a random block: dirt (a shield), TNT (explodes when hit) or a craft table (break it for 2x damage)
   | "eyebeam"; // a laser from the eyes that keeps firing and follows the aim
 
 export interface SkillDef {
@@ -125,6 +132,10 @@ export interface HeroDef {
   skill2?: SkillDef; // a second skill (E key / second button)
   /** A gun mode the "swap" skill switches to: basic attacks fire this instead. */
   gun?: { attackCooldown: number; damage: number; range: number; shotSpeed: number; spread: number };
+  /** Basic attack is a straight kick (a lane `range` long and this wide) instead of a swing. */
+  lineAttack?: number;
+  /** DIAMOND SWORD: what basic attacks become while the sword is out. */
+  sword?: { attackCooldown: number; damage: number; range: number; arc: number };
   /** Helpers called out by skills: not shown on the hero select screen. */
   summon?: boolean;
 }
@@ -595,6 +606,61 @@ export const HEROES: Record<HeroId, HeroDef> = {
     pierce: 0,
     skill: { kind: "immortal", name: "IMMORTAL", cooldown: 18, damage: 0.1, radius: 0, duration: 3 },
   },
+  taekwondo: {
+    name: "Taekwondo Master",
+    role: "Kicker",
+    blurb: "Fast straight kicks that reach mid range. FLASH KICK darts in to kick the nearest target in front, stuns it for 1s, and lands back where he started.",
+    stars: 3,
+    maxHp: 125,
+    speed: 125,
+    attack: "punch",
+    lineAttack: 14,
+    attackCooldown: 0.25,
+    damage: 14,
+    range: 52,
+    arc: 0.4,
+    aoe: 0,
+    shotSpeed: 0,
+    pierce: 0,
+    skill: { kind: "dashkick", name: "FLASH KICK", cooldown: 5, damage: 45, radius: 170, duration: 1 },
+  },
+  theworld: {
+    name: "Time Emperor",
+    role: "Time tyrant",
+    blurb: "Punches incredibly fast. TRUCK SMASH stops time for 2s, then drops a truck on the spot he aimed at. He and the Chrono Brawler can move in each other's stopped time.",
+    stars: 5,
+    maxHp: 150,
+    speed: 110,
+    attack: "punch",
+    attackCooldown: 0.07,
+    damage: 9,
+    range: 22,
+    arc: 1.4,
+    aoe: 0,
+    shotSpeed: 0,
+    pierce: 0,
+    // TRUCK SMASH: the truck lands `radius` away at most and crushes everything within 60.
+    skill: { kind: "truck", name: "TRUCK SMASH", cooldown: 18, damage: 140, radius: 170, duration: 2 },
+  },
+  steve: {
+    name: "Block Crafter",
+    role: "Builder",
+    blurb: "Weak punches. DIAMOND SWORD: 10s of strong, long, fast sword swings. BUILD (E): place a random block where you aim: dirt (blocks a hit), TNT (explodes with a huge knockback when hit) or a craft table (break it yourself for 2x damage for good).",
+    stars: 3,
+    maxHp: 120,
+    speed: 112,
+    attack: "punch",
+    attackCooldown: 0.45,
+    damage: 8,
+    range: 20,
+    arc: 1.2,
+    aoe: 0,
+    shotSpeed: 0,
+    pierce: 0,
+    sword: { attackCooldown: 0.28, damage: 45, range: 44, arc: 2.2 },
+    skill: { kind: "diamond", name: "DIAMOND SWORD", cooldown: 16, damage: 0, radius: 0, duration: 10 },
+    skill2: { kind: "build", name: "BUILD", cooldown: 3, damage: 90, radius: 110 },
+  },
   agamemnon: {
     name: "Agamemnon",
     role: "King of kings",
@@ -729,8 +795,8 @@ export const HEROES: Record<HeroId, HeroDef> = {
  * The character select shows them in this order. Heroes missing here go at the end.
  */
 const PVP_RANKING: HeroId[] = [
-  "lawliet", "healer", "titan", "trainer", "howl", "rudeus", "loki", "isekai", "vampire", "kid",
-  "rick", "thorfinn", "deku", "okita", "sakamoto", "hanuman", "joyboy", "doraemon", "agamemnon", "killua",
+  "lawliet", "healer", "titan", "trainer", "howl", "rudeus", "steve", "loki", "isekai", "vampire", "kid",
+  "rick", "thorfinn", "theworld", "deku", "okita", "taekwondo", "sakamoto", "hanuman", "joyboy", "doraemon", "agamemnon", "killua",
   "rider", "gojo", "badigadi", "superman", "starplatinum", "simo", "ricardo", "yaotsu", "saitama",
 ];
 export const HERO_IDS = [
@@ -753,7 +819,9 @@ export const LAVA_DPS = 25;
 export const WAVE_COUNT = 5; // last wave is the boss
 export const INTERMISSION_TIME = 6;
 
-export type EnemyKind = "cinderling" | "brute" | "caster" | "warden" | "godzilla" | "monkey" | "bananamonkey" | "kingkong" | "swordsman" | "swordmaster" | "swordgod";
+export type EnemyKind =
+  | "cinderling" | "brute" | "caster" | "warden" | "godzilla" | "monkey" | "bananamonkey" | "kingkong" | "swordsman" | "swordmaster" | "swordgod"
+  | "dirtblock" | "tntblock" | "craftblock";
 
 export interface EnemyDef {
   hp: number;
@@ -766,6 +834,7 @@ export interface EnemyDef {
   shot?: "banana" | "boulder" | "slash"; // what it throws (default: a fireball)
   keepAway?: number; // ranged enemies back off when closer than this
   boss?: boolean; // bosses shrug off knockback
+  block?: boolean; // the Block Crafter's blocks: they sit still and break on the first hit
 }
 
 const ENEMY_SHOT_DAMAGE_BASE = 12;
@@ -784,6 +853,10 @@ export const ENEMIES: Record<EnemyKind, EnemyDef> = {
   swordsman: { hp: 70, speed: 95, radius: 6, touchDamage: 16, score: 20 },
   swordmaster: { hp: 80, speed: 70, radius: 6, touchDamage: 14, score: 35, shootEvery: 1.7, shotDamage: 20, shot: "slash", keepAway: 90 },
   swordgod: { hp: 6000, speed: 80, radius: 8, touchDamage: 30, score: 3000, boss: true },
+  // The Block Crafter's blocks (BUILD).
+  dirtblock: { hp: 1, speed: 0, radius: 8, touchDamage: 0, score: 0, block: true },
+  tntblock: { hp: 1, speed: 0, radius: 8, touchDamage: 0, score: 0, block: true },
+  craftblock: { hp: 1, speed: 0, radius: 8, touchDamage: 0, score: 0, block: true },
   godzilla: { hp: 7000, speed: 24, radius: 22, touchDamage: 105, score: 2000, shootEvery: 3, shotDamage: ENEMY_SHOT_DAMAGE_BASE * 3, boss: true },
 };
 
@@ -895,6 +968,12 @@ export function inputDirection(input: PlayerInput): { x: number; y: number } {
     y /= len;
   }
   return { x, y };
+}
+
+/** Heroes who can move while time is stopped (their own time stop, or each other's). */
+export function movesInStoppedTime(hero: string): boolean {
+  const kind = heroOf(hero).skill.kind;
+  return kind === "timestop" || kind === "truck";
 }
 
 /** The boxing ring the PvP Arena and Bot Duel are fought in: a small square with no cover. */

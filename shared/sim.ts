@@ -3,6 +3,7 @@
 // solo play (with plain objects).
 
 import {
+  movesInStoppedTime,
   CENTER_X,
   CENTER_Y,
   DASH_COOLDOWN,
@@ -78,6 +79,10 @@ const REWIND_EVERY = 0.1; // seconds between TIME MACHINE snapshots
 const LATCH_CONE = 0.7; // BLOOD LATCH finds targets within this angle of the aim (radians, each side)
 const LATCH_TICK = 0.25; // seconds between bites
 const SQUAD_SPACING = 12; // helpers keep this far apart
+const MAX_BLOCKS = 6; // the Block Crafter's blocks on the map at once (the oldest goes)
+const TNT_RADIUS = 60;
+const TNT_KNOCK = 3.5; // times a normal knockback
+const TRUCK_RADIUS = 60;
 const EYEBEAM_TICK = 0.1; // seconds between HEAT VISION hits
 
 export interface SimPlayer {
@@ -127,6 +132,10 @@ export interface SimPlayer {
   beam: number;
   /** PvP player select: this player has locked in their hero. */
   ready: boolean;
+  /** Seconds left of a timed power-up (the Block Crafter's DIAMOND SWORD). */
+  buff: number;
+  /** Damage multiplier (the Block Crafter's craft table makes it 2). */
+  power: number;
 }
 
 export interface SimEnemy {
@@ -254,6 +263,8 @@ interface EnemyBrain {
   hit?: Set<string>;
   cutsLeft?: number;
   cutTimer?: number;
+  /** A placed block: who built it. */
+  owner?: string;
 }
 
 interface ZoneBrain {
@@ -422,6 +433,15 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
     const zones: string[] = [];
     s.zones.forEach((_z, zid) => zones.push(zid));
     for (const z of zones) this.removeZone(z);
+    this.clearEnemies();
+  }
+
+  /** Remove everything from the enemy map (in the arena that is only the Block Crafter's blocks). */
+  private clearEnemies() {
+    const ids: string[] = [];
+    this.state.enemies.forEach((_e, eid) => ids.push(eid));
+    for (const eid of ids) this.state.enemies.delete(eid);
+    this.enemyBrains.clear();
   }
 
   /** PvP: everyone is ready; fresh start positions and the countdown begins. */
@@ -432,6 +452,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       p.dead = false;
       p.hp = p.maxHp;
       p.ready = false;
+      p.power = 1;
       this.placeAtSpawn(p);
       const brain = this.brains.get(id);
       if (brain) brain.target = undefined;
@@ -439,6 +460,24 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
     s.notice = "";
     s.phase = "intermission";
     s.phaseTimer = PVP_COUNTDOWN;
+  }
+
+  /** Monsters on the map (the Block Crafter's blocks do not count). */
+  private monsterCount() {
+    let n = 0;
+    this.state.enemies.forEach((e) => {
+      if (!ENEMIES[e.kind as EnemyKind].block) n++;
+    });
+    return n;
+  }
+
+  /** A dirt block in the way of something of this radius at (x, y)? Walls off monsters and their shots. */
+  private blockAt(x: number, y: number, radius: number): string | undefined {
+    let hit: string | undefined;
+    this.state.enemies.forEach((b, bid) => {
+      if (!hit && b.kind === "dirtblock" && Math.hypot(b.x - x, b.y - y) < radius + ENEMIES.dirtblock.radius) hit = bid;
+    });
+    return hit;
   }
 
   /** Players actually connected (not clones). */
@@ -494,9 +533,14 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
         s.timeStop = 0;
         s.timeStopBy = "";
       } else {
-        this.updatePlayers(dt, by);
-        this.updateBullets(dt, by);
-        this.updateZones(dt, by);
+        // Those who can move in stopped time (the one who stopped it, and other time-stop heroes).
+        const movers = new Set<string>([by]);
+        s.players.forEach((p, pid) => {
+          if (!p.owner && movesInStoppedTime(p.hero)) movers.add(pid);
+        });
+        this.updatePlayers(dt, movers);
+        this.updateBullets(dt, movers);
+        this.updateZones(dt, movers);
         return;
       }
     }
@@ -517,7 +561,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       if (s.phaseTimer <= 0) this.startWave(s.wave + 1);
     } else if (s.phase === "fight") {
       if (s.stage === "lava") s.lavaRadius = Math.max(LAVA_MIN_RADIUS, s.lavaRadius - LAVA_SHRINK_PER_SEC * dt);
-      if (s.enemies.size === 0) {
+      if (this.monsterCount() === 0) {
         if (s.wave >= WAVE_COUNT) {
           s.phase = "victory";
           s.phaseTimer = 12;
@@ -643,10 +687,12 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
           p.score = 0;
           p.dead = false;
           p.hp = p.maxHp;
+          p.power = 1;
           this.placeAtSpawn(p);
           const brain = this.brains.get(id);
           if (brain) brain.target = undefined;
         });
+        this.clearEnemies();
         this.startIntermission(0);
       }
     }
@@ -661,7 +707,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
         s.phase = "fight";
         this.spawnEnemy("godzilla");
       }
-    } else if (s.phase === "fight" && s.enemies.size === 0) {
+    } else if (s.phase === "fight" && this.monsterCount() === 0) {
       s.phase = "victory";
       s.phaseTimer = 12;
     } else if (s.phase === "victory") {
@@ -689,10 +735,10 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
   // ------------------------------------------------------------- players
 
   /** Move and fight for every player. With `only`, just that one (time is stopped). */
-  private updatePlayers(dt: number, only?: string) {
+  private updatePlayers(dt: number, only?: Set<string>) {
     const s = this.state;
     s.players.forEach((p, id) => {
-      if (only && id !== only) return;
+      if (only && !only.has(id)) return;
       const brain = this.brains.get(id);
       if (!brain) return;
       if (brain.bot) this.botThink(id, p, brain, dt);
@@ -727,6 +773,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
         p.revive = 0;
         p.latch = 0;
         p.beam = 0;
+        p.buff = 0;
         p.respawnIn = Math.max(0, p.respawnIn - dt);
         if (p.respawnIn <= 0) {
           p.dead = false;
@@ -747,6 +794,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       }
 
       p.revive = Math.max(0, p.revive - dt);
+      p.buff = Math.max(0, p.buff - dt);
       if (p.barrier > 0) {
         // IMMORTAL: untouchable, and healing fast.
         p.barrier = Math.max(0, p.barrier - dt);
@@ -806,6 +854,13 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
           brain.attackTimer = gun.attackCooldown;
           const angle = input.aim + (Math.random() - 0.5) * 2 * gun.spread;
           this.spawnBullet("bullet", p.x, p.y, angle, gun.shotSpeed, { owner: id, damage: gun.damage, pierce: 0, life: gun.range / gun.shotSpeed });
+        } else if (hero.sword && p.buff > 0) {
+          // DIAMOND SWORD: big, fast swings.
+          brain.attackTimer = hero.sword.attackCooldown;
+          this.sweep(id, p.x, p.y, input.aim, hero.sword.range, hero.sword.arc, hero.sword.damage, true);
+        } else if (hero.lineAttack) {
+          // A straight kick down a lane.
+          this.lineHit(id, p.x, p.y, input.aim, hero.range, hero.lineAttack, hero.damage, 0, 1);
         } else if (hero.attack === "rifle") {
           this.spawnBullet("snipe", p.x, p.y, input.aim, hero.shotSpeed, { owner: id, damage: hero.damage, pierce: hero.pierce, life: hero.range / hero.shotSpeed });
         } else if (hero.attack === "magic") {
@@ -890,6 +945,42 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
         break;
       case "cross": // DEATH CROSS: crushing damage down a short lane, and everything hit goes flying
         this.lineHit(id, p.x, p.y, p.aim, skill.radius, skill.width ?? 26, skill.damage, 0, skill.duration ?? 4);
+        break;
+      case "dashkick": {
+        // FLASH KICK: dart to the nearest target in front, kick and stun it, and land back here.
+        const t = this.findTarget(id, p, skill.radius);
+        if (!t) {
+          this.lineHit(id, p.x, p.y, p.aim, skill.radius * 0.4, 20, skill.damage, skill.duration ?? 1);
+          break;
+        }
+        if (t.key.startsWith("p:")) {
+          const vid = t.key.slice(2);
+          this.damagePlayer(vid, skill.damage * PVP_DAMAGE_SCALE, true, id);
+          const v = s.players.get(vid);
+          if (v && !v.dead) v.stun = Math.max(v.stun, skill.duration ?? 1);
+        } else {
+          const e = s.enemies.get(t.key);
+          const def = e && ENEMIES[e.kind as EnemyKind];
+          this.damageEnemy(t.key, skill.damage, id);
+          if (e && def && !def.boss && s.enemies.has(t.key)) e.stun = Math.max(e.stun, skill.duration ?? 1);
+        }
+        this.addZone("dashkick", t.x, t.y, 12, 0.35, { owner: id, every: Infinity, damage: 0 });
+        break;
+      }
+      case "truck": {
+        // TRUCK SMASH: time stops, and a truck falls on the spot he aimed at when it starts again.
+        const spot = this.move(p.x, p.y, Math.cos(p.aim) * skill.radius, Math.sin(p.aim) * skill.radius, 4);
+        s.timeStop = skill.duration ?? 2;
+        s.timeStopBy = id;
+        this.addZone("truck", spot.x, spot.y, TRUCK_RADIUS, Math.max(0.1, (skill.duration ?? 2) - 0.05), { owner: id, every: Infinity, damage: skill.damage });
+        break;
+      }
+      case "diamond":
+        p.buff = skill.duration ?? 10;
+        brain.attackTimer = 0;
+        break;
+      case "build":
+        this.placeBlock(id, p, skill);
         break;
       case "eyebeam":
         p.beam = skill.duration ?? 2.5;
@@ -1063,22 +1154,10 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
 
   /** BLOOD LATCH: leap onto the nearest target in front (monster, or rival in PvP); with none, just leap. */
   private startLatch(id: string, p: P, skill: SkillDef, brain: PlayerBrain) {
-    let best = Infinity;
-    let pick: string | undefined;
-    let tx = 0;
-    let ty = 0;
-    const consider = (key: string, x: number, y: number) => {
-      const d = Math.hypot(x - p.x, y - p.y);
-      if (d > skill.radius || d >= best) return;
-      let diff = Math.atan2(y - p.y, x - p.x) - p.aim;
-      diff = Math.atan2(Math.sin(diff), Math.cos(diff));
-      if (Math.abs(diff) > LATCH_CONE && d > 30) return;
-      [best, pick, tx, ty] = [d, key, x, y];
-    };
-    this.state.enemies.forEach((e, eid) => consider(eid, e.x, e.y));
-    this.state.players.forEach((v, vid) => {
-      if (!v.dead && this.isFoe(id, vid)) consider(`p:${vid}`, v.x, v.y);
-    });
+    const t = this.findTarget(id, p, skill.radius);
+    const pick = t?.key;
+    const tx = t?.x ?? 0;
+    const ty = t?.y ?? 0;
     if (!pick) {
       const end = this.move(p.x, p.y, Math.cos(p.aim) * skill.radius * 0.6, Math.sin(p.aim) * skill.radius * 0.6, PLAYER_RADIUS);
       p.x = end.x;
@@ -1095,6 +1174,29 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
     brain.latchTick = 0;
     p.latch = skill.duration ?? 3;
     this.updateLatch(id, p, brain, heroOf(p.hero), 0);
+  }
+
+  /** The nearest monster (or rival, in PvP) within `radius` and roughly where `p` is aiming. Blocks are ignored. */
+  private findTarget(id: string, p: P, radius: number): { key: string; x: number; y: number } | undefined {
+    let best = Infinity;
+    let pick: string | undefined;
+    let tx = 0;
+    let ty = 0;
+    const consider = (key: string, x: number, y: number) => {
+      const d = Math.hypot(x - p.x, y - p.y);
+      if (d > radius || d >= best) return;
+      let diff = Math.atan2(y - p.y, x - p.x) - p.aim;
+      diff = Math.atan2(Math.sin(diff), Math.cos(diff));
+      if (Math.abs(diff) > LATCH_CONE && d > 30) return;
+      [best, pick, tx, ty] = [d, key, x, y];
+    };
+    this.state.enemies.forEach((e, eid) => {
+      if (!ENEMIES[e.kind as EnemyKind].block) consider(eid, e.x, e.y);
+    });
+    this.state.players.forEach((v, vid) => {
+      if (!v.dead && this.isFoe(id, vid)) consider(`p:${vid}`, v.x, v.y);
+    });
+    return pick ? { key: pick, x: tx, y: ty } : undefined;
   }
 
   /** Clinging on: ride along with the target and bite it every LATCH_TICK, healing what we drink. */
@@ -1239,6 +1341,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
     let ty = 0;
     let best = CLONE_SIGHT;
     this.state.enemies.forEach((e) => {
+      if (ENEMIES[e.kind as EnemyKind].block) return;
       const r = ENEMIES[e.kind as EnemyKind].radius;
       const d = Math.hypot(e.x - c.x, e.y - c.y) - r;
       if (d < best) [best, tx, ty] = [d, e.x, e.y]; // measured to its edge, so melee helpers close in
@@ -1312,11 +1415,11 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
     this.zoneBrains.delete(id);
   }
 
-  private updateZones(dt: number, onlyOwner?: string) {
+  private updateZones(dt: number, onlyOwner?: Set<string>) {
     const s = this.state;
     s.zones.forEach((z, id) => {
       const brain = this.zoneBrains.get(id);
-      if (!brain || (onlyOwner && brain.owner !== onlyOwner)) return;
+      if (!brain || (onlyOwner && !onlyOwner.has(brain.owner))) return;
       z.life -= dt;
       brain.tick -= dt;
       if (brain.link) this.usePortal(id, z, brain.link);
@@ -1342,11 +1445,17 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
           });
         }
       }
+      if (z.life <= 0 && z.kind === "truck") {
+        // The truck lands: everything under it is crushed and thrown back.
+        this.sweep(brain.owner, z.x, z.y, 0, z.radius, Math.PI * 2, brain.damage, 2);
+      }
       if (z.life <= 0 || (brain.link && !s.zones.has(brain.link))) this.removeZone(id);
     });
   }
   /** Hit every enemy inside a slice of a circle (a punch, a sword swing, or a full circle). */
-  private sweep(owner: string, x: number, y: number, aim: number, range: number, arc: number, damage: number, knock = false) {
+  /** `knock`: true for a normal melee knockback, or a number for that many times as far. */
+  private sweep(owner: string, x: number, y: number, aim: number, range: number, arc: number, damage: number, knock: boolean | number = false) {
+    const kb = knock === true ? 1 : Number(knock) || 0;
     if (knock) this.cutBullets(owner, x, y, aim, range, arc);
     this.state.enemies.forEach((e, eid) => {
       const def = ENEMIES[e.kind as EnemyKind];
@@ -1359,7 +1468,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
         if (Math.abs(diff) > arc / 2) return;
       }
       this.damageEnemy(eid, damage, owner);
-      if (knock && !def.boss) this.knockEnemy(eid, dx, dy);
+      if (kb && !def.boss && !def.block) this.knockEnemy(eid, dx, dy, kb);
     });
     if (!this.pvpLive()) return;
     this.state.players.forEach((v, vid) => {
@@ -1373,7 +1482,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
         if (Math.abs(diff) > arc / 2) return;
       }
       this.damagePlayer(vid, damage * PVP_DAMAGE_SCALE, true, owner);
-      if (knock) this.knockPlayer(vid, dx, dy);
+      if (kb) this.knockPlayer(vid, dx, dy, kb);
     });
   }
 
@@ -1435,6 +1544,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
     const brain = this.brains.get(id);
     if (!p || !brain || p.dead || p.dashing) return;
     if (heroOf(p.hero).invincible || p.barrier > 0) return;
+    if (attacker && attacker !== ENEMY) amount *= this.state.players.get(this.rootOf(attacker))?.power || 1;
     // Under Yaotsu's reality change, ordinary humans hit for 1.
     if (this.state.reality > 0 && attacker && (attacker === ENEMY || this.isFoe(this.state.realityBy, attacker))) {
       amount = Math.min(amount, 1);
@@ -1525,13 +1635,57 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
   private damageEnemy(eid: string, damage: number, owner?: string) {
     const e = this.state.enemies.get(eid);
     if (!e) return;
-    e.hp -= damage;
+    const killer = this.state.players.get(this.rootOf(owner));
+    e.hp -= damage * (killer?.power || 1);
     e.hitFlash = 0.1;
     if (e.hp <= 0) {
+      const brain = this.enemyBrains.get(eid);
       this.state.enemies.delete(eid);
       this.enemyBrains.delete(eid);
-      const killer = this.state.players.get(this.rootOf(owner));
       if (killer) killer.score += ENEMIES[e.kind as EnemyKind].score;
+      if (ENEMIES[e.kind as EnemyKind].block) this.breakBlock(e, brain?.owner ?? "", owner);
+    }
+  }
+
+  /** BUILD: drop a random block (dirt wall, TNT or crafting table) where the Block Crafter aimed. */
+  private placeBlock(id: string, p: P, skill: SkillDef) {
+    const spot = this.move(p.x, p.y, Math.cos(p.aim) * skill.radius, Math.sin(p.aim) * skill.radius, 8);
+    const kinds: EnemyKind[] = ["dirtblock", "tntblock", "craftblock"];
+    const kind = kinds[Math.floor(Math.random() * kinds.length)];
+    // Only so many at once: the oldest one crumbles.
+    const mine: string[] = [];
+    this.enemyBrains.forEach((b, eid) => {
+      if (b.owner === id) mine.push(eid);
+    });
+    while (mine.length >= MAX_BLOCKS) {
+      const old = mine.shift()!;
+      this.state.enemies.delete(old);
+      this.enemyBrains.delete(old);
+    }
+    const e = this.make.enemy();
+    e.kind = kind;
+    e.hp = e.maxHp = 1;
+    e.x = spot.x;
+    e.y = spot.y;
+    const eid = `e${this.nextId++}`;
+    this.state.enemies.set(eid, e);
+    this.enemyBrains.set(eid, { shootTimer: 999, burstAngle: 0, beamTimer: 999, kbx: 0, kby: 0, owner: id });
+    this.addZone("build", spot.x, spot.y, 10, 0.3, { owner: id, every: Infinity, damage: 0 });
+  }
+
+  /** A block was broken: TNT blows up, and a crafting table broken by its builder doubles his damage for good. */
+  private breakBlock(e: E, builder: string, breaker?: string) {
+    if (e.kind === "tntblock") {
+      this.addZone("boom", e.x, e.y, TNT_RADIUS, 0.45, { owner: builder, every: Infinity, damage: 0 });
+      const p = this.state.players.get(builder);
+      const dmg = p ? heroOf(p.hero).skill2?.damage ?? 90 : 90;
+      this.sweep(builder, e.x, e.y, 0, TNT_RADIUS, Math.PI * 2, dmg, TNT_KNOCK);
+    } else if (e.kind === "craftblock" && builder && this.rootOf(breaker) === builder) {
+      const p = this.state.players.get(builder);
+      if (p && !p.dead) {
+        p.power = 2;
+        this.addZone("craftbuff", p.x, p.y, 30, 1, { owner: builder, every: Infinity, damage: 0 });
+      }
     }
   }
 
@@ -1559,6 +1713,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       const def = ENEMIES[e.kind as EnemyKind];
       const brain = this.enemyBrains.get(id)!;
       e.hitFlash = Math.max(0, e.hitFlash - dt);
+      if (def.block) return; // blocks just sit there
       if (Math.abs(brain.kbx) + Math.abs(brain.kby) > 1) {
         const pushed = this.move(e.x, e.y, brain.kbx * dt, brain.kby * dt, def.radius);
         e.x = pushed.x;
@@ -1600,8 +1755,11 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
         dirY = -dirY;
       }
       const moved = this.move(e.x, e.y, dirX * def.speed * dt, dirY * def.speed * dt, def.radius);
-      e.x = moved.x;
-      e.y = moved.y;
+      const walled = this.blockAt(moved.x, moved.y, def.radius);
+      if (!walled) {
+        e.x = moved.x;
+        e.y = moved.y;
+      }
 
       if (dist < def.radius + PLAYER_RADIUS) this.damagePlayer(targetId, def.touchDamage, false, ENEMY);
 
@@ -1822,11 +1980,11 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
     this.bulletBrains.delete(id);
   }
 
-  private updateBullets(dt: number, onlyOwner?: string) {
+  private updateBullets(dt: number, onlyOwner?: Set<string>) {
     const s = this.state;
     s.bullets.forEach((b, id) => {
       const brain = this.bulletBrains.get(id)!;
-      if (onlyOwner && brain.owner !== onlyOwner) return;
+      if (onlyOwner && !onlyOwner.has(brain.owner ?? "")) return;
       if (brain.homing) this.steerMissile(b, brain, dt);
       b.x += b.vx * dt;
       b.y += b.vy * dt;
@@ -1840,6 +1998,12 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       }
 
       if (b.hostile) {
+        const wall = this.blockAt(b.x, b.y, 2);
+        if (wall) {
+          this.damageEnemy(wall, brain.damage);
+          this.removeBullet(id);
+          return;
+        }
         s.players.forEach((p, pid) => {
           if (!s.bullets.has(id) || p.dead || p.dashing) return;
           if (Math.hypot(p.x - b.x, p.y - b.y) < PLAYER_RADIUS + 2) {
@@ -1895,6 +2059,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
     let tx = 0;
     let ty = 0;
     this.state.enemies.forEach((e) => {
+      if (ENEMIES[e.kind as EnemyKind].block) return;
       const d = Math.hypot(e.x - b.x, e.y - b.y);
       if (d < best) [best, tx, ty] = [d, e.x, e.y];
     });
@@ -1993,6 +2158,8 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       case "gatling":
       case "card":
       case "latch":
+      case "dashkick":
+      case "truck":
       case "eyebeam":
       case "onepunch":
       case "smash":
@@ -2001,6 +2168,10 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
         return dist <= reach;
       case "titan":
         return dist < 120;
+      case "diamond":
+        return dist < 140;
+      case "build":
+        return dist < 200;
       case "hurricane":
         return dist > 60 && dist < 220;
       default:

@@ -34,6 +34,7 @@ import {
   inLava,
   inputDirection,
   moveCircle,
+  movesInStoppedTime,
 } from "../../../shared/game";
 import type { HudScene } from "./HudScene";
 import { LocalRoom } from "../localRoom";
@@ -56,7 +57,7 @@ interface PlayerView {
 
 /** A short-lived swing, slash or shockwave drawn on top of the world. */
 interface Effect {
-  kind: "punch" | "sword" | "smash" | "muzzle" | "bolt" | "storm" | "blast" | "impact" | "heal" | "line" | "slashes" | "ripple" | "jab" | "gatling" | "rewind" | "kick";
+  kind: "punch" | "sword" | "smash" | "muzzle" | "bolt" | "storm" | "blast" | "impact" | "heal" | "line" | "slashes" | "ripple" | "jab" | "gatling" | "rewind" | "kick" | "tkick";
   x: number;
   y: number;
   aim: number;
@@ -68,7 +69,7 @@ interface Effect {
   follow?: PlayerView;
 }
 
-const WEAPON_TEXTURE: Record<string, string | undefined> = { isekai: "sword", simo: "rifle", okita: "sword", sakamoto: "knife", hanuman: "trident", rick: "raygun", kid: "pistol", doraemon: "aircannon", agamemnon: "bronzesword", gladiator: "gladius" };
+const WEAPON_TEXTURE: Record<string, string | undefined> = { isekai: "sword", simo: "rifle", okita: "sword", sakamoto: "knife", hanuman: "trident", rick: "raygun", kid: "pistol", doraemon: "aircannon", agamemnon: "bronzesword", gladiator: "gladius", steve: "diamondsword" };
 const BULLET_TEXTURE: Record<string, string> = {
   snipe: "snipe",
   wave: "wave",
@@ -163,6 +164,9 @@ const ENEMY_SCALE: Record<EnemyKind, number> = {
   swordsman: 1,
   swordmaster: 1,
   swordgod: 1.3,
+  dirtblock: 1.3,
+  tntblock: 1.3,
+  craftblock: 1.3,
 };
 
 export function serverUrl(): string {
@@ -428,7 +432,7 @@ export class GameScene extends Phaser.Scene {
     this.dashCooldown = Math.max(0, this.dashCooldown - dt);
     const state = this.room!.state;
     // Someone stopped time, or a rival's jab stunned us: we cannot move until it passes.
-    const frozen = (state.timeStop > 0 && state.timeStopBy !== this.room!.sessionId) || me.stun > 0;
+    const frozen = (state.timeStop > 0 && state.timeStopBy !== this.room!.sessionId && !movesInStoppedTime(me.hero)) || me.stun > 0;
     if (me.dead || me.warp !== this.warp) {
       this.warp = me.warp;
       this.predicted = { x: me.x, y: me.y };
@@ -577,7 +581,7 @@ export class GameScene extends Phaser.Scene {
         view.weapon.setRotation(aim);
         view.weapon.setFlipY(Math.cos(aim) < 0);
         view.weapon.setDepth(body.y + 0.5);
-        view.weapon.setVisible(!p.dead);
+        view.weapon.setVisible(!p.dead && (!heroOf(p.hero).sword || p.buff > 0)); // the diamond sword only while crafted
       }
       this.playAttackEffects(view, p, body.x, body.y - 5, aim);
       const helper = !!heroOf(p.hero).summon; // pets and gunner bots look like themselves, not ghostly clones
@@ -603,7 +607,7 @@ export class GameScene extends Phaser.Scene {
       if (p.hp < view.lastHp - 0.5) view.hurtFlash = 0.15;
       view.lastHp = p.hp;
       view.hurtFlash = Math.max(0, view.hurtFlash - dt);
-      const stoppedHere = state.timeStop > 0 && state.timeStopBy !== id;
+      const stoppedHere = state.timeStop > 0 && state.timeStopBy !== id && !movesInStoppedTime(p.hero);
       if (view.hurtFlash > 0) body.setTintFill(0xff4040);
       else if (stoppedHere) body.setTint(0x8a93b8);
       else if (p.owner && !helper) body.setTint(0xb8ffc8);
@@ -736,12 +740,12 @@ export class GameScene extends Phaser.Scene {
     if (!room || room instanceof LocalRoom) return;
     const me = room.state.players.get(room.sessionId);
     const state = room.state;
-    if (!me || me.dead || me.stun > 0 || (state.timeStop > 0 && state.timeStopBy !== room.sessionId)) return;
+    if (!me || me.dead || me.stun > 0 || (state.timeStop > 0 && state.timeStopBy !== room.sessionId && !movesInStoppedTime(me.hero))) return;
     const hero = heroOf(me.hero);
     const x = this.predicted.x;
     const y = this.predicted.y - 5;
     if (input.shoot && this.localAttackTimer <= 0) {
-      this.localAttackTimer = me.titan > 0 ? TITAN_ATTACK_COOLDOWN : hero.gun && me.mode === 1 ? hero.gun.attackCooldown : hero.attackCooldown;
+      this.localAttackTimer = me.titan > 0 ? TITAN_ATTACK_COOLDOWN : hero.gun && me.mode === 1 ? hero.gun.attackCooldown : hero.sword && me.buff > 0 ? hero.sword.attackCooldown : hero.attackCooldown;
       this.predictedAttacks.push(performance.now());
       this.playAttack(me, x, y, this.aim);
     }
@@ -769,6 +773,10 @@ export class GameScene extends Phaser.Scene {
       this.sparks.explode(12, x, y + 5);
     } else if (hero.gun && p.mode === 1) {
       this.effects.push({ kind: "muzzle", x, y, aim, range: 20, arc: 0, age: 0, life: 0.05 });
+    } else if (hero.sword && p.buff > 0) {
+      this.effects.push({ kind: "sword", x, y, aim, range: hero.sword.range, arc: hero.sword.arc, age: 0, life: 0.18 });
+    } else if (hero.lineAttack) {
+      this.effects.push({ kind: "tkick", x, y, aim, range: hero.range, arc: hero.lineAttack, age: 0, life: 0.14 });
     } else if (hero.attack === "rifle") {
       this.effects.push({ kind: "muzzle", x, y, aim, range: 16, arc: 0, age: 0, life: 0.08 });
       if (p === this.room?.state.players.get(this.room.sessionId)) this.cameras.main.shake(60, 0.004);
@@ -894,6 +902,21 @@ export class GameScene extends Phaser.Scene {
       case "immortal":
         this.effects.push({ kind: "ripple", x, y, aim, range: 60, arc: 0, age: 0, life: 0.4 });
         cam.shake(150, 0.008);
+        break;
+      case "dashkick":
+        this.effects.push({ kind: "ripple", x, y, aim, range: 26, arc: 0, age: 0, life: 0.25 });
+        break;
+      case "truck":
+        // TRUCK SMASH: the world stops (the truck falls in the zone drawing).
+        this.effects.push({ kind: "ripple", x, y, aim, range: 700, arc: 0, age: 0, life: 0.7 });
+        cam.shake(120, 0.006);
+        break;
+      case "diamond":
+        cam.flash(150, 120, 240, 255);
+        this.sparks.explode(18, x, y);
+        break;
+      case "build":
+        this.sparks.explode(6, x + Math.cos(aim) * skill.radius, y + Math.sin(aim) * skill.radius);
         break;
     }
   }
@@ -1080,6 +1103,16 @@ export class GameScene extends Phaser.Scene {
         g.lineStyle(4, 0xe02a3a, 1 - t).lineBetween(e.x + cos * e.range * 0.3, e.y + sin * e.range * 0.3, ex, ey);
         g.lineStyle(2, 0xffffff, 1 - t).lineBetween(e.x + cos * e.range * 0.5, e.y + sin * e.range * 0.5, ex, ey);
         g.fillStyle(0xffd400, 0.8 * (1 - t)).fillCircle(ex, ey, 6 + 18 * t);
+      } else if (e.kind === "tkick") {
+        // A quick straight kick: a white streak with a snap at the end.
+        const cos = Math.cos(e.aim);
+        const sin = Math.sin(e.aim);
+        const reach = e.range * Math.min(1, t * 3);
+        const ex = e.x + cos * reach;
+        const ey = e.y + sin * reach;
+        g.lineStyle(e.arc * 0.7, 0xf6f6f6, 0.3 * (1 - t)).lineBetween(e.x, e.y, ex, ey);
+        g.lineStyle(3, 0xe8b48a, 1 - t).lineBetween(e.x + cos * reach * 0.4, e.y + sin * reach * 0.4, ex, ey);
+        g.lineStyle(1, 0xffffff, 1 - t).strokeCircle(ex, ey, 3 + 8 * t);
       } else if (e.kind === "rewind") {
         // A ring closing back in, with a clock hand spinning backwards.
         g.lineStyle(4, 0x9fd8ff, 0.8 * (1 - t)).strokeCircle(e.x, e.y, e.range * (1 - t));
@@ -1191,8 +1224,17 @@ export class GameScene extends Phaser.Scene {
       case "eyebeam":
         lane(skill.radius, skill.width ?? 30);
         break;
+      case "truck":
+        lane(skill.radius, 4);
+        area(x + cos * skill.radius, y + sin * skill.radius, 60);
+        break;
+      case "build":
+        lane(skill.radius, 4);
+        area(x + cos * skill.radius, y + sin * skill.radius, 10);
+        break;
+      case "dashkick":
       case "latch": {
-        // A cone: the nearest target inside it gets bitten.
+        // A cone: the nearest target inside it gets bitten (or kicked).
         g.fillStyle(0xe02a3a, 0.12);
         g.slice(x, y, skill.radius, this.aim - 0.7, this.aim + 0.7);
         g.fillPath();
@@ -1485,6 +1527,45 @@ export class GameScene extends Phaser.Scene {
         sky.fillStyle(0xffe08a, 0.35 * fade).fillRect(z.x - 10, z.y - 120 * fade, 20, 120 * fade);
         sky.fillStyle(0xffffff, 0.5 * fade).fillRect(z.x - 3, z.y - 120 * fade, 6, 120 * fade);
         floor.lineStyle(2, 0xffd23f, fade).strokeCircle(z.x, z.y, z.radius * (1 - z.life / z.maxLife));
+      } else if (z.kind === "truck") {
+        // TRUCK SMASH: a shadow grows on the ground while the truck drops out of the sky.
+        const left = z.life / z.maxLife;
+        floor.fillStyle(0x000000, 0.35 * (1 - left)).fillEllipse(z.x, z.y, z.radius * 2 * (1.2 - left * 0.7), z.radius * (1.2 - left * 0.7));
+        floor.lineStyle(1, 0xff4040, 0.6).strokeCircle(z.x, z.y, z.radius);
+        let img = this.zoneImages.get(id);
+        if (!img) {
+          img = this.add.image(z.x, z.y, "truck").setOrigin(0.5, 0.9).setScale(3).setData("truck", true);
+          this.zoneImages.set(id, img);
+        }
+        const drop = left * left * 420;
+        img.setPosition(z.x, z.y - drop).setRotation(0.25 * left).setDepth(z.y + 50);
+      } else if (z.kind === "dashkick") {
+        // FLASH KICK: the kick lands with a starburst.
+        const t = 1 - z.life / z.maxLife;
+        sky.lineStyle(2, 0xffffff, 1 - t);
+        for (let i = 0; i < 8; i++) {
+          const a = (i / 8) * Math.PI * 2;
+          sky.lineBetween(z.x + Math.cos(a) * 6, z.y - 6 + Math.sin(a) * 6, z.x + Math.cos(a) * (10 + 22 * t), z.y - 6 + Math.sin(a) * (10 + 22 * t));
+        }
+        sky.fillStyle(0xffd23f, 0.8 * (1 - t)).fillCircle(z.x, z.y - 6, 6 + 10 * t);
+      } else if (z.kind === "boom") {
+        // TNT: a fireball and a shockwave ring.
+        const t = 1 - z.life / z.maxLife;
+        if (!this.zoneImages.has(id)) {
+          this.zoneImages.set(id, this.add.image(z.x, z.y, "spark").setVisible(false));
+          this.cameras.main.shake(250, 0.015);
+          this.sparks.explode(30, z.x, z.y);
+        }
+        sky.fillStyle(0xffd23f, 0.8 * (1 - t)).fillCircle(z.x, z.y - 4, z.radius * 0.5 * (0.5 + t));
+        sky.fillStyle(0xff6a2a, 0.6 * (1 - t)).fillCircle(z.x, z.y - 4, z.radius * (0.4 + 0.6 * t));
+        floor.lineStyle(3, 0xffffff, 1 - t).strokeCircle(z.x, z.y, z.radius * t);
+      } else if (z.kind === "build") {
+        const t = 1 - z.life / z.maxLife;
+        floor.lineStyle(2, 0xc8ffc8, 1 - t).strokeRect(z.x - 10 - 8 * t, z.y - 10 - 8 * t, 20 + 16 * t, 20 + 16 * t);
+      } else if (z.kind === "craftbuff") {
+        // Crafted! Golden rings rise around him: damage x2 for good.
+        const t = 1 - z.life / z.maxLife;
+        for (let i = 0; i < 3; i++) sky.lineStyle(2, 0xffd23f, 1 - t).strokeEllipse(z.x, z.y - 40 * t - i * 10, 30, 10);
       } else if (z.kind === "asgard") {
         // Loki's illusion: golden Asgard rises out of the ground.
         floor.fillStyle(0xffd86a, 0.16 * fade).fillCircle(z.x, z.y, z.radius);
@@ -1505,6 +1586,12 @@ export class GameScene extends Phaser.Scene {
     });
     for (const [id, img] of this.zoneImages) {
       if (seen.has(id)) continue;
+      if (img.getData("truck")) {
+        // The truck hits the ground.
+        this.effects.push({ kind: "blast", x: img.x, y: img.y, aim: 0, range: 60, arc: 1, age: 0, life: 0.45 });
+        this.cameras.main.shake(400, 0.025);
+        this.sparks.explode(40, img.x, img.y);
+      }
       img.destroy();
       this.zoneImages.delete(id);
     }
