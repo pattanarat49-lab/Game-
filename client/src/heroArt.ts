@@ -2,7 +2,7 @@
 // Each one has a picture per facing (4, or 8 with diagonals): the game shows the one closest to where the hero aims.
 
 import { HERO_SPRITES, renderPixelSprite } from "./art";
-import { HERO_ART_DATA, HERO_ATTACK_DATA } from "./heroArt.data";
+import { HERO_ART_DATA, HERO_ATTACK_DATA, PROP_ART_DATA } from "./heroArt.data";
 
 export type Facing = "south" | "east" | "north" | "west" | "south-east" | "north-east" | "north-west" | "south-west";
 
@@ -78,11 +78,12 @@ export function attackFrame(hero: string, aim: number, t: number): { texture: st
   return { texture: `hero_${hero}_atk_${dir}_${i}`, flip };
 }
 
-/** Load every facing picture as a Phaser texture named `hero_<id>_<facing>`. */
+/** Load every facing picture as a Phaser texture named `hero_<id>_<facing>` (plus swing frames and prop pictures). */
 export function loadHeroArt(load: Phaser.Loader.LoaderPlugin) {
   for (const [hero, frames] of Object.entries(HERO_ART_DATA)) {
     for (const [facing, uri] of Object.entries(frames)) load.image(`hero_${hero}_${facing}`, uri);
   }
+  for (const [name, uri] of Object.entries(PROP_ART_DATA)) load.image(name, uri);
   for (const [hero, swing] of Object.entries(HERO_ATTACK_DATA)) {
     for (const [dir, list] of Object.entries(swing)) list!.forEach((uri, i) => load.image(`hero_${hero}_atk_${dir}_${i}`, uri));
   }

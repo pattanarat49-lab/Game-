@@ -173,7 +173,6 @@ export class BootScene extends Phaser.Scene {
     this.addCanvas("holy", renderPixelSprite(HOLY_ORB));
     this.addCanvas("stone", renderPixelSprite(WATER_ORB));
     this.addCanvas("lokishot", renderPixelSprite(LOKI_ORB));
-    this.addCanvas("asgard", this.drawAsgard());
     this.addCanvas("titanform", renderPixelSprite(TITAN_FORM));
     this.addCanvas("human", renderPixelSprite(HUMAN));
     this.addCanvas("monkey", renderPixelSprite(MONKEY));
@@ -405,62 +404,6 @@ export class BootScene extends Phaser.Scene {
         if (x * x + y * y <= r * r) ctx.fillRect(Math.round(cx + x), Math.round(cy + y), 1, 1);
       }
     }
-  }
-
-  /** Loki's illusion: the golden city of Asgard, towers and spires catching the light. */
-  private drawAsgard(): HTMLCanvasElement {
-    const W = 200;
-    const H = 150;
-    const canvas = document.createElement("canvas");
-    canvas.width = W;
-    canvas.height = H;
-    const ctx = canvas.getContext("2d")!;
-    const rand = seeded(9);
-    const px = (x: number, y: number, w: number, h: number, c: string) => {
-      ctx.fillStyle = c;
-      ctx.fillRect(Math.round(x), Math.round(y), Math.round(w), Math.round(h));
-    };
-    // Rainbow bridge (Bifrost) running out of the city.
-    const bifrost = ["#ff5a5a", "#ffb04a", "#ffe86a", "#6ae08a", "#5ab4ff", "#9a7aff"];
-    bifrost.forEach((c, i) => px(0, H - 18 + i, W * 0.42, 1, c));
-    // Towers, back to front: [centre x, width, height]
-    const towers: [number, number, number][] = [
-      [30, 14, 60], [170, 14, 64], [55, 16, 82], [145, 16, 86], [78, 18, 104], [122, 18, 100], [100, 26, 136],
-    ];
-    for (const [cx, w, h] of towers) {
-      const x0 = cx - w / 2;
-      const top = H - 12 - h;
-      // body with light on the left, shade on the right
-      px(x0 - 1, top, w + 2, h, "#5a3a0a");
-      px(x0, top, w, h, "#e0a832");
-      px(x0, top, w * 0.3, h, "#ffd86a");
-      px(x0 + w * 0.75, top, w * 0.25, h, "#b07a1e");
-      // gold bands and glowing windows
-      for (let y = top + 6; y < H - 16; y += 10) {
-        px(x0, y, w, 1, "#fff0b0");
-        for (let x = x0 + 3; x < x0 + w - 3; x += 5) if (rand() < 0.8) px(x, y + 3, 2, 3, "#fff8d8");
-      }
-      // spire
-      for (let i = 0; i < w / 2 + 6; i++) {
-        const half = Math.max(0.5, w / 2 - i * (w / (w + 12)));
-        px(cx - half, top - i, half * 2, 1, i % 3 === 0 ? "#fff0b0" : "#e7b83a");
-      }
-      px(cx, top - w / 2 - 10, 1, 4, "#ffffff");
-    }
-    // Dome on the great hall
-    for (let i = 0; i < 12; i++) {
-      const half = Math.sqrt(144 - i * i) * 1.3;
-      px(100 - half, H - 52 - i, half * 2, 1, i < 4 ? "#ffd86a" : "#e0a832");
-    }
-    // The wall and gate in front
-    px(10, H - 22, W - 20, 12, "#5a3a0a");
-    px(11, H - 21, W - 22, 10, "#c99428");
-    for (let x = 12; x < W - 12; x += 6) px(x, H - 24, 3, 3, "#e7b83a");
-    px(92, H - 20, 16, 10, "#3a2400");
-    px(94, H - 18, 12, 8, "#ffe9a0");
-    // Sparkles
-    for (let i = 0; i < 40; i++) px(rand() * W, rand() * (H - 30), 1, 1, "#ffffff");
-    return canvas;
   }
 
   /** Yaotsu's CREATOR: a whole modern city skyline, glass towers and lit windows. */

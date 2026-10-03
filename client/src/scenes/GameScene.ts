@@ -2002,7 +2002,7 @@ export class GameScene extends Phaser.Scene {
         floor.lineStyle(1, 0xfff0b0, 0.6 * fade).strokeCircle(z.x, z.y, z.radius - 6 + Math.sin(now / 200) * 3);
         let img = this.zoneImages.get(id);
         if (!img) {
-          img = this.add.image(z.x, z.y, "asgard").setOrigin(0.5, 0.75).setDepth(-2).setScale(1.6);
+          img = this.add.image(z.x, z.y, "asgard").setOrigin(0.5, 0.8).setDepth(-2).setScale(2.6);
           this.zoneImages.set(id, img);
         }
         img.setAlpha(0.9 * fade);
