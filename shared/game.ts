@@ -717,7 +717,19 @@ export const HEROES: Record<HeroId, HeroDef> = {
   },
 };
 
-export const HERO_IDS = (Object.keys(HEROES) as HeroId[]).filter((id) => !HEROES[id].summon);
+/**
+ * Pickable heroes, ranked by how strong they are in the PvP Arena: weakest first, strongest last.
+ * The character select shows them in this order. Heroes missing here go at the end.
+ */
+const PVP_RANKING: HeroId[] = [
+  "lawliet", "healer", "titan", "trainer", "howl", "rudeus", "loki", "isekai", "vampire", "kid",
+  "rick", "thorfinn", "deku", "okita", "sakamoto", "hanuman", "joyboy", "doraemon", "agamemnon", "killua",
+  "rider", "gojo", "superman", "badigadi", "starplatinum", "ricardo", "simo", "yaotsu", "saitama",
+];
+export const HERO_IDS = [
+  ...PVP_RANKING,
+  ...(Object.keys(HEROES) as HeroId[]).filter((id) => !PVP_RANKING.includes(id)),
+].filter((id) => !HEROES[id].summon);
 
 export function heroOf(id: string): HeroDef {
   return HEROES[id as HeroId] ?? HEROES.superman;
