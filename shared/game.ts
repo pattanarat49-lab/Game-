@@ -412,18 +412,22 @@ export interface EnemyDef {
   touchDamage: number;
   score: number;
   shootEvery?: number; // seconds between shots
+  shotDamage?: number; // damage per shot (default ENEMY_SHOT_DAMAGE)
 }
+
+const ENEMY_SHOT_DAMAGE_BASE = 12;
 
 export const ENEMIES: Record<EnemyKind, EnemyDef> = {
   cinderling: { hp: 20, speed: 70, radius: 5, touchDamage: 8, score: 10 },
   brute: { hp: 90, speed: 38, radius: 9, touchDamage: 20, score: 30 },
   caster: { hp: 35, speed: 45, radius: 6, touchDamage: 6, score: 20, shootEvery: 2.2 },
   warden: { hp: 1400, speed: 30, radius: 18, touchDamage: 30, score: 500, shootEvery: 1.6 },
-  godzilla: { hp: 3500, speed: 24, radius: 22, touchDamage: 35, score: 2000, shootEvery: 3 },
+  // Godzilla: basic attacks (stomp and fireballs) hit 3x harder than other bosses; the beam is BEAM_DAMAGE.
+  godzilla: { hp: 7000, speed: 24, radius: 22, touchDamage: 105, score: 2000, shootEvery: 3, shotDamage: ENEMY_SHOT_DAMAGE_BASE * 3 },
 };
 
 export const ENEMY_SHOT_SPEED = 140;
-export const ENEMY_SHOT_DAMAGE = 12;
+export const ENEMY_SHOT_DAMAGE = ENEMY_SHOT_DAMAGE_BASE;
 
 // Waves: how many of each enemy type spawn.
 export const WAVES: Partial<Record<EnemyKind, number>>[] = [

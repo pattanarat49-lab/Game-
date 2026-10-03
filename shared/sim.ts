@@ -942,7 +942,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
         if (brain.shootTimer <= 0) {
           brain.shootTimer = def.shootEvery;
           const aim = Math.atan2(dy, dx);
-          const shot = { damage: ENEMY_SHOT_DAMAGE, pierce: 0, life: 6 };
+          const shot = { damage: def.shotDamage ?? ENEMY_SHOT_DAMAGE, pierce: 0, life: 6 };
           if (e.kind === "godzilla") {
             // A fan of atomic fireballs between beams.
             for (let i = -2; i <= 2; i++) this.spawnBullet("enemy", e.x, e.y, aim + i * 0.22, ENEMY_SHOT_SPEED * 1.1, shot);
