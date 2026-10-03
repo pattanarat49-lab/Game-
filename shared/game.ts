@@ -188,12 +188,12 @@ export const HEROES: Record<HeroId, HeroDef> = {
   ricardo: {
     name: "Champ Rico",
     role: "Boxer",
-    blurb: "Boxer with very short reach. JAB fires a long straight jab that stuns enemies for 0.5s.",
+    blurb: "Fast boxer (1.5x speed) with very short reach. JAB fires a long straight jab that stuns enemies for 0.5s.",
     stars: 1,
     maxHp: 170,
-    speed: 115,
+    speed: 173, // 1.5x his old pace
     attack: "punch",
-    attackCooldown: 0.55,
+    attackCooldown: 0.3,
     damage: 45,
     range: 16,
     arc: 1.2,

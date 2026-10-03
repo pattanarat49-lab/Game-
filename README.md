@@ -19,7 +19,7 @@ Design doc: see `docs/game-design-foundation.md`.
   - **Frost Sniper:** sniper with very long range and huge damage, but a slow reload. Shots pierce. Skill FROST VOLLEY fires three rapid shots.
   - **Volt Kid:** three times faster than anyone. Attacks call down lightning that hits an area. Skill THUNDERBOLT strikes everything around him.
   - **Sky Wizard:** long-range magic orbs that explode in a wide blast. Skill FIRE SPIRIT throws a big fireball with a huge explosion.
-  - **Champ Rico:** boxer with very short reach. Skill JAB (1s cooldown) fires a long straight jab that stuns monsters and rival players for 0.5 seconds (bosses are not stunned).
+  - **Champ Rico:** fast boxer (1.5x speed, quick punches) with very short reach. Skill JAB (1s cooldown) fires a long straight jab that stuns monsters and rival players for 0.5 seconds (bosses are not stunned).
   - **Plain Hero:** 100x the HP of anyone else. Skill FINAL BLOW kills anything in front of him (Reborn Knight's reach).
   - **Holy Healer:** holy bolts from range. Skill HEAL restores 50% max HP to every ally nearby (and himself).
   - **Green Rookie:** runs 1.5x faster. Skill FULL POWER SMASH blasts a wide straight line.
