@@ -624,9 +624,9 @@ export class GameScene extends Phaser.Scene {
       const skill2 = heroOf(p.hero).skill2;
       const batNow = !p.dead && p.active2 > 0 && skill2?.kind === "bat";
       const look = humanized ? "human" : titanNow ? "titanform" : batNow ? "batform" : `hero_${p.hero}`;
-      // Heroes with hand-made art turn to face where they aim (4 facings) instead of mirroring.
+      // Heroes with hand-made art turn to face where they aim (4 or 8 facings) instead of mirroring.
       const art = look === `hero_${p.hero}` && hasHeroArt(p.hero);
-      const texture = art ? `${look}_${facingOf(aim)}` : look;
+      const texture = art ? `${look}_${facingOf(aim, p.hero)}` : look;
       if (art) body.setFlipX(false);
       const artScale = art ? heroArtLayout(p.hero).scale : 1;
       body.setScale(k * artScale * (titanNow && !humanized ? 2.6 : humanized ? 1 : SUMMON_SCALE[p.hero] ?? 1));

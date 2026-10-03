@@ -1,10 +1,13 @@
 // Heroes drawn from hand-made pictures (see scripts/embed-hero-art.mjs) instead of pixel grids.
-// Each one has a picture per facing: the game shows the one closest to where the hero aims.
+// Each one has a picture per facing (4, or 8 with diagonals): the game shows the one closest to where the hero aims.
 
 import { HERO_SPRITES, renderPixelSprite } from "./art";
 import { HERO_ART_DATA } from "./heroArt.data";
 
-export type Facing = "south" | "east" | "north" | "west";
+export type Facing = "south" | "east" | "north" | "west" | "south-east" | "north-east" | "north-west" | "south-west";
+
+// Facings in order of screen angle (0 = east; screen y grows downward, so +90 degrees is south).
+const EIGHT: Facing[] = ["east", "south-east", "south", "south-west", "west", "north-west", "north", "north-east"];
 
 /** How each picture sits in the world: its scale (vs. a pixel-grid hero) and where its feet are. */
 interface ArtLayout {
@@ -24,12 +27,13 @@ export function heroArtLayout(hero: string): ArtLayout {
   return LAYOUT[hero] ?? { scale: 1, originY: 0.95 };
 }
 
-/** The facing for an aim angle (screen y grows downward, so south faces the viewer). */
-export function facingOf(aim: number): Facing {
-  const c = Math.cos(aim);
-  const s = Math.sin(aim);
-  if (Math.abs(c) >= Math.abs(s)) return c >= 0 ? "east" : "west";
-  return s >= 0 ? "south" : "north";
+/** The facing for an aim angle: the nearest of 8 if the hero has diagonal pictures, else of 4. */
+export function facingOf(aim: number, hero: string): Facing {
+  const eight = !!HERO_ART_DATA[hero]?.["south-east"];
+  const step = eight ? Math.PI / 4 : Math.PI / 2;
+  const n = Math.round(aim / step);
+  const i = (((n * (eight ? 1 : 2)) % 8) + 8) % 8;
+  return EIGHT[i];
 }
 
 /** Load every facing picture as a Phaser texture named `hero_<id>_<facing>`. */
