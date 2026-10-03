@@ -8,6 +8,15 @@ import {
   GODZILLA,
   ENEMY_SHOT,
   HERO_SPRITES,
+  TRIDENT,
+  RAYGUN,
+  PISTOL,
+  AIR_CANNON,
+  LASER_SHOT,
+  MISSILE,
+  AIR_ORB,
+  DRAGON_FIRE,
+  cardSprite,
   BANANA,
   BANANA_MONKEY,
   BOULDER,
@@ -113,6 +122,15 @@ export class BootScene extends Phaser.Scene {
     this.addCanvas("knife", renderPixelSprite(KNIFE));
     this.addCanvas("machinegun", renderPixelSprite(MACHINE_GUN));
     this.addCanvas("bullet", renderPixelSprite(MG_SHOT));
+    this.addCanvas("trident", renderPixelSprite(TRIDENT));
+    this.addCanvas("raygun", renderPixelSprite(RAYGUN));
+    this.addCanvas("pistol", renderPixelSprite(PISTOL));
+    this.addCanvas("aircannon", renderPixelSprite(AIR_CANNON));
+    this.addCanvas("laser", renderPixelSprite(LASER_SHOT));
+    this.addCanvas("missile", renderPixelSprite(MISSILE));
+    this.addCanvas("air", renderPixelSprite(AIR_ORB));
+    this.addCanvas("dragonfire", renderPixelSprite(DRAGON_FIRE));
+    for (let n = 1; n <= 9; n++) this.addCanvas(`card${n}`, renderPixelSprite(cardSprite(n)));
     this.addCanvas("magic", renderPixelSprite(MAGIC_ORB));
     this.addCanvas("calcifer", renderPixelSprite(CALCIFER));
     this.addCanvas("holy", renderPixelSprite(HOLY_ORB));

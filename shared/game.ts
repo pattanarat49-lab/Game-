@@ -41,7 +41,17 @@ export type HeroId =
   | "thorfinn"
   | "titan"
   | "yaotsu"
-  | "sakamoto";
+  | "sakamoto"
+  | "joyboy"
+  | "rick"
+  | "doraemon"
+  | "trainer"
+  | "kid"
+  | "hanuman"
+  | "badigadi"
+  | "gunbot"
+  | "sparkmouse"
+  | "flamedragon";
 export type AttackStyle = "punch" | "sword" | "rifle" | "lightning" | "magic";
 export type SkillKind =
   | "smash"
@@ -64,7 +74,15 @@ export type SkillKind =
   | "titan" // transform into a giant: basic attacks hit all around
   | "city" // build a whole city that heals the caster inside it
   | "reality" // every enemy becomes an ordinary human for a while
-  | "swap"; // switch between the hero's normal attack and their gun
+  | "swap" // switch between the hero's normal attack and their gun
+  | "gatling" // a storm of punches down a lane
+  | "portal" // two linked portals: walk into one, come out of the other
+  | "missiles" // homing missiles
+  | "rewind" // everything goes back a couple of seconds
+  | "summon" // call out helpers that fight on their own
+  | "card" // a thrown card that takes a random share of the target's HP
+  | "revive" // get straight back up if you fall soon after
+  | "immortal"; // a barrier that blocks all damage and heals
 
 export interface SkillDef {
   kind: SkillKind;
@@ -74,6 +92,8 @@ export interface SkillDef {
   radius: number; // area of effect, or reach for waves, jabs and lines
   width?: number; // for "line"
   duration?: number; // for lasting skills (time stop, storms, illusions, clones)
+  count?: number; // how many missiles or summons
+  pet?: HeroId; // for "summon": which helper comes out (damage = its share of the summoner's max HP)
 }
 
 export interface HeroDef {
@@ -97,6 +117,8 @@ export interface HeroDef {
   skill2?: SkillDef; // a second skill (E key / second button)
   /** A gun mode the "swap" skill switches to: basic attacks fire this instead. */
   gun?: { attackCooldown: number; damage: number; range: number; shotSpeed: number; spread: number };
+  /** Helpers called out by skills: not shown on the hero select screen. */
+  summon?: boolean;
 }
 
 export const HEROES: Record<HeroId, HeroDef> = {
@@ -432,9 +454,194 @@ export const HEROES: Record<HeroId, HeroDef> = {
     gun: { attackCooldown: 0.06, damage: 6, range: 240, shotSpeed: 520, spread: 0.08 },
     skill: { kind: "swap", name: "SWAP MODE", cooldown: 0.8, damage: 0, radius: 0 },
   },
+  joyboy: {
+    name: "Rubber Pirate",
+    role: "Rubber brawler",
+    blurb: "1.5x HP. Stretchy punches reach further. GATLING PUNCH fires a storm of fists down a medium-range lane.",
+    stars: 4,
+    maxHp: 180,
+    speed: 110,
+    attack: "punch",
+    attackCooldown: 0.4,
+    damage: 30,
+    range: 30,
+    arc: 1.2,
+    aoe: 0,
+    shotSpeed: 0,
+    pierce: 0,
+    // GATLING PUNCH: `damage` per hit, every 0.1s for `duration`, in a lane `radius` long and `width` wide.
+    skill: { kind: "gatling", name: "GATLING PUNCH", cooldown: 6, damage: 14, radius: 110, width: 40, duration: 1 },
+  },
+  rick: {
+    name: "Mad Scientist",
+    role: "Inventor",
+    blurb: "Laser gun. PORTAL GUN: shoot one portal, then another; walk into one to come out of the other. MISSILES: 10 homing missiles that chase targets until they hit.",
+    stars: 5,
+    maxHp: 110,
+    speed: 110,
+    attack: "magic",
+    attackCooldown: 0.45,
+    damage: 22,
+    range: 260,
+    arc: 0,
+    aoe: 0,
+    shotSpeed: 420,
+    pierce: 0,
+    shot: "laser",
+    // PORTAL GUN: each press opens a portal up to `radius` ahead; the pair stays open `duration` seconds.
+    skill: { kind: "portal", name: "PORTAL GUN", cooldown: 8, damage: 0, radius: 160, duration: 20 },
+    skill2: { kind: "missiles", name: "MISSILES", cooldown: 14, damage: 25, radius: 0, count: 10, duration: 8 },
+  },
+  doraemon: {
+    name: "Gadget Cat",
+    role: "Robot cat",
+    blurb: "1.5x HP. Air cannon blasts. TIME MACHINE turns everything back 2 seconds. GUNNER BOTS: 6 little gunner robots (15% of his HP each).",
+    stars: 5,
+    maxHp: 180,
+    speed: 100,
+    attack: "magic",
+    attackCooldown: 0.6,
+    damage: 26,
+    range: 220,
+    arc: 0,
+    aoe: 30,
+    shotSpeed: 260,
+    pierce: 0,
+    shot: "air",
+    skill: { kind: "rewind", name: "TIME MACHINE", cooldown: 20, damage: 0, radius: 0, duration: 2 },
+    skill2: { kind: "summon", name: "GUNNER BOTS", cooldown: 22, damage: 0.15, radius: 0, count: 6, duration: 15, pet: "gunbot" },
+  },
+  trainer: {
+    name: "Monster Tamer",
+    role: "Tamer",
+    blurb: "Weak, slow punches. SPARK MOUSE: a fast electric mouse (60% HP) zaps enemies. FLAME DRAGON: a big fire dragon (200% HP). Pets stay until they fall or the Tamer does.",
+    stars: 4,
+    maxHp: 110,
+    speed: 110,
+    attack: "punch",
+    attackCooldown: 0.9,
+    damage: 10,
+    range: 18,
+    arc: 1.2,
+    aoe: 0,
+    shotSpeed: 0,
+    pierce: 0,
+    skill: { kind: "summon", name: "SPARK MOUSE", cooldown: 15, damage: 0.6, radius: 0, count: 1, pet: "sparkmouse" },
+    skill2: { kind: "summon", name: "FLAME DRAGON", cooldown: 18, damage: 2, radius: 0, count: 1, pet: "flamedragon" },
+  },
+  kid: {
+    name: "Phantom Thief",
+    role: "Magician",
+    blurb: "Runs 1.3x faster, card-gun shots. DRAW CARD throws a random card 1-9: it takes 10-90% of the target's max HP (1-9% on bosses).",
+    stars: 4,
+    maxHp: 115,
+    speed: 143,
+    attack: "magic",
+    attackCooldown: 0.4,
+    damage: 18,
+    range: 220,
+    arc: 0,
+    aoe: 0,
+    shotSpeed: 420,
+    pierce: 0,
+    shot: "bullet",
+    skill: { kind: "card", name: "DRAW CARD", cooldown: 7, damage: 0.1, radius: 260 },
+  },
+  hanuman: {
+    name: "Hanuman",
+    role: "Monkey god",
+    blurb: "Runs 1.5x faster, quick trident thrusts. REVIVE: for 5s after pressing it, falling brings him straight back up.",
+    stars: 4,
+    maxHp: 130,
+    speed: 165,
+    attack: "sword",
+    attackCooldown: 0.25,
+    damage: 20,
+    range: 36,
+    arc: 0.9,
+    aoe: 0,
+    shotSpeed: 0,
+    pierce: 0,
+    // REVIVE: if he falls within `duration` seconds, he gets back up with `damage` of his max HP.
+    skill: { kind: "revive", name: "REVIVE", cooldown: 25, damage: 0.5, radius: 0, duration: 5 },
+  },
+  badigadi: {
+    name: "Demon Lord",
+    role: "Four-armed demon",
+    blurb: "3x HP, runs 1.2x faster. Slow, crushing four-armed blows hit a wide area. IMMORTAL: a barrier blocks all damage for 3s and heals 10% HP/s.",
+    stars: 5,
+    maxHp: 360,
+    speed: 132,
+    attack: "punch",
+    attackCooldown: 1.1,
+    damage: 65,
+    range: 44,
+    arc: 3.2,
+    aoe: 0,
+    shotSpeed: 0,
+    pierce: 0,
+    skill: { kind: "immortal", name: "IMMORTAL", cooldown: 18, damage: 0.1, radius: 0, duration: 3 },
+  },
+  // Summons (not pickable): their HP comes from the summoner's skill.
+  gunbot: {
+    name: "Gunner Bot",
+    role: "Summon",
+    blurb: "",
+    stars: 1,
+    summon: true,
+    maxHp: 1,
+    speed: 110,
+    attack: "magic",
+    attackCooldown: 0.5,
+    damage: 8,
+    range: 200,
+    arc: 0,
+    aoe: 0,
+    shotSpeed: 380,
+    pierce: 0,
+    shot: "bullet",
+    skill: { kind: "passive", name: "", cooldown: 1, damage: 0, radius: 0 },
+  },
+  sparkmouse: {
+    name: "Spark Mouse",
+    role: "Summon",
+    blurb: "",
+    stars: 1,
+    summon: true,
+    maxHp: 1,
+    speed: 220,
+    attack: "lightning",
+    attackCooldown: 0.8,
+    damage: 18,
+    range: 60,
+    arc: 0,
+    aoe: 34,
+    shotSpeed: 0,
+    pierce: 0,
+    skill: { kind: "passive", name: "", cooldown: 1, damage: 0, radius: 0 },
+  },
+  flamedragon: {
+    name: "Flame Dragon",
+    role: "Summon",
+    blurb: "",
+    stars: 1,
+    summon: true,
+    maxHp: 1,
+    speed: 165,
+    attack: "magic",
+    attackCooldown: 1,
+    damage: 30,
+    range: 200,
+    arc: 0,
+    aoe: 40,
+    shotSpeed: 200,
+    pierce: 0,
+    shot: "dragonfire",
+    skill: { kind: "passive", name: "", cooldown: 1, damage: 0, radius: 0 },
+  },
 };
 
-export const HERO_IDS = Object.keys(HEROES) as HeroId[];
+export const HERO_IDS = (Object.keys(HEROES) as HeroId[]).filter((id) => !HEROES[id].summon);
 
 export function heroOf(id: string): HeroDef {
   return HEROES[id as HeroId] ?? HEROES.superman;

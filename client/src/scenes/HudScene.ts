@@ -77,7 +77,7 @@ export class HudScene extends Phaser.Scene {
       this.hpText.setText(`${me.name} (${heroOf(me.hero).name})  HP ${invincible ? "INFINITE" : `${Math.ceil(me.hp)}/${me.maxHp}`}`);
       const dash = me.dashCooldown > 0 ? `${me.dashCooldown.toFixed(1)}s` : "READY";
       const hero = heroOf(me.hero);
-      const skill = hero.skill.kind === "swap" ? `NOW ${me.mode === 1 ? "GUN" : "KNIFE"}` : hero.skill.kind === "passive" ? "PASSIVE" : me.titan > 0 ? `ACTIVE ${me.titan.toFixed(1)}s` : me.skillCooldown > 0 ? `${me.skillCooldown.toFixed(1)}s` : "READY";
+      const skill = hero.skill.kind === "swap" ? `NOW ${me.mode === 1 ? "GUN" : "KNIFE"}` : hero.skill.kind === "passive" ? "PASSIVE" : me.titan > 0 || me.barrier > 0 || me.revive > 0 ? `ACTIVE ${Math.max(me.titan, me.barrier, me.revive).toFixed(1)}s` : me.skillCooldown > 0 ? `${me.skillCooldown.toFixed(1)}s` : "READY";
       const lines = [`DASH   ${dash}`, `${hero.skill.name.padEnd(6)} ${skill}`];
       const skill2Ready = hero.skill2 ? 1 - me.skill2Cooldown / hero.skill2.cooldown : 1;
       if (hero.skill2) lines.push(`${hero.skill2.name.padEnd(6)} ${me.skill2Cooldown > 0 ? `${me.skill2Cooldown.toFixed(1)}s` : "READY"}`);
@@ -142,6 +142,7 @@ export class HudScene extends Phaser.Scene {
     state.zones?.forEach((z: any) => {
       if (z.kind === "domain") [special, color] = ["VOID REALM", "#c9a8ff"];
       else if (z.kind === "city" && !special) [special, color] = [z.maxLife - z.life < 1.5 ? "CREATOR" : "", "#e8f0ff"];
+      else if (z.kind === "rewind") [special, color] = ["TIME MACHINE", "#9fd8ff"];
       else if (z.kind === "asgard" && !special) [special, color] = [z.maxLife - z.life < 1.5 ? "ILLUSION: GOLDEN CITY" : "", "#ffd86a"];
     });
     if (state.reality > 0) {

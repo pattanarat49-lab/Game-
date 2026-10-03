@@ -27,6 +27,8 @@ export class Player extends Schema {
   @type("float32") kby = 0;
   @type("uint8") kbSeq = 0;
   @type("uint8") mode = 0;
+  @type("float32") revive = 0;
+  @type("float32") barrier = 0;
   @type("float32") stun = 0;
 }
 

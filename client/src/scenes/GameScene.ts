@@ -52,7 +52,7 @@ interface PlayerView {
 
 /** A short-lived swing, slash or shockwave drawn on top of the world. */
 interface Effect {
-  kind: "punch" | "sword" | "smash" | "muzzle" | "bolt" | "storm" | "blast" | "impact" | "heal" | "line" | "slashes" | "ripple" | "jab";
+  kind: "punch" | "sword" | "smash" | "muzzle" | "bolt" | "storm" | "blast" | "impact" | "heal" | "line" | "slashes" | "ripple" | "jab" | "gatling" | "rewind";
   x: number;
   y: number;
   aim: number;
@@ -60,9 +60,11 @@ interface Effect {
   arc: number;
   age: number;
   life: number;
+  /** Stays on this player as they move (GATLING PUNCH). */
+  follow?: PlayerView;
 }
 
-const WEAPON_TEXTURE: Record<string, string | undefined> = { isekai: "sword", simo: "rifle", okita: "sword", sakamoto: "knife" };
+const WEAPON_TEXTURE: Record<string, string | undefined> = { isekai: "sword", simo: "rifle", okita: "sword", sakamoto: "knife", hanuman: "trident", rick: "raygun", kid: "pistol", doraemon: "aircannon" };
 const BULLET_TEXTURE: Record<string, string> = {
   snipe: "snipe",
   wave: "wave",
@@ -77,7 +79,13 @@ const BULLET_TEXTURE: Record<string, string> = {
   boulder: "boulder",
   bullet: "bullet",
   slash: "slash",
+  laser: "laser",
+  missile: "missile",
+  air: "air",
+  dragonfire: "dragonfire",
 };
+/** Summons drawn bigger than their pixel art. */
+const SUMMON_SCALE: Record<string, number> = { flamedragon: 1.4 };
 const PLAYER_MARKERS = [0x3b7dd8, 0xd84b3b, 0x3bd87a, 0xc93bd8];
 
 interface EnemyView {
@@ -507,6 +515,8 @@ export class GameScene extends Phaser.Scene {
         if (p.owner) {
           view.label.setColor("#9fffb0");
           this.sparks.explode(16, p.x, p.y - 6);
+          view.body.setScale(SUMMON_SCALE[p.hero] ?? 1);
+          if (p.hero === "gunbot") view.label.setVisible(false); // six name tags would bury the squad
         }
         this.players.set(id, view);
       }
@@ -535,6 +545,7 @@ export class GameScene extends Phaser.Scene {
         view.weapon.setVisible(!p.dead);
       }
       this.playAttackEffects(view, p, body.x, body.y - 5, aim);
+      const helper = !!heroOf(p.hero).summon; // pets and gunner bots look like themselves, not ghostly clones
 
       // Titan form: a giant body for the duration.
       const titanNow = p.titan > 0 && !p.dead;
@@ -542,7 +553,7 @@ export class GameScene extends Phaser.Scene {
       const humanized = state.reality > 0 && state.stage === "pvp" && (p.owner || id) !== state.realityBy && !p.dead;
       const texture = humanized ? "human" : titanNow ? "titanform" : `hero_${p.hero}`;
       if (body.texture.key !== texture) {
-        body.setTexture(texture).setScale(titanNow && !humanized ? 2.6 : 1);
+        body.setTexture(texture).setScale(titanNow && !humanized ? 2.6 : humanized ? 1 : SUMMON_SCALE[p.hero] ?? 1);
         if (titanNow) {
           this.effects.push({ kind: "bolt", x: body.x, y: body.y, aim: 0, range: 60, arc: 0, age: 0, life: 0.5 });
           this.cameras.main.shake(400, 0.02);
@@ -560,15 +571,25 @@ export class GameScene extends Phaser.Scene {
       const stoppedHere = state.timeStop > 0 && state.timeStopBy !== id;
       if (view.hurtFlash > 0) body.setTintFill(0xff4040);
       else if (stoppedHere) body.setTint(0x8a93b8);
-      else if (p.owner) body.setTint(0xb8ffc8);
+      else if (p.owner && !helper) body.setTint(0xb8ffc8);
       else body.clearTint();
-      if (p.owner && !p.dead) body.setAlpha(0.8);
+      if (p.owner && !helper && !p.dead) body.setAlpha(0.8);
 
       view.bar.clear();
       if (!p.dead) {
         view.bar.fillStyle(PLAYER_MARKERS[p.color % 4], 0.5).fillEllipse(body.x, body.y + 1, 14, 5);
         view.bar.fillStyle(0x000000, 0.7).fillRect(body.x - 8, body.y + 4, 16, 2);
         view.bar.fillStyle(0x4cd964, 1).fillRect(body.x - 8, body.y + 4, 16 * (p.hp / p.maxHp), 2);
+        const pulse = 0.5 + 0.5 * Math.sin(this.time.now / 120);
+        if (p.barrier > 0) {
+          // IMMORTAL: a dark-violet barrier around the Demon Lord.
+          view.bar.fillStyle(0x9a4aff, 0.18 + 0.1 * pulse).fillCircle(body.x, body.y - 9, 17);
+          view.bar.lineStyle(2, 0xd8a8ff, 0.7 + 0.3 * pulse).strokeCircle(body.x, body.y - 9, 17);
+        }
+        if (p.revive > 0) {
+          // REVIVE is armed: a golden halo.
+          view.bar.lineStyle(1, 0xffd23f, 0.6 + 0.4 * pulse).strokeEllipse(body.x, body.y - 22, 12, 4);
+        }
       }
       view.bar.setDepth(999);
 
@@ -628,11 +649,11 @@ export class GameScene extends Phaser.Scene {
     }
     if (p.skillSeq !== view.skillSeq) {
       view.skillSeq = p.skillSeq;
-      if (!(isMe && this.takePredicted(this.predictedSkills))) this.playSkillEffect(hero.skill, x, y, aim);
+      if (!(isMe && this.takePredicted(this.predictedSkills))) this.playSkillEffect(hero.skill, x, y, aim, view);
     }
     if (hero.skill2 && p.skill2Seq !== view.skill2Seq) {
       view.skill2Seq = p.skill2Seq;
-      if (!(isMe && this.takePredicted(this.predictedSkills2))) this.playSkillEffect(hero.skill2, x, y, aim);
+      if (!(isMe && this.takePredicted(this.predictedSkills2))) this.playSkillEffect(hero.skill2, x, y, aim, view);
     }
   }
 
@@ -671,12 +692,12 @@ export class GameScene extends Phaser.Scene {
     if (input.skill && me.skillCooldown <= 0 && this.localSkillLock <= 0 && hero.skill.kind !== "passive") {
       this.localSkillLock = lock;
       this.predictedSkills.push(performance.now());
-      this.playSkillEffect(hero.skill, x, y, this.aim);
+      this.playSkillEffect(hero.skill, x, y, this.aim, this.players.get(room.sessionId));
     }
     if (hero.skill2 && input.skill2 && me.skill2Cooldown <= 0 && this.localSkill2Lock <= 0) {
       this.localSkill2Lock = lock;
       this.predictedSkills2.push(performance.now());
-      this.playSkillEffect(hero.skill2, x, y, this.aim);
+      this.playSkillEffect(hero.skill2, x, y, this.aim, this.players.get(room.sessionId));
     }
   }
 
@@ -702,7 +723,7 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  private playSkillEffect(skill: SkillDef, x: number, y: number, aim: number) {
+  private playSkillEffect(skill: SkillDef, x: number, y: number, aim: number, view?: PlayerView) {
     const cam = this.cameras.main;
     switch (skill.kind) {
       case "smash":
@@ -765,6 +786,35 @@ export class GameScene extends Phaser.Scene {
       case "swap": // a quick flourish as the weapon changes hands
         this.sparks.explode(6, x, y);
         break;
+      case "gatling":
+        this.effects.push({ kind: "gatling", x, y, aim, range: skill.radius, arc: skill.width ?? 40, age: 0, life: skill.duration ?? 1, follow: view });
+        cam.shake(150, 0.005);
+        break;
+      case "portal":
+        this.effects.push({ kind: "muzzle", x, y, aim, range: 12, arc: 0, age: 0, life: 0.12 });
+        break;
+      case "missiles":
+        this.sparks.explode(14, x, y);
+        cam.shake(120, 0.006);
+        break;
+      case "rewind":
+        // TIME MACHINE: the world spins back.
+        this.effects.push({ kind: "rewind", x, y, aim, range: 420, arc: 0, age: 0, life: 0.8 });
+        cam.flash(250, 140, 190, 255);
+        break;
+      case "summon":
+        this.sparks.explode(24, x, y);
+        break;
+      case "card":
+        this.effects.push({ kind: "muzzle", x, y, aim, range: 10, arc: 0, age: 0, life: 0.1 });
+        break;
+      case "revive":
+        this.effects.push({ kind: "heal", x, y: y + 5, aim, range: 30, arc: 0, age: 0, life: 0.6 });
+        break;
+      case "immortal":
+        this.effects.push({ kind: "ripple", x, y, aim, range: 60, arc: 0, age: 0, life: 0.4 });
+        cam.shake(150, 0.008);
+        break;
     }
   }
 
@@ -796,6 +846,10 @@ export class GameScene extends Phaser.Scene {
     this.drawStuns(g);
     for (const e of this.effects) {
       const t = e.age / e.life;
+      if (e.follow?.body.active) {
+        e.x = e.follow.body.x;
+        e.y = e.follow.body.y - 5;
+      }
       if (e.kind === "punch") {
         const r = e.range * (0.6 + 0.4 * t);
         g.fillStyle(0xffffff, 0.8 * (1 - t));
@@ -914,6 +968,35 @@ export class GameScene extends Phaser.Scene {
         g.strokeCircle(e.x, e.y, e.range * t);
         g.lineStyle(2, 0x6a4aff, 1 - t);
         g.strokeCircle(e.x, e.y, e.range * t * 0.85);
+      } else if (e.kind === "gatling") {
+        // GATLING PUNCH: a blur of fists all down the lane.
+        const cos = Math.cos(e.aim);
+        const sin = Math.sin(e.aim);
+        const w = e.arc / 2;
+        const lane = [
+          { x: e.x - sin * w, y: e.y + cos * w },
+          { x: e.x + cos * e.range - sin * w, y: e.y + sin * e.range + cos * w },
+          { x: e.x + cos * e.range + sin * w, y: e.y + sin * e.range - cos * w },
+          { x: e.x + sin * w, y: e.y - cos * w },
+        ];
+        g.fillStyle(0xffd400, 0.12).fillPoints(lane, true);
+        for (let k = 0; k < 7; k++) {
+          const d = 10 + Math.random() * (e.range - 10);
+          const off = (Math.random() - 0.5) * e.arc * 0.9;
+          const fx = e.x + cos * d - sin * off;
+          const fy = e.y + sin * d + cos * off;
+          g.lineStyle(2, 0xf6e2c8, 0.5).lineBetween(e.x - sin * off * 0.3, e.y + cos * off * 0.3, fx, fy); // stretchy arm
+          g.fillStyle(0xe8a878, 1).fillCircle(fx, fy, 4);
+          g.lineStyle(1, 0x1a0f14, 1).strokeCircle(fx, fy, 4);
+        }
+        if (Math.random() < 0.5) this.sparks.explode(1, e.x + cos * e.range * Math.random(), e.y + sin * e.range * Math.random());
+      } else if (e.kind === "rewind") {
+        // A ring closing back in, with a clock hand spinning backwards.
+        g.lineStyle(4, 0x9fd8ff, 0.8 * (1 - t)).strokeCircle(e.x, e.y, e.range * (1 - t));
+        g.lineStyle(2, 0xffffff, 1 - t).strokeCircle(e.x, e.y, 26);
+        const hand = -t * Math.PI * 6;
+        g.lineBetween(e.x, e.y, e.x + Math.cos(hand) * 20, e.y + Math.sin(hand) * 20);
+        g.lineBetween(e.x, e.y, e.x + Math.cos(hand / 12) * 13, e.y + Math.sin(hand / 12) * 13);
       } else if (e.kind === "muzzle") {
         g.fillStyle(0xffd23f, 1 - t);
         g.fillCircle(e.x + Math.cos(e.aim) * e.range, e.y + Math.sin(e.aim) * e.range, 4);
@@ -1006,6 +1089,16 @@ export class GameScene extends Phaser.Scene {
         break;
       case "onepunch":
         lane(skill.radius * 1.5, skill.radius * 1.4);
+        break;
+      case "gatling":
+        lane(skill.radius, skill.width ?? 40);
+        break;
+      case "card":
+        lane(skill.radius, 8);
+        break;
+      case "portal":
+        lane(skill.radius, 4);
+        area(x + cos * skill.radius, y + sin * skill.radius, 16);
         break;
       case "hurricane":
         lane(120, 4);
@@ -1269,6 +1362,24 @@ export class GameScene extends Phaser.Scene {
           this.zoneImages.set(id, img);
         }
         img.setAlpha(0.92 * fade);
+      } else if (z.kind === "portalA" || z.kind === "portalB") {
+        // PORTAL GUN: a swirling green-edged portal (blue in, orange out).
+        const inner = z.kind === "portalA" ? 0x3aa8ff : 0xff9a2a;
+        const spin = now / 150;
+        floor.fillStyle(0x0a1a10, 0.8 * fade).fillEllipse(z.x, z.y, z.radius * 2, z.radius * 1.3);
+        floor.fillStyle(inner, 0.6 * fade).fillEllipse(z.x, z.y, z.radius * 1.5, z.radius);
+        floor.lineStyle(3, 0x4aff7a, fade).strokeEllipse(z.x, z.y, z.radius * 2, z.radius * 1.3);
+        for (let i = 0; i < 4; i++) {
+          const a = spin + (i * Math.PI) / 2;
+          floor.fillStyle(0xe8ffe8, fade).fillRect(z.x + Math.cos(a) * z.radius * 0.55 - 1, z.y + Math.sin(a) * z.radius * 0.35 - 1, 2, 2);
+        }
+      } else if (z.kind === "rewind") {
+        floor.fillStyle(0x2a4aa0, 0.25 * fade).fillRect(0, 0, WORLD_W, WORLD_H);
+      } else if (z.kind === "revive") {
+        // REVIVE: a pillar of golden light where he got back up.
+        sky.fillStyle(0xffe08a, 0.35 * fade).fillRect(z.x - 10, z.y - 120 * fade, 20, 120 * fade);
+        sky.fillStyle(0xffffff, 0.5 * fade).fillRect(z.x - 3, z.y - 120 * fade, 6, 120 * fade);
+        floor.lineStyle(2, 0xffd23f, fade).strokeCircle(z.x, z.y, z.radius * (1 - z.life / z.maxLife));
       } else if (z.kind === "asgard") {
         // Loki's illusion: golden Asgard rises out of the ground.
         floor.fillStyle(0xffd86a, 0.16 * fade).fillCircle(z.x, z.y, z.radius);
@@ -1300,9 +1411,10 @@ export class GameScene extends Phaser.Scene {
       seen.add(id);
       let sprite = this.bullets.get(id);
       if (!sprite) {
-        const texture = BULLET_TEXTURE[b.kind] ?? "snipe";
+        const texture = b.kind.startsWith("card") ? b.kind : BULLET_TEXTURE[b.kind] ?? "snipe";
         sprite = this.add.image(b.x, b.y, texture).setDepth(900).setData("kind", b.kind);
-        if (b.kind === "wave" || b.kind === "snipe" || b.kind === "bullet" || b.kind === "slash") sprite.setRotation(Math.atan2(b.vy, b.vx));
+        if (b.kind === "wave" || b.kind === "snipe" || b.kind === "bullet" || b.kind === "slash" || b.kind === "laser") sprite.setRotation(Math.atan2(b.vy, b.vx));
+        if (b.kind.startsWith("card")) sprite.setScale(1.3);
         if (b.kind === "wave") sprite.setScale(1.6);
         if (b.kind === "fireball") sprite.setScale(1.6);
         if (b.kind === "stone") sprite.setScale(1.2);
@@ -1315,12 +1427,24 @@ export class GameScene extends Phaser.Scene {
         sprite.y += b.vy * dt;
       }
       if (b.kind === "banana" || b.kind === "boulder") sprite.rotation += dt * 12; // spinning throws
+      if (b.kind === "missile") {
+        sprite.setRotation(Math.atan2(b.vy, b.vx)); // homing missiles turn as they chase
+        if (Math.random() < 0.4) this.sparks.explode(1, sprite.x - b.vx * 0.03, sprite.y - b.vy * 0.03);
+      }
       sprite.x += (b.x - sprite.x) * 0.2;
       sprite.y += (b.y - sprite.y) * 0.2;
     });
     for (const [id, sprite] of this.bullets) {
       if (seen.has(id)) continue;
       const kind = sprite.getData("kind");
+      if (kind === "air" || kind === "dragonfire") {
+        const radius = kind === "air" ? HEROES.doraemon.aoe : HEROES.flamedragon.aoe;
+        this.effects.push({ kind: "blast", x: sprite.x, y: sprite.y, aim: 0, range: radius, arc: kind === "dragonfire" ? 1 : 0, age: 0, life: 0.3 });
+      }
+      if (kind === "missile") {
+        this.effects.push({ kind: "blast", x: sprite.x, y: sprite.y, aim: 0, range: 14, arc: 1, age: 0, life: 0.25 });
+        this.sparks.explode(6, sprite.x, sprite.y);
+      }
       if (kind === "magic" || kind === "fireball") {
         const big = kind === "fireball";
         const radius = big ? HEROES.howl.skill.radius : HEROES.howl.aoe;
