@@ -35,6 +35,9 @@ import {
   inputDirection,
   moveCircle,
   movesInStoppedTime,
+  HERO_SCALE,
+  BIG_SCALE,
+  BIG_SLOW,
 } from "../../../shared/game";
 import type { HudScene } from "./HudScene";
 import { LocalRoom } from "../localRoom";
@@ -57,7 +60,7 @@ interface PlayerView {
 
 /** A short-lived swing, slash or shockwave drawn on top of the world. */
 interface Effect {
-  kind: "punch" | "sword" | "smash" | "muzzle" | "bolt" | "storm" | "blast" | "impact" | "heal" | "line" | "slashes" | "ripple" | "jab" | "gatling" | "rewind" | "kick" | "tkick";
+  kind: "punch" | "sword" | "smash" | "muzzle" | "bolt" | "storm" | "blast" | "impact" | "heal" | "line" | "slashes" | "ripple" | "jab" | "gatling" | "rewind" | "kick" | "tkick" | "biglight";
   x: number;
   y: number;
   aim: number;
@@ -452,8 +455,8 @@ export class GameScene extends Phaser.Scene {
         this.dashTimer = DASH_TIME;
         this.dashCooldown = DASH_COOLDOWN;
       }
-      let vx = dir.x * heroOf(me.hero).speed;
-      let vy = dir.y * heroOf(me.hero).speed;
+      let vx = dir.x * heroOf(me.hero).speed * (me.big > 0 ? BIG_SLOW : 1);
+      let vy = dir.y * heroOf(me.hero).speed * (me.big > 0 ? BIG_SLOW : 1);
       if (this.dashTimer > 0) {
         this.dashTimer -= dt;
         vx = this.dashDir.x * DASH_SPEED;
@@ -572,18 +575,20 @@ export class GameScene extends Phaser.Scene {
       const aim = isMe ? this.aim : p.aim;
       body.setFlipX(Math.cos(aim) < 0);
       const bob = Math.sin(this.time.now / 90) * 0.6;
+      // Heroes are drawn HERO_SCALE times their sprite; BIG LIGHT makes them bigger still.
+      const k = HERO_SCALE * (p.big > 0 && !p.dead ? BIG_SCALE : 1);
       body.setDepth(body.y);
       body.setAlpha(p.dead ? 0.25 : p.dashing ? 0.6 : 1);
 
       if (view.weapon) {
         if (heroOf(p.hero).gun) view.weapon.setTexture(p.mode === 1 ? "machinegun" : WEAPON_TEXTURE[p.hero]!);
-        view.weapon.setPosition(body.x, body.y - 5 + bob);
+        view.weapon.setPosition(body.x, body.y - 5 * k + bob).setScale(k);
         view.weapon.setRotation(aim);
         view.weapon.setFlipY(Math.cos(aim) < 0);
         view.weapon.setDepth(body.y + 0.5);
         view.weapon.setVisible(!p.dead && (!heroOf(p.hero).sword || p.buff > 0)); // the diamond sword only while crafted
       }
-      this.playAttackEffects(view, p, body.x, body.y - 5, aim);
+      this.playAttackEffects(view, p, body.x, body.y - 5 * k, aim);
       const helper = !!heroOf(p.hero).summon; // pets and gunner bots look like themselves, not ghostly clones
 
       // Titan form: a giant body for the duration.
@@ -591,8 +596,9 @@ export class GameScene extends Phaser.Scene {
       // Under Yaotsu's reality change, rival players are ordinary humans too.
       const humanized = state.reality > 0 && ringStage(state.stage) && (p.owner || id) !== state.realityBy && !p.dead;
       const texture = humanized ? "human" : titanNow ? "titanform" : `hero_${p.hero}`;
+      body.setScale(k * (titanNow && !humanized ? 2.6 : humanized ? 1 : SUMMON_SCALE[p.hero] ?? 1));
       if (body.texture.key !== texture) {
-        body.setTexture(texture).setScale(titanNow && !humanized ? 2.6 : humanized ? 1 : SUMMON_SCALE[p.hero] ?? 1);
+        body.setTexture(texture);
         if (titanNow) {
           this.effects.push({ kind: "bolt", x: body.x, y: body.y, aim: 0, range: 60, arc: 0, age: 0, life: 0.5 });
           this.cameras.main.shake(400, 0.02);
@@ -600,7 +606,7 @@ export class GameScene extends Phaser.Scene {
           this.sparks.explode(40, body.x, body.y - 20);
         } else this.sparks.explode(20, body.x, body.y - 6);
       }
-      view.label.setPosition(body.x, body.y - (titanNow ? 66 : 18));
+      view.label.setPosition(body.x, body.y - (titanNow ? 66 : 18) * k);
       if (p.hero === "yaotsu") this.drawGlitch(view, p.dead);
       view.label.setDepth(1000);
 
@@ -616,14 +622,18 @@ export class GameScene extends Phaser.Scene {
 
       view.bar.clear();
       if (!p.dead) {
-        view.bar.fillStyle(PLAYER_MARKERS[p.color % 4], 0.5).fillEllipse(body.x, body.y + 1, 14, 5);
-        view.bar.fillStyle(0x000000, 0.7).fillRect(body.x - 8, body.y + 4, 16, 2);
-        view.bar.fillStyle(0x4cd964, 1).fillRect(body.x - 8, body.y + 4, 16 * (p.hp / p.maxHp), 2);
+        view.bar.fillStyle(PLAYER_MARKERS[p.color % 4], 0.5).fillEllipse(body.x, body.y + 1, 14 * k, 5 * k);
+        view.bar.fillStyle(0x000000, 0.7).fillRect(body.x - 12, body.y + 3 + 2 * k, 24, 2);
+        view.bar.fillStyle(0x4cd964, 1).fillRect(body.x - 12, body.y + 3 + 2 * k, 24 * (p.hp / p.maxHp), 2);
+        if (p.big > 0) {
+          // BIG LIGHT: a soft yellow glow while enlarged.
+          view.bar.lineStyle(1, 0xfff07a, 0.6).strokeEllipse(body.x, body.y + 1, 18 * k, 7 * k);
+        }
         const pulse = 0.5 + 0.5 * Math.sin(this.time.now / 120);
         if (p.barrier > 0) {
           // IMMORTAL: a dark-violet barrier around the Demon Lord.
-          view.bar.fillStyle(0x9a4aff, 0.18 + 0.1 * pulse).fillCircle(body.x, body.y - 9, 17);
-          view.bar.lineStyle(2, 0xd8a8ff, 0.7 + 0.3 * pulse).strokeCircle(body.x, body.y - 9, 17);
+          view.bar.fillStyle(0x9a4aff, 0.18 + 0.1 * pulse).fillCircle(body.x, body.y - 9 * k, 17 * k);
+          view.bar.lineStyle(2, 0xd8a8ff, 0.7 + 0.3 * pulse).strokeCircle(body.x, body.y - 9 * k, 17 * k);
         }
         if (p.beam > 0) {
           // HEAT VISION: twin red beams from the eyes, following his aim.
@@ -631,7 +641,7 @@ export class GameScene extends Phaser.Scene {
           const cos = Math.cos(aim);
           const sin = Math.sin(aim);
           const ex = body.x;
-          const ey = body.y - 13;
+          const ey = body.y - 13 * k;
           const tx = ex + cos * eb.radius;
           const ty = ey + 8 + sin * eb.radius;
           const flick = 0.75 + Math.random() * 0.25;
@@ -648,7 +658,7 @@ export class GameScene extends Phaser.Scene {
         }
         if (p.revive > 0) {
           // REVIVE is armed: a golden halo.
-          view.bar.lineStyle(1, 0xffd23f, 0.6 + 0.4 * pulse).strokeEllipse(body.x, body.y - 22, 12, 4);
+          view.bar.lineStyle(1, 0xffd23f, 0.6 + 0.4 * pulse).strokeEllipse(body.x, body.y - 22 * k, 12 * k, 4 * k);
         }
       }
       view.bar.setDepth(999);
@@ -743,7 +753,7 @@ export class GameScene extends Phaser.Scene {
     if (!me || me.dead || me.stun > 0 || (state.timeStop > 0 && state.timeStopBy !== room.sessionId && !movesInStoppedTime(me.hero))) return;
     const hero = heroOf(me.hero);
     const x = this.predicted.x;
-    const y = this.predicted.y - 5;
+    const y = this.predicted.y - 5 * HERO_SCALE;
     if (input.shoot && this.localAttackTimer <= 0) {
       this.localAttackTimer = me.titan > 0 ? TITAN_ATTACK_COOLDOWN : hero.gun && me.mode === 1 ? hero.gun.attackCooldown : hero.sword && me.buff > 0 ? hero.sword.attackCooldown : hero.attackCooldown;
       this.predictedAttacks.push(performance.now());
@@ -905,6 +915,10 @@ export class GameScene extends Phaser.Scene {
         break;
       case "dashkick":
         this.effects.push({ kind: "ripple", x, y, aim, range: 26, arc: 0, age: 0, life: 0.25 });
+        break;
+      case "biglight":
+        // BIG LIGHT: a flashlight beam sweeps out ahead.
+        this.effects.push({ kind: "biglight", x, y, aim, range: skill.radius, arc: skill.width ?? 0.6, age: 0, life: 0.5 });
         break;
       case "truck":
         // TRUCK SMASH: the world stops (the truck falls in the zone drawing).
@@ -1103,6 +1117,14 @@ export class GameScene extends Phaser.Scene {
         g.lineStyle(4, 0xe02a3a, 1 - t).lineBetween(e.x + cos * e.range * 0.3, e.y + sin * e.range * 0.3, ex, ey);
         g.lineStyle(2, 0xffffff, 1 - t).lineBetween(e.x + cos * e.range * 0.5, e.y + sin * e.range * 0.5, ex, ey);
         g.fillStyle(0xffd400, 0.8 * (1 - t)).fillCircle(ex, ey, 6 + 18 * t);
+      } else if (e.kind === "biglight") {
+        // A cone of warm light from the flashlight, fading out.
+        g.fillStyle(0xfff07a, 0.35 * (1 - t));
+        g.slice(e.x, e.y, e.range, e.aim - e.arc, e.aim + e.arc);
+        g.fillPath();
+        g.fillStyle(0xffffff, 0.3 * (1 - t));
+        g.slice(e.x, e.y, e.range * 0.6, e.aim - e.arc * 0.4, e.aim + e.arc * 0.4);
+        g.fillPath();
       } else if (e.kind === "tkick") {
         // A quick straight kick: a white streak with a snap at the end.
         const cos = Math.cos(e.aim);
@@ -1152,7 +1174,7 @@ export class GameScene extends Phaser.Scene {
     if (!me || me.dead) return;
     const hero = heroOf(me.hero);
     const x = this.predicted.x;
-    const y = this.predicted.y - 5;
+    const y = this.predicted.y - 5 * HERO_SCALE;
     const aiming = this.aimingSkill();
     const skill = aiming === 2 ? hero.skill2 : aiming === 1 ? hero.skill : undefined;
     if (skill) {
@@ -1232,6 +1254,14 @@ export class GameScene extends Phaser.Scene {
         lane(skill.radius, 4);
         area(x + cos * skill.radius, y + sin * skill.radius, 10);
         break;
+      case "biglight":
+        g.fillStyle(0xfff07a, 0.12);
+        g.slice(x, y, skill.radius, this.aim - (skill.width ?? 0.6), this.aim + (skill.width ?? 0.6));
+        g.fillPath();
+        g.lineStyle(1, 0xfff07a, 0.6).beginPath();
+        g.arc(x, y, skill.radius, this.aim - (skill.width ?? 0.6), this.aim + (skill.width ?? 0.6));
+        g.strokePath();
+        break;
       case "dashkick":
       case "latch": {
         // A cone: the nearest target inside it gets bitten (or kicked).
@@ -1291,6 +1321,8 @@ export class GameScene extends Phaser.Scene {
         view.vy += ((at.y - s.y) / dt - view.vy) * k;
       }
       s.setPosition(at.x, at.y);
+      // BIG LIGHT: enlarged monsters are drawn bigger.
+      s.setScale((asHuman ? 1.2 : ENEMY_SCALE[e.kind as EnemyKind]) * (e.big > 0 ? BIG_SCALE : 1));
       // L's foresight: a ghost shows where this monster will be in half a second.
       if (foresight) {
         if (!view.ghost) view.ghost = this.add.image(s.x, s.y, e.kind).setOrigin(0.5, 0.75).setScale(s.scale).setTint(0xd890ff);
@@ -1316,6 +1348,7 @@ export class GameScene extends Phaser.Scene {
       const def = ENEMIES[e.kind as EnemyKind];
       const w = Math.max(12, def.radius * 2);
       view.bar.clear();
+      if (e.big > 0) view.bar.lineStyle(1, 0xfff07a, 0.6).strokeEllipse(s.x, s.y + 1, def.radius * 2 * BIG_SCALE + 6, def.radius * BIG_SCALE + 3);
       if (e.hp < e.maxHp) {
         view.bar.fillStyle(0x000000, 0.7).fillRect(s.x - w / 2, s.y + 4, w, 2);
         view.bar.fillStyle(0xff5a36, 1).fillRect(s.x - w / 2, s.y + 4, w * (e.hp / e.maxHp), 2);
@@ -1325,7 +1358,7 @@ export class GameScene extends Phaser.Scene {
 
     for (const [id, view] of this.enemies) {
       if (seen.has(id)) continue;
-      const big = view.sprite.scale > 2 || view.sprite.texture.key === "swordgod";
+      const big = !!ENEMIES[view.sprite.texture.key as EnemyKind]?.boss;
       this.sparks.explode(big ? 60 : 14, view.sprite.x, view.sprite.y - 4);
       if (big) this.cameras.main.shake(400, 0.01);
       view.sprite.destroy();

@@ -35,6 +35,7 @@ export class Player extends Schema {
   @type("float32") buff = 0;
   @type("float32") power = 1;
   @type("float32") stun = 0;
+  @type("float32") big = 0;
 }
 
 export class Enemy extends Schema {
@@ -48,6 +49,7 @@ export class Enemy extends Schema {
   @type("float32") beamAngle = 0;
   @type("uint8") move = 0;
   @type("float32") stun = 0;
+  @type("float32") big = 0;
 }
 
 export class Bullet extends Schema {

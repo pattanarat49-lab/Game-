@@ -13,7 +13,12 @@ export const ROOM_NAME = "emberfall";
 export const MAX_PLAYERS = 4;
 
 // Players
-export const PLAYER_RADIUS = 6;
+/** Heroes are drawn this much bigger than their sprites (user request 2026-10-03); the hitbox grew with them. */
+export const HERO_SCALE = 1.5;
+export const PLAYER_RADIUS = 9;
+/** BIG LIGHT: an enlarged target is this much bigger (and easier to hit) and moves at BIG_SLOW of its speed. */
+export const BIG_SCALE = 1.8;
+export const BIG_SLOW = 0.5;
 export const DASH_SPEED = 340;
 export const DASH_TIME = 0.15;
 // Melee basic attacks (punch and sword heroes) knock enemies and rival players back. Bosses don't budge.
@@ -95,6 +100,7 @@ export type SkillKind =
   | "cross" // a huge straight punch that knocks targets far away
   | "dashkick" // dart in, kick and stun the nearest target in front, then hop back
   | "truck" // stop time, then drop a truck on the aimed spot
+  | "biglight" // a flashlight beam: everything caught in it grows bigger (easier to hit) and slower
   | "diamond" // a diamond sword for a while: basic attacks become strong, fast, long sword swings
   | "build" // place a random block: dirt (a shield), TNT (explodes when hit) or a craft table (break it for 2x damage)
   | "eyebeam"; // a laser from the eyes that keeps firing and follows the aim
@@ -519,7 +525,7 @@ export const HEROES: Record<HeroId, HeroDef> = {
   doraemon: {
     name: "Gadget Cat",
     role: "Robot cat",
-    blurb: "1.5x HP. Air cannon blasts. TIME MACHINE turns everything back 2 seconds. GUNNER BOTS: 6 little gunner robots (15% of his HP each).",
+    blurb: "1.5x HP. Air cannon blasts. BIG LIGHT shines a flashlight ahead: enemies caught in it grow bigger (easier to hit) and walk at half speed for 5s. GUNNER BOTS: 6 little gunner robots (15% of his HP each).",
     stars: 5,
     maxHp: 180,
     speed: 100,
@@ -532,7 +538,8 @@ export const HEROES: Record<HeroId, HeroDef> = {
     shotSpeed: 260,
     pierce: 0,
     shot: "air",
-    skill: { kind: "rewind", name: "TIME MACHINE", cooldown: 20, damage: 0, radius: 0, duration: 2 },
+    // BIG LIGHT: a cone `radius` long and `width` radians wide (each side).
+    skill: { kind: "biglight", name: "BIG LIGHT", cooldown: 12, damage: 0, radius: 170, width: 0.6, duration: 5 },
     skill2: { kind: "summon", name: "GUNNER BOTS", cooldown: 22, damage: 0.15, radius: 0, count: 6, duration: 15, pet: "gunbot" },
   },
   trainer: {
@@ -807,6 +814,12 @@ export const HERO_IDS = [
   ...PVP_RANKING,
   ...(Object.keys(HEROES) as HeroId[]).filter((id) => !PVP_RANKING.includes(id)),
 ].filter((id) => !HEROES[id].summon);
+
+/**
+ * Balance pass (user request 2026-10-03): everything a hero (and its summons) hits for is multiplied by this.
+ * Tuned from bot duels so no hero wins far more or far less than half its PvP fights.
+ */
+export const DAMAGE_BALANCE: Partial<Record<HeroId, number>> = {};
 
 export function heroOf(id: string): HeroDef {
   return HEROES[id as HeroId] ?? HEROES.superman;

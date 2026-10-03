@@ -35,6 +35,8 @@ import {
   PVP_KILLS_TO_WIN,
   StageId,
   PLAYER_RADIUS,
+  BIG_SCALE,
+  BIG_SLOW,
   PlayerInput,
   RESPAWN_TIME,
   WAVE_COUNT,
@@ -50,6 +52,8 @@ import {
   WORLD_H,
   WORLD_W,
   heroOf,
+  DAMAGE_BALANCE,
+  HeroId,
   hitsRock,
   inLava,
   inputDirection,
@@ -120,6 +124,8 @@ export interface SimPlayer {
   kbSeq: number;
   /** Seconds left stunned (a rival's jab): no moving, attacking or skills. */
   stun: number;
+  /** Seconds left enlarged by BIG LIGHT: bigger hitbox, half speed. */
+  big: number;
   /** 1 while a hero with a gun mode (SWAP MODE) has the gun out. */
   mode: number;
   /** Seconds left in which falling brings the hero straight back up (REVIVE). */
@@ -152,6 +158,8 @@ export interface SimEnemy {
   move: number;
   /** Seconds left stunned (Champ Rico's jab): a stunned enemy cannot move or attack. */
   stun: number;
+  /** Seconds left enlarged by BIG LIGHT: bigger hitbox, half speed. */
+  big: number;
 }
 
 export type BulletKind =
@@ -460,6 +468,42 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
     s.notice = "";
     s.phase = "intermission";
     s.phaseTimer = PVP_COUNTDOWN;
+  }
+
+  /** Everything this attacker (or its summoner) hits for is scaled by its hero's balance and any crafted power. */
+  private dmgMul(attacker: string | undefined): number {
+    const p = this.state.players.get(this.rootOf(attacker));
+    if (!p) return 1;
+    return (p.power || 1) * (DAMAGE_BALANCE[p.hero as HeroId] ?? 1);
+  }
+
+  /** How far from its centre an enemy can be hit (BIG LIGHT makes it bigger). */
+  private er(e: E): number {
+    return ENEMIES[e.kind as EnemyKind].radius * (e.big > 0 ? BIG_SCALE : 1);
+  }
+
+  /** How far from its centre a player can be hit. */
+  private pr(v: P): number {
+    return PLAYER_RADIUS * (v.big > 0 ? BIG_SCALE : 1);
+  }
+
+  /** BIG LIGHT: everything hostile in the flashlight's cone grows and slows down. */
+  private bigLight(id: string, p: P, skill: SkillDef) {
+    const half = skill.width ?? 0.6;
+    const t = skill.duration ?? 5;
+    const inCone = (x: number, y: number, r: number) => {
+      const d = Math.hypot(x - p.x, y - p.y);
+      if (d > skill.radius + r) return false;
+      let diff = Math.atan2(y - p.y, x - p.x) - p.aim;
+      diff = Math.atan2(Math.sin(diff), Math.cos(diff));
+      return Math.abs(diff) <= half || d <= r + 8;
+    };
+    this.state.enemies.forEach((e) => {
+      if (!ENEMIES[e.kind as EnemyKind].block && inCone(e.x, e.y, this.er(e))) e.big = Math.max(e.big, t);
+    });
+    this.state.players.forEach((v, vid) => {
+      if (!v.dead && this.isFoe(id, vid) && inCone(v.x, v.y, PLAYER_RADIUS)) v.big = Math.max(v.big, t);
+    });
   }
 
   /** Monsters on the map (the Block Crafter's blocks do not count). */
@@ -795,6 +839,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
 
       p.revive = Math.max(0, p.revive - dt);
       p.buff = Math.max(0, p.buff - dt);
+      p.big = Math.max(0, p.big - dt);
       if (p.barrier > 0) {
         // IMMORTAL: untouchable, and healing fast.
         p.barrier = Math.max(0, p.barrier - dt);
@@ -832,7 +877,8 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       } else if (dashingNow) {
         moved = this.move(p.x, p.y, brain.dashX * DASH_SPEED * dt, brain.dashY * DASH_SPEED * dt, PLAYER_RADIUS);
       } else {
-        moved = this.move(p.x, p.y, dir.x * hero.speed * dt, dir.y * hero.speed * dt, PLAYER_RADIUS);
+        const speed = hero.speed * (p.big > 0 ? BIG_SLOW : 1);
+        moved = this.move(p.x, p.y, dir.x * speed * dt, dir.y * speed * dt, PLAYER_RADIUS);
       }
       p.x = moved.x;
       p.y = moved.y;
@@ -1102,6 +1148,9 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
         }
         break;
       }
+      case "biglight":
+        this.bigLight(id, p, skill);
+        break;
       case "rewind":
         this.rewind(skill.duration ?? 2);
         this.addZone("rewind", p.x, p.y, 400, 0.8, { owner: id, every: Infinity, damage: 0 });
@@ -1145,10 +1194,10 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
   private stunAround(owner: string, x: number, y: number, radius: number, seconds: number) {
     this.state.enemies.forEach((e) => {
       const def = ENEMIES[e.kind as EnemyKind];
-      if (!def.boss && Math.hypot(e.x - x, e.y - y) <= radius + def.radius) e.stun = Math.max(e.stun, seconds);
+      if (!def.boss && Math.hypot(e.x - x, e.y - y) <= radius + this.er(e)) e.stun = Math.max(e.stun, seconds);
     });
     this.state.players.forEach((v, vid) => {
-      if (!v.dead && this.isFoe(owner, vid) && Math.hypot(v.x - x, v.y - y) <= radius + PLAYER_RADIUS) v.stun = Math.max(v.stun, seconds);
+      if (!v.dead && this.isFoe(owner, vid) && Math.hypot(v.x - x, v.y - y) <= radius + this.pr(v)) v.stun = Math.max(v.stun, seconds);
     });
   }
 
@@ -1279,13 +1328,13 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
     };
     this.state.enemies.forEach((e, eid) => {
       const def = ENEMIES[e.kind as EnemyKind];
-      if (!inLine(e.x, e.y, def.radius)) return;
+      if (!inLine(e.x, e.y, this.er(e))) return;
       this.damageEnemy(eid, damage, owner);
       if (stun > 0 && !def.boss) e.stun = Math.max(e.stun, stun); // bosses shrug it off
       if (knock > 0 && !def.boss) this.knockEnemy(eid, cos, sin, knock); // sent flying along the line
     });
     this.state.players.forEach((v, vid) => {
-      if (v.dead || !this.isFoe(owner, vid) || !inLine(v.x, v.y, PLAYER_RADIUS)) return;
+      if (v.dead || !this.isFoe(owner, vid) || !inLine(v.x, v.y, this.pr(v))) return;
       this.damagePlayer(vid, damage * PVP_DAMAGE_SCALE, true, owner);
       if (stun > 0 && !v.dead) v.stun = Math.max(v.stun, stun);
       if (knock > 0) this.knockPlayer(vid, cos, sin, knock);
@@ -1461,7 +1510,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       const def = ENEMIES[e.kind as EnemyKind];
       const dx = e.x - x;
       const dy = e.y - y;
-      if (Math.hypot(dx, dy) > range + def.radius) return;
+      if (Math.hypot(dx, dy) > range + this.er(e)) return;
       if (arc < Math.PI * 2) {
         let diff = Math.atan2(dy, dx) - aim;
         diff = Math.atan2(Math.sin(diff), Math.cos(diff));
@@ -1475,7 +1524,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       if (!this.isFoe(owner, vid) || v.dead) return;
       const dx = v.x - x;
       const dy = v.y - y;
-      if (Math.hypot(dx, dy) > range + PLAYER_RADIUS) return;
+      if (Math.hypot(dx, dy) > range + this.pr(v)) return;
       if (arc < Math.PI * 2) {
         let diff = Math.atan2(dy, dx) - aim;
         diff = Math.atan2(Math.sin(diff), Math.cos(diff));
@@ -1544,7 +1593,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
     const brain = this.brains.get(id);
     if (!p || !brain || p.dead || p.dashing) return;
     if (heroOf(p.hero).invincible || p.barrier > 0) return;
-    if (attacker && attacker !== ENEMY) amount *= this.state.players.get(this.rootOf(attacker))?.power || 1;
+    if (attacker && attacker !== ENEMY) amount *= this.dmgMul(attacker);
     // Under Yaotsu's reality change, ordinary humans hit for 1.
     if (this.state.reality > 0 && attacker && (attacker === ENEMY || this.isFoe(this.state.realityBy, attacker))) {
       amount = Math.min(amount, 1);
@@ -1636,7 +1685,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
     const e = this.state.enemies.get(eid);
     if (!e) return;
     const killer = this.state.players.get(this.rootOf(owner));
-    e.hp -= damage * (killer?.power || 1);
+    e.hp -= damage * this.dmgMul(owner);
     e.hitFlash = 0.1;
     if (e.hp <= 0) {
       const brain = this.enemyBrains.get(eid);
@@ -1713,6 +1762,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       const def = ENEMIES[e.kind as EnemyKind];
       const brain = this.enemyBrains.get(id)!;
       e.hitFlash = Math.max(0, e.hitFlash - dt);
+      e.big = Math.max(0, e.big - dt);
       if (def.block) return; // blocks just sit there
       if (Math.abs(brain.kbx) + Math.abs(brain.kby) > 1) {
         const pushed = this.move(e.x, e.y, brain.kbx * dt, brain.kby * dt, def.radius);
@@ -1754,7 +1804,8 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
         dirX = -dirX;
         dirY = -dirY;
       }
-      const moved = this.move(e.x, e.y, dirX * def.speed * dt, dirY * def.speed * dt, def.radius);
+      const speed = def.speed * (e.big > 0 ? BIG_SLOW : 1);
+      const moved = this.move(e.x, e.y, dirX * speed * dt, dirY * speed * dt, def.radius);
       const walled = this.blockAt(moved.x, moved.y, def.radius);
       if (!walled) {
         e.x = moved.x;
@@ -2018,7 +2069,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       if (this.pvpLive()) {
         s.players.forEach((v, vid) => {
           if (!s.bullets.has(id) || !this.isFoe(brain.owner, vid) || v.dead || brain.hit.has(vid)) return;
-          if (Math.hypot(v.x - b.x, v.y - b.y) >= PLAYER_RADIUS + hitRadius) return;
+          if (Math.hypot(v.x - b.x, v.y - b.y) >= this.pr(v) + hitRadius) return;
           if (brain.blast > 0) {
             this.sweep(brain.owner ?? "", b.x, b.y, 0, brain.blast, Math.PI * 2, brain.damage);
             this.removeBullet(id);
@@ -2034,7 +2085,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       s.enemies.forEach((e, eid) => {
         if (!s.bullets.has(id) || brain.hit.has(eid)) return;
         const def = ENEMIES[e.kind as EnemyKind];
-        if (Math.hypot(e.x - b.x, e.y - b.y) < def.radius + hitRadius) {
+        if (Math.hypot(e.x - b.x, e.y - b.y) < this.er(e) + hitRadius) {
           if (brain.blast > 0) {
             // Magic explodes on the first enemy it touches.
             this.sweep(brain.owner ?? "", b.x, b.y, 0, brain.blast, Math.PI * 2, brain.damage);
@@ -2160,6 +2211,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       case "latch":
       case "dashkick":
       case "truck":
+      case "biglight":
       case "eyebeam":
       case "onepunch":
       case "smash":
