@@ -60,7 +60,7 @@ interface Effect {
   life: number;
 }
 
-const WEAPON_TEXTURE: Record<string, string | undefined> = { isekai: "sword", simo: "rifle", okita: "sword" };
+const WEAPON_TEXTURE: Record<string, string | undefined> = { isekai: "sword", simo: "rifle", okita: "sword", sakamoto: "knife" };
 const BULLET_TEXTURE: Record<string, string> = {
   snipe: "snipe",
   wave: "wave",
@@ -73,6 +73,7 @@ const BULLET_TEXTURE: Record<string, string> = {
   glitch: "glitchshot",
   banana: "banana",
   boulder: "boulder",
+  bullet: "bullet",
 };
 const PLAYER_MARKERS = [0x3b7dd8, 0xd84b3b, 0x3bd87a, 0xc93bd8];
 
@@ -490,6 +491,7 @@ export class GameScene extends Phaser.Scene {
       body.setAlpha(p.dead ? 0.25 : p.dashing ? 0.6 : 1);
 
       if (view.weapon) {
+        if (heroOf(p.hero).gun) view.weapon.setTexture(p.mode === 1 ? "machinegun" : WEAPON_TEXTURE[p.hero]!);
         view.weapon.setPosition(body.x, body.y - 5 + bob);
         view.weapon.setRotation(aim);
         view.weapon.setFlipY(Math.cos(aim) < 0);
@@ -622,7 +624,7 @@ export class GameScene extends Phaser.Scene {
     const x = this.predicted.x;
     const y = this.predicted.y - 5;
     if (input.shoot && this.localAttackTimer <= 0) {
-      this.localAttackTimer = me.titan > 0 ? TITAN_ATTACK_COOLDOWN : hero.attackCooldown;
+      this.localAttackTimer = me.titan > 0 ? TITAN_ATTACK_COOLDOWN : hero.gun && me.mode === 1 ? hero.gun.attackCooldown : hero.attackCooldown;
       this.predictedAttacks.push(performance.now());
       this.playAttack(me, x, y, this.aim);
     }
@@ -648,6 +650,8 @@ export class GameScene extends Phaser.Scene {
       this.effects.push({ kind: "smash", x, y: y + 5, aim, range: hero.skill.radius, arc: Math.PI * 2, age: 0, life: 0.35 });
       this.cameras.main.shake(150, 0.008);
       this.sparks.explode(12, x, y + 5);
+    } else if (hero.gun && p.mode === 1) {
+      this.effects.push({ kind: "muzzle", x, y, aim, range: 20, arc: 0, age: 0, life: 0.05 });
     } else if (hero.attack === "rifle") {
       this.effects.push({ kind: "muzzle", x, y, aim, range: 16, arc: 0, age: 0, life: 0.08 });
       if (p === this.room?.state.players.get(this.room.sessionId)) this.cameras.main.shake(60, 0.004);
@@ -721,6 +725,9 @@ export class GameScene extends Phaser.Scene {
         this.effects.push({ kind: "ripple", x, y, aim, range: 900, arc: 0, age: 0, life: 0.9 });
         cam.flash(300, 255, 255, 255);
         cam.shake(200, 0.01);
+        break;
+      case "swap": // a quick flourish as the weapon changes hands
+        this.sparks.explode(6, x, y);
         break;
     }
   }
@@ -872,7 +879,7 @@ export class GameScene extends Phaser.Scene {
       const ty = y + 5 + Math.sin(this.aim) * hero.range;
       g.fillStyle(0x9fd8ff, 0.12).fillCircle(tx, ty, hero.aoe);
       g.lineStyle(1, 0x9fd8ff, 0.4).strokeCircle(tx, ty, hero.aoe);
-    } else if (hero.attack === "rifle" || hero.attack === "magic") {
+    } else if (hero.attack === "rifle" || hero.attack === "magic" || (hero.gun && me.mode === 1)) {
       for (let d = 14; d < 150; d += 10) {
         g.fillStyle(0xffffff, 0.35 * (1 - d / 150));
         g.fillRect(x + Math.cos(this.aim) * d - 1, y + Math.sin(this.aim) * d - 1, 2, 2);
@@ -1107,7 +1114,7 @@ export class GameScene extends Phaser.Scene {
       if (!sprite) {
         const texture = BULLET_TEXTURE[b.kind] ?? "snipe";
         sprite = this.add.image(b.x, b.y, texture).setDepth(900).setData("kind", b.kind);
-        if (b.kind === "wave" || b.kind === "snipe") sprite.setRotation(Math.atan2(b.vy, b.vx));
+        if (b.kind === "wave" || b.kind === "snipe" || b.kind === "bullet") sprite.setRotation(Math.atan2(b.vy, b.vx));
         if (b.kind === "wave") sprite.setScale(1.6);
         if (b.kind === "fireball") sprite.setScale(1.6);
         if (b.kind === "stone") sprite.setScale(1.2);

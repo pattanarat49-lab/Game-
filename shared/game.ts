@@ -40,7 +40,8 @@ export type HeroId =
   | "lawliet"
   | "thorfinn"
   | "titan"
-  | "yaotsu";
+  | "yaotsu"
+  | "sakamoto";
 export type AttackStyle = "punch" | "sword" | "rifle" | "lightning" | "magic";
 export type SkillKind =
   | "smash"
@@ -62,7 +63,8 @@ export type SkillKind =
   | "rush" // dash through enemies, cutting everything on the way
   | "titan" // transform into a giant: basic attacks hit all around
   | "city" // build a whole city that heals the caster inside it
-  | "reality"; // every enemy becomes an ordinary human for a while
+  | "reality" // every enemy becomes an ordinary human for a while
+  | "swap"; // switch between the hero's normal attack and their gun
 
 export interface SkillDef {
   kind: SkillKind;
@@ -93,6 +95,8 @@ export interface HeroDef {
   shot?: string; // projectile look for magic attacks (default "magic")
   skill: SkillDef;
   skill2?: SkillDef; // a second skill (E key / second button)
+  /** A gun mode the "swap" skill switches to: basic attacks fire this instead. */
+  gun?: { attackCooldown: number; damage: number; range: number; shotSpeed: number; spread: number };
 }
 
 export const HEROES: Record<HeroId, HeroDef> = {
@@ -409,6 +413,24 @@ export const HEROES: Record<HeroId, HeroDef> = {
     shot: "loki",
     skill: { kind: "asgard", name: "ILLUSION", cooldown: 22, damage: 0.07, radius: 230, duration: 10 },
     skill2: { kind: "clone", name: "CLONE", cooldown: 12, damage: 0.25, radius: 0, duration: 20 },
+  },
+  sakamoto: {
+    name: "Retired Hitman",
+    role: "Hitman",
+    blurb: "Runs 1.2x faster. Quick knife slashes. SWAP MODE pulls out a machine gun that fires very fast; use it again to go back to the knife.",
+    stars: 4,
+    maxHp: 130,
+    speed: 130,
+    attack: "sword",
+    attackCooldown: 0.25,
+    damage: 22,
+    range: 28,
+    arc: 1.8,
+    aoe: 0,
+    shotSpeed: 0,
+    pierce: 0,
+    gun: { attackCooldown: 0.06, damage: 6, range: 240, shotSpeed: 520, spread: 0.08 },
+    skill: { kind: "swap", name: "SWAP MODE", cooldown: 0.8, damage: 0, radius: 0 },
   },
 };
 

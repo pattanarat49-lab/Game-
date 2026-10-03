@@ -436,6 +436,29 @@ export const HERO_SPRITES: Record<string, PixelSprite> = {
     ],
     palette: { k: OUTLINE, y: "#e8c86a", s: "#e9b48c", S: "#b05a4a", e: "#1a3a4a", m: "#8a4030", t: "#3f6f6a", b: "#7a5030", n: "#4a3a2a", d: "#d8dde8" },
   },
+  // Retired Hitman: slicked-back hair, round glasses, white shirt and a shop apron.
+  sakamoto: {
+    grid: [
+      "....kkkkkkk.....",
+      "...khhhhhhhk....",
+      "..khhhhhhhhhk...",
+      "..khhssssshhk...",
+      "..kgggsssgggk...",
+      "..ksGgsssgGsk...",
+      "..ksssssssssk...",
+      "...kssmmmssk....",
+      "..kwwwkkkwwwk...",
+      ".kwwaaaaaaawwk..",
+      ".kswaaaaaaawsk..",
+      ".kswaaaaaaawsk..",
+      "..kkaaaaaaakk...",
+      "...kbbbkbbbk....",
+      "...kbbbkbbbk....",
+      "...knnnknnnk....",
+      "...kkkkkkkkk....",
+    ],
+    palette: { k: OUTLINE, h: "#1e1e24", s: "#f0c8a0", g: "#2a2a2a", G: "#cfe8ff", m: "#a0645a", w: "#f2f2f2", a: "#d8b04a", b: "#3a3a4a", n: "#2a1a14" },
+  },
   titan: {
     grid: [
       "...kkkkkkkkk....",
@@ -660,6 +683,32 @@ export const RIFLE: PixelSprite = {
     "kkkk................",
   ],
   palette: { k: OUTLINE, n: "#7a4a26", G: "#8f9aa6" },
+};
+
+export const KNIFE: PixelSprite = {
+  grid: [
+    "kkk.kkkkkk..",
+    "knnkwwwwwwkk",
+    "kkk.kkkkkk..",
+  ],
+  palette: { k: OUTLINE, n: "#3a2a20", w: "#e8eef7" },
+};
+
+export const MACHINE_GUN: PixelSprite = {
+  grid: [
+    "......kk..........",
+    "kkkkkkkkkkkkkkkkk.",
+    "kddddddddGGGGGGGGk",
+    "kddkkkkddkkkkkkkk.",
+    "kkk..kddk.........",
+    "......kkk.........",
+  ],
+  palette: { k: OUTLINE, d: "#3a3d44", G: "#8f9aa6" },
+};
+
+export const MG_SHOT: PixelSprite = {
+  grid: ["oyyw"],
+  palette: { o: "#f07a22", y: "#ffd23f", w: "#ffffff" },
 };
 
 export const SWORD_WAVE: PixelSprite = {

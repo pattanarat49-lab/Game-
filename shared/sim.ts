@@ -100,6 +100,8 @@ export interface SimPlayer {
   kbx: number;
   kby: number;
   kbSeq: number;
+  /** 1 while a hero with a gun mode (SWAP MODE) has the gun out. */
+  mode: number;
 }
 
 export interface SimEnemy {
@@ -114,7 +116,7 @@ export interface SimEnemy {
   beamAngle: number;
 }
 
-export type BulletKind = "snipe" | "wave" | "magic" | "fireball" | "enemy" | "banana" | "boulder" | "holy" | "stone" | "loki" | "glitch";
+export type BulletKind = "snipe" | "wave" | "magic" | "fireball" | "enemy" | "banana" | "boulder" | "holy" | "stone" | "loki" | "glitch" | "bullet";
 
 /** A lasting area on the map: a storm cloud, an illusion kingdom, a domain. */
 export interface SimZone {
@@ -542,6 +544,12 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
           // A 50m Titan's blows crush everything around it.
           brain.attackTimer = TITAN_ATTACK_COOLDOWN;
           this.sweep(id, p.x, p.y, 0, hero.skill.radius, Math.PI * 2, hero.skill.damage, true);
+        } else if (hero.gun && p.mode === 1) {
+          // Machine gun: a stream of small, slightly scattered bullets.
+          const gun = hero.gun;
+          brain.attackTimer = gun.attackCooldown;
+          const angle = input.aim + (Math.random() - 0.5) * 2 * gun.spread;
+          this.spawnBullet("bullet", p.x, p.y, angle, gun.shotSpeed, { owner: id, damage: gun.damage, pierce: 0, life: gun.range / gun.shotSpeed });
         } else if (hero.attack === "rifle") {
           this.spawnBullet("snipe", p.x, p.y, input.aim, hero.shotSpeed, { owner: id, damage: hero.damage, pierce: hero.pierce, life: hero.range / hero.shotSpeed });
         } else if (hero.attack === "magic") {
@@ -662,6 +670,10 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
         break;
       case "clone":
         this.spawnClone(id, p, skill);
+        break;
+      case "swap": // knife <-> machine gun
+        p.mode = p.mode === 1 ? 0 : 1;
+        brain.attackTimer = 0;
         break;
       case "rush": {
         // Dash straight ahead (rocks stop you), cutting through everything on the way.

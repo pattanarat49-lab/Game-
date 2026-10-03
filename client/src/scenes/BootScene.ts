@@ -21,6 +21,9 @@ import {
   WATER_ORB,
   RIFLE,
   SNIPE_SHOT,
+  KNIFE,
+  MACHINE_GUN,
+  MG_SHOT,
   SPARK,
   SWORD,
   SWORD_WAVE,
@@ -102,6 +105,9 @@ export class BootScene extends Phaser.Scene {
     this.addCanvas("rifle", renderPixelSprite(RIFLE));
     this.addCanvas("wave", renderPixelSprite(SWORD_WAVE));
     this.addCanvas("snipe", renderPixelSprite(SNIPE_SHOT));
+    this.addCanvas("knife", renderPixelSprite(KNIFE));
+    this.addCanvas("machinegun", renderPixelSprite(MACHINE_GUN));
+    this.addCanvas("bullet", renderPixelSprite(MG_SHOT));
     this.addCanvas("magic", renderPixelSprite(MAGIC_ORB));
     this.addCanvas("calcifer", renderPixelSprite(CALCIFER));
     this.addCanvas("holy", renderPixelSprite(HOLY_ORB));
