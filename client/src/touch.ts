@@ -5,7 +5,8 @@ import Phaser from "phaser";
  * Left half of the screen: floating joystick to move.
  * Right half: floating joystick to aim; your hero attacks in that direction while it is held.
  * When only the left stick is used, your hero faces (and aims) where you walk.
- * Buttons in the bottom-right corner: DASH, the hero's skill, and a second skill if the hero has one.
+ * Letting go of the move stick while it is pushed dashes that way (there is no dash button).
+ * Buttons in the bottom-right corner: the hero's skill, and a second skill if the hero has one.
  * Skill buttons work like small sticks: hold, drag to aim, and release to use the skill.
  * While a skill is held a CANCEL spot appears above it: let go there and the skill is not used.
  */
@@ -41,13 +42,15 @@ interface Button {
 export class TouchControls {
   readonly move: Stick = { pointerId: null, baseX: 0, baseY: 0, dx: 0, dy: 0 };
   readonly aim: Stick = { pointerId: null, baseX: 0, baseY: 0, dx: 0, dy: 0 };
-  readonly dashButton: Button;
   readonly skillButton: Button;
   readonly skill2Button?: Button;
   /** Last aim angle, kept after the aim stick is released. */
   aimAngle = 0;
   /** After a dragged skill is released, its direction holds until the cast has gone out. */
   private aimLockUntil = 0;
+  /** Releasing the move stick dashes the way it was pushed: the dash input stays on until then. */
+  private dashUntil = 0;
+  private dashAngle = 0;
 
   /** Where to drop a held skill to call it off. */
   readonly cancelSpot: { x: number; y: number; r: number };
@@ -63,7 +66,6 @@ export class TouchControls {
     scene.input.addPointer(3); // up to 4 fingers at once
     const { width, height } = scene.scale;
     const button = (x: number, y: number, r: number, label: string): Button => ({ x, y, r, label, pointerId: null, dragX: 0, dragY: 0, castUntil: 0, overCancel: false });
-    this.dashButton = button(width - 170, height - 70, 42, "DASH");
     this.skillButton = button(width - 70, height - 150, 42, skillName);
     if (skill2Name) this.skill2Button = button(width - 165, height - 175, 38, skill2Name);
     this.cancelSpot = { x: width - 70, y: Math.max(70, height - 310), r: 34 };
@@ -89,7 +91,7 @@ export class TouchControls {
   }
 
   get dashing() {
-    return this.dashButton.pointerId !== null;
+    return performance.now() < this.dashUntil;
   }
 
   /** True for a moment after a skill button is released: that is when the skill goes off. */
@@ -109,7 +111,7 @@ export class TouchControls {
   }
 
   private get buttons(): Button[] {
-    return this.skill2Button ? [this.dashButton, this.skillButton, this.skill2Button] : [this.dashButton, this.skillButton];
+    return this.skill2Button ? [this.skillButton, this.skill2Button] : [this.skillButton];
   }
 
   get shooting() {
@@ -118,7 +120,10 @@ export class TouchControls {
 
   /** Movement as keyboard-style booleans, matching PlayerInput. */
   get directions() {
-    const { dx, dy } = this.move;
+    // While a release-dash goes out, keep pointing the way the stick was pushed.
+    const dashing = this.dashing && this.move.pointerId === null;
+    const dx = dashing ? Math.cos(this.dashAngle) : this.move.dx;
+    const dy = dashing ? Math.sin(this.dashAngle) : this.move.dy;
     const active = Math.hypot(dx, dy) > DEADZONE;
     return {
       left: active && dx < -0.38,
@@ -193,6 +198,10 @@ export class TouchControls {
   private onUp(p: Phaser.Input.Pointer) {
     for (const stick of [this.move, this.aim]) {
       if (stick.pointerId === p.id) {
+        if (stick === this.move && Math.hypot(stick.dx, stick.dy) > DEADZONE) {
+          this.dashUntil = performance.now() + CAST_PULSE_MS;
+          this.dashAngle = Math.atan2(stick.dy, stick.dx);
+        }
         stick.pointerId = null;
         stick.dx = 0;
         stick.dy = 0;
@@ -201,9 +210,9 @@ export class TouchControls {
     for (const b of this.buttons) {
       if (b.pointerId !== p.id) continue;
       b.pointerId = null;
-      if (b !== this.dashButton && b.overCancel) {
+      if (b.overCancel) {
         b.overCancel = false; // dropped on CANCEL: no skill
-      } else if (b !== this.dashButton) {
+      } else {
         b.castUntil = performance.now() + CAST_PULSE_MS; // release = cast
         // A dragged skill goes where it was aimed, not where you happen to be walking.
         if (Math.hypot(b.dragX, b.dragY) > SKILL_AIM_DEADZONE) {
@@ -223,7 +232,9 @@ export class TouchControls {
     for (const stick of [this.move, this.aim]) {
       if (stick.pointerId === null) continue;
       g.fillStyle(0xffffff, 0.12).fillCircle(stick.baseX, stick.baseY, STICK_RADIUS);
-      g.lineStyle(2, 0xffffff, 0.35).strokeCircle(stick.baseX, stick.baseY, STICK_RADIUS);
+      // The move stick's rim glows orange when letting go would dash.
+      const dashRim = stick === this.move && dashReady >= 1;
+      g.lineStyle(2, dashRim ? 0xf07a22 : 0xffffff, dashRim ? 0.8 : 0.35).strokeCircle(stick.baseX, stick.baseY, STICK_RADIUS);
       const color = stick === this.aim ? 0xffd23f : 0xffffff;
       g.fillStyle(color, 0.6).fillCircle(
         stick.baseX + stick.dx * STICK_RADIUS,
@@ -239,15 +250,12 @@ export class TouchControls {
       g.fillStyle(held.overCancel ? 0xd83a3a : 0x2a2028, held.overCancel ? 0.9 : 0.6).fillCircle(c.x, c.y, c.r);
       g.lineStyle(2, held.overCancel ? 0xffffff : 0xd83a3a, 0.9).strokeCircle(c.x, c.y, c.r);
     }
-    const buttons: [Button, number][] = [
-      [this.dashButton, dashReady],
-      [this.skillButton, skillReady],
-    ];
+    const buttons: [Button, number][] = [[this.skillButton, skillReady]];
     if (this.skill2Button) buttons.push([this.skill2Button, skill2Ready]);
     for (const [b, ready] of buttons) {
       const pressed = b.pointerId !== null;
       g.fillStyle(ready >= 1 ? 0xf07a22 : 0x5a4a50, pressed ? 0.9 : 0.55).fillCircle(b.x, b.y, b.r);
-      if (pressed && b !== this.dashButton) {
+      if (pressed) {
         // An aiming ring and a knob that follows the finger.
         g.lineStyle(2, 0xffffff, 0.4).strokeCircle(b.x, b.y, b.r + SKILL_DRAG - 20);
         g.fillStyle(0xffd23f, 0.75).fillCircle(b.x + b.dragX, b.y + b.dragY, 14);

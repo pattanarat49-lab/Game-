@@ -93,7 +93,8 @@ The game works on phones and tablets with touch controls:
 
 - **Left thumb:** touch anywhere on the left half of the screen and drag to move.
 - **Right thumb:** touch anywhere on the right half and drag to aim. Your hero attacks in that direction while you hold it. If you only use the left stick, your hero faces where you walk.
-- **DASH** and your hero's **skill** button sit in the bottom-right corner.
+- **Dash:** there is no dash button. Let go of the move stick while it is pushed and your hero dashes that way (the stick's rim glows orange when the dash is ready).
+- Your hero's **skill** buttons sit in the bottom-right corner.
 
 Turn the phone sideways. On Android the game goes fullscreen and locks to landscape automatically. You can also use "Add to Home Screen" to launch it like an app.
 
