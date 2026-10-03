@@ -5,7 +5,7 @@ import Phaser from "phaser";
  * Left half of the screen: floating joystick to move.
  * Right half: floating joystick to aim; your hero attacks in that direction while it is held.
  * When only the left stick is used, your hero faces (and aims) where you walk.
- * Two buttons in the bottom-right corner: DASH and the hero's skill.
+ * Buttons in the bottom-right corner: DASH, the hero's skill, and a second skill if the hero has one.
  */
 
 const STICK_RADIUS = 60;
@@ -32,6 +32,7 @@ export class TouchControls {
   readonly aim: Stick = { pointerId: null, baseX: 0, baseY: 0, dx: 0, dy: 0 };
   readonly dashButton: Button;
   readonly skillButton: Button;
+  readonly skill2Button?: Button;
   /** Last aim angle, kept after the aim stick is released. */
   aimAngle = 0;
 
@@ -41,13 +42,15 @@ export class TouchControls {
   constructor(
     private scene: Phaser.Scene,
     skillName: string,
+    skill2Name?: string,
   ) {
     scene.input.addPointer(3); // up to 4 fingers at once
     const { width, height } = scene.scale;
     this.dashButton = { x: width - 170, y: height - 70, r: 42, label: "DASH", pointerId: null };
     this.skillButton = { x: width - 70, y: height - 150, r: 42, label: skillName, pointerId: null };
+    if (skill2Name) this.skill2Button = { x: width - 165, y: height - 175, r: 38, label: skill2Name, pointerId: null };
     this.gfx = scene.add.graphics().setDepth(100);
-    for (const b of [this.dashButton, this.skillButton]) {
+    for (const b of this.buttons) {
       this.labels.push(
         scene.add
           .text(b.x, b.y, b.label, { fontFamily: '"Press Start 2P", monospace', fontSize: "8px", color: "#ffffff", align: "center", wordWrap: { width: 70 } })
@@ -70,6 +73,14 @@ export class TouchControls {
     return this.skillButton.pointerId !== null;
   }
 
+  get skilling2() {
+    return !!this.skill2Button && this.skill2Button.pointerId !== null;
+  }
+
+  private get buttons(): Button[] {
+    return this.skill2Button ? [this.dashButton, this.skillButton, this.skill2Button] : [this.dashButton, this.skillButton];
+  }
+
   get shooting() {
     return this.aim.pointerId !== null && Math.hypot(this.aim.dx, this.aim.dy) > DEADZONE;
   }
@@ -87,7 +98,7 @@ export class TouchControls {
   }
 
   private hitButton(p: Phaser.Input.Pointer): Button | undefined {
-    return [this.dashButton, this.skillButton].find((b) => Math.hypot(p.x - b.x, p.y - b.y) < b.r + 10);
+    return this.buttons.find((b) => Math.hypot(p.x - b.x, p.y - b.y) < b.r + 10);
   }
 
   private onDown(p: Phaser.Input.Pointer) {
@@ -137,13 +148,13 @@ export class TouchControls {
         stick.dy = 0;
       }
     }
-    for (const b of [this.dashButton, this.skillButton]) {
+    for (const b of this.buttons) {
       if (b.pointerId === p.id) b.pointerId = null;
     }
   }
 
   /** Redraw sticks and buttons. Buttons show their cooldown as a filling ring. */
-  draw(skillReady: number, dashReady: number) {
+  draw(skillReady: number, dashReady: number, skill2Ready = 1) {
     const g = this.gfx;
     g.clear();
     for (const stick of [this.move, this.aim]) {
@@ -161,6 +172,7 @@ export class TouchControls {
       [this.dashButton, dashReady],
       [this.skillButton, skillReady],
     ];
+    if (this.skill2Button) buttons.push([this.skill2Button, skill2Ready]);
     for (const [b, ready] of buttons) {
       const pressed = b.pointerId !== null;
       g.fillStyle(ready >= 1 ? 0xf07a22 : 0x5a4a50, pressed ? 0.9 : 0.55).fillCircle(b.x, b.y, b.r);

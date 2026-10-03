@@ -92,7 +92,7 @@ function buildHeroPicker() {
     card.innerHTML = `
       <span class="name">${hero.name}</span>
       <span class="role">${hero.role}</span>
-      <span class="role">Skill: ${hero.skill.name}</span>
+      <span class="role">Skill: ${hero.skill.name}${hero.skill2 ? ` + ${hero.skill2.name}` : ""}</span>
       <div class="stats">
         <span>HP</span>${bars(hero.maxHp / 300)}
         <span>DAMAGE</span>${bars(hero.damage / 90)}

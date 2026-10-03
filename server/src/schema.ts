@@ -12,11 +12,14 @@ export class Player extends Schema {
   @type("boolean") dashing = false;
   @type("float32") dashCooldown = 0;
   @type("float32") skillCooldown = 0;
+  @type("float32") skill2Cooldown = 0;
   @type("float32") respawnIn = 0;
   @type("number") score = 0;
   @type("uint8") color = 0;
   @type("number") attackSeq = 0;
   @type("number") skillSeq = 0;
+  @type("number") skill2Seq = 0;
+  @type("string") owner = "";
   @type("uint8") warp = 0;
   @type("float64") mt = 0;
 }
@@ -41,6 +44,15 @@ export class Bullet extends Schema {
   @type("boolean") hostile = false;
 }
 
+export class Zone extends Schema {
+  @type("string") kind = "";
+  @type("float32") x = 0;
+  @type("float32") y = 0;
+  @type("float32") radius = 0;
+  @type("float32") life = 0;
+  @type("float32") maxLife = 0;
+}
+
 export type Phase = "intermission" | "fight" | "victory";
 
 export class RiftState extends Schema {
@@ -48,6 +60,9 @@ export class RiftState extends Schema {
   @type({ map: Player }) players = new MapSchema<Player>();
   @type({ map: Enemy }) enemies = new MapSchema<Enemy>();
   @type({ map: Bullet }) bullets = new MapSchema<Bullet>();
+  @type({ map: Zone }) zones = new MapSchema<Zone>();
+  @type("float32") timeStop = 0;
+  @type("string") timeStopBy = "";
   @type("string") phase: Phase = "intermission";
   @type("uint8") wave = 0;
   @type("float32") phaseTimer = 0;

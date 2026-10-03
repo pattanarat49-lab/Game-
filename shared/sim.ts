@@ -15,6 +15,7 @@ import {
   EnemyKind,
   HEROES,
   HeroDef,
+  SkillDef,
   INTERMISSION_TIME,
   LAVA_DPS,
   LAVA_MIN_RADIUS,
@@ -51,6 +52,10 @@ const HURT_IFRAMES = 0.5;
 const WAVE_CLEAR_HEAL = 0.3;
 const SNIPER_BURST = 3;
 const SNIPER_BURST_GAP = 0.15;
+const OKITA_SLASHES = 8;
+const ONE_PUNCH_DAMAGE = 1e9; // "infinity", but still a number the network can send
+const MAX_CLONES = 2;
+const CLONE_SIGHT = 300;
 
 export interface SimPlayer {
   name: string;
@@ -64,6 +69,7 @@ export interface SimPlayer {
   dashing: boolean;
   dashCooldown: number;
   skillCooldown: number;
+  skill2Cooldown: number;
   respawnIn: number;
   score: number;
   color: number;
@@ -71,6 +77,9 @@ export interface SimPlayer {
   attackSeq: number;
   /** Goes up by one every time the skill is used. */
   skillSeq: number;
+  skill2Seq: number;
+  /** For a summoned copy (Loki's clone): the id of the player who made it. Empty for real players. */
+  owner: string;
   /** Goes up whenever the server teleports the player (spawn), so the client snaps instead of sliding. */
   warp: number;
   /** The owner's clock (ms) when they were at x, y, for smooth playback on other screens. */
@@ -89,7 +98,17 @@ export interface SimEnemy {
   beamAngle: number;
 }
 
-export type BulletKind = "snipe" | "wave" | "magic" | "fireball" | "enemy";
+export type BulletKind = "snipe" | "wave" | "magic" | "fireball" | "enemy" | "holy" | "stone" | "loki";
+
+/** A lasting area on the map: a storm cloud, an illusion kingdom, a domain. */
+export interface SimZone {
+  kind: string;
+  x: number;
+  y: number;
+  radius: number;
+  life: number; // seconds left
+  maxLife: number;
+}
 
 export interface SimBullet {
   kind: string;
@@ -110,11 +129,15 @@ export interface SimCollection<T> {
   readonly size: number;
 }
 
-export interface SimState<P extends SimPlayer, E extends SimEnemy, B extends SimBullet> {
+export interface SimState<P extends SimPlayer, E extends SimEnemy, B extends SimBullet, Z extends SimZone = SimZone> {
   stage: string;
   players: SimCollection<P>;
   enemies: SimCollection<E>;
   bullets: SimCollection<B>;
+  zones: SimCollection<Z>;
+  /** Seconds of stopped time left, and who stopped it (they alone can move). */
+  timeStop: number;
+  timeStopBy: string;
   phase: string;
   wave: number;
   phaseTimer: number;
@@ -123,10 +146,11 @@ export interface SimState<P extends SimPlayer, E extends SimEnemy, B extends Sim
   winner: string;
 }
 
-export interface SimFactory<P, E, B> {
+export interface SimFactory<P, E, B, Z = SimZone> {
   player(): P;
   enemy(): E;
   bullet(): B;
+  zone(): Z;
 }
 
 // Data that players do not need to see.
@@ -139,6 +163,9 @@ interface PlayerBrain {
   hurtTimer: number;
   burstLeft: number;
   burstTimer: number;
+  slashLeft: number; // Okita's dimension slash: hits still to come
+  slashTimer: number;
+  cloneLife: number; // seconds a clone has left
   /** Position the client says it moved to (client-side movement), and how far the server lets it go. */
   target?: { x: number; y: number; t: number };
   moveBudget: number;
@@ -150,6 +177,13 @@ interface EnemyBrain {
   beamTimer: number; // counts down to the next beam phase
 }
 
+interface ZoneBrain {
+  owner: string;
+  tick: number; // seconds until the next hit
+  every: number;
+  damage: number;
+}
+
 interface BulletBrain {
   owner?: string;
   damage: number;
@@ -159,15 +193,16 @@ interface BulletBrain {
   blast: number; // explosion radius when it hits or runs out (0 = no explosion)
 }
 
-export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBullet> {
+export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBullet, Z extends SimZone = SimZone> {
   private brains = new Map<string, PlayerBrain>();
+  private zoneBrains = new Map<string, ZoneBrain>();
   private enemyBrains = new Map<string, EnemyBrain>();
   private bulletBrains = new Map<string, BulletBrain>();
   private nextId = 1;
 
   constructor(
-    readonly state: SimState<P, E, B>,
-    private make: SimFactory<P, E, B>,
+    readonly state: SimState<P, E, B, Z>,
+    private make: SimFactory<P, E, B, Z>,
     stage: StageId = "lava",
   ) {
     state.stage = stage;
@@ -179,12 +214,17 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
     const player = this.make.player();
     player.name = name.slice(0, 16) || "Riftborn";
     player.hero = hero in HEROES ? hero : "superman";
-    player.color = this.state.players.size % 4;
+    player.color = this.realPlayerCount() % 4;
     this.placeAtSpawn(player);
     player.maxHp = def.maxHp;
     player.hp = def.maxHp;
     this.state.players.set(id, player);
-    this.brains.set(id, {
+    this.brains.set(id, this.newBrain());
+    return player;
+  }
+
+  private newBrain(): PlayerBrain {
+    return {
       input: { ...EMPTY_INPUT },
       attackTimer: 0,
       dashTimer: 0,
@@ -193,14 +233,40 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       hurtTimer: 0,
       burstLeft: 0,
       burstTimer: 0,
+      slashLeft: 0,
+      slashTimer: 0,
+      cloneLife: 0,
       moveBudget: 0,
-    });
-    return player;
+    };
   }
 
   removePlayer(id: string) {
     this.state.players.delete(id);
     this.brains.delete(id);
+    // A player's clones vanish with them.
+    this.state.players.forEach((p, cid) => {
+      if (p.owner === id) this.removePlayer(cid);
+    });
+  }
+
+  /** Players actually connected (not clones). */
+  realPlayerCount() {
+    let n = 0;
+    this.state.players.forEach((p) => {
+      if (!p.owner) n++;
+    });
+    return n;
+  }
+
+  /** Who gets the credit for an attack: a clone's attacks count as its owner's. */
+  private rootOf(id: string | undefined): string {
+    if (!id) return "";
+    return this.state.players.get(id)?.owner || id;
+  }
+
+  /** True if attacks from `attacker` can hurt player `victim` (PvP, and never your own side). */
+  private isFoe(attacker: string | undefined, victim: string): boolean {
+    return this.pvpLive() && !!attacker && this.rootOf(attacker) !== this.rootOf(victim);
   }
 
   setInput(id: string, input: Partial<PlayerInput>) {
@@ -215,6 +281,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       shoot: !!input.shoot,
       dash: !!input.dash,
       skill: !!input.skill,
+      skill2: !!input.skill2,
     };
     const p = this.state.players.get(id);
     if (p && Number.isFinite(input.x) && Number.isFinite(input.y) && input.warp === p.warp) {
@@ -226,6 +293,21 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
 
   update(dt: number) {
     const s = this.state;
+
+    if (s.timeStop > 0) {
+      // ZA WARUDO: only the one who stopped time (and their own attacks) moves.
+      s.timeStop = Math.max(0, s.timeStop - dt);
+      const by = s.timeStopBy;
+      if (s.timeStop <= 0 || !s.players.has(by)) {
+        s.timeStop = 0;
+        s.timeStopBy = "";
+      } else {
+        this.updatePlayers(dt, by);
+        this.updateBullets(dt, by);
+        this.updateZones(dt, by);
+        return;
+      }
+    }
 
     if (s.stage === "boss") this.updateBossRoom(dt);
     else if (s.stage === "pvp") this.updatePvp(dt);
@@ -255,6 +337,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
     this.updatePlayers(dt);
     this.updateEnemies(dt);
     this.updateBullets(dt);
+    this.updateZones(dt);
   }
 
   private startIntermission(wave: number) {
@@ -283,6 +366,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       if (s.phaseTimer <= 0) {
         // New round: reset kills and put everyone back at full health.
         s.players.forEach((p, id) => {
+          if (p.owner) return this.removePlayer(id);
           p.score = 0;
           p.dead = false;
           p.hp = p.maxHp;
@@ -331,19 +415,29 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
 
   // ------------------------------------------------------------- players
 
-  private updatePlayers(dt: number) {
+  /** Move and fight for every player. With `only`, just that one (time is stopped). */
+  private updatePlayers(dt: number, only?: string) {
     const s = this.state;
     s.players.forEach((p, id) => {
-      const brain = this.brains.get(id)!;
+      if (only && id !== only) return;
+      const brain = this.brains.get(id);
+      if (!brain) return;
       const input = brain.input;
       const hero = heroOf(p.hero);
       brain.hurtTimer = Math.max(0, brain.hurtTimer - dt);
       brain.attackTimer = Math.max(0, brain.attackTimer - dt);
       p.dashCooldown = Math.max(0, p.dashCooldown - dt);
       p.skillCooldown = Math.max(0, p.skillCooldown - dt);
+      p.skill2Cooldown = Math.max(0, p.skill2Cooldown - dt);
+
+      if (p.owner) {
+        this.updateClone(id, p, brain, hero, dt);
+        return;
+      }
 
       if (p.dead) {
         brain.burstLeft = 0;
+        brain.slashLeft = 0;
         p.respawnIn = Math.max(0, p.respawnIn - dt);
         if (p.respawnIn <= 0) {
           p.dead = false;
@@ -410,11 +504,26 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
         }
       }
 
-      // Skill
+      // Skills
       if (input.skill && p.skillCooldown <= 0) {
         p.skillCooldown = hero.skill.cooldown;
         p.skillSeq++;
-        this.useSkill(id, p, hero, brain);
+        this.useSkill(id, p, hero, hero.skill, brain);
+      }
+      if (hero.skill2 && input.skill2 && p.skill2Cooldown <= 0) {
+        p.skill2Cooldown = hero.skill2.cooldown;
+        p.skill2Seq++;
+        this.useSkill(id, p, hero, hero.skill2, brain);
+      }
+
+      // Okita's dimension slash keeps cutting for a moment.
+      if (brain.slashLeft > 0) {
+        brain.slashTimer -= dt;
+        if (brain.slashTimer <= 0) {
+          brain.slashLeft--;
+          brain.slashTimer = (hero.skill.duration ?? 0.8) / OKITA_SLASHES;
+          this.sweep(id, p.x, p.y, 0, hero.skill.radius, Math.PI * 2, hero.skill.damage);
+        }
       }
 
       // Sniper burst continues over a few ticks.
@@ -433,8 +542,8 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
     });
   }
 
-  private useSkill(id: string, p: P, hero: HeroDef, brain: PlayerBrain) {
-    const skill = hero.skill;
+  private useSkill(id: string, p: P, hero: HeroDef, skill: SkillDef, brain: PlayerBrain) {
+    const s = this.state;
     switch (skill.kind) {
       case "smash": // ground pound that hits everything around you
       case "storm": // lightning rains on everything around you
@@ -459,7 +568,188 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       case "jab": // a quick, short punch
         this.sweep(id, p.x, p.y, p.aim, skill.radius, 1.0, skill.damage);
         break;
+      case "onepunch": // whatever is in front of Saitama simply stops existing
+        this.sweep(id, p.x, p.y, p.aim, skill.radius, 2.4, ONE_PUNCH_DAMAGE);
+        break;
+      case "heal":
+        s.players.forEach((q, qid) => {
+          if (q.dead || Math.hypot(q.x - p.x, q.y - p.y) > skill.radius) return;
+          if (this.pvpLive() && this.rootOf(qid) !== id) return; // no healing your rivals
+          q.hp = Math.min(q.maxHp, q.hp + q.maxHp * skill.damage);
+        });
+        break;
+      case "line":
+        this.lineHit(id, p.x, p.y, p.aim, skill.radius, skill.width ?? 40, skill.damage);
+        break;
+      case "slashes":
+        brain.slashLeft = OKITA_SLASHES;
+        brain.slashTimer = 0;
+        break;
+      case "domain":
+        // Unlimited Void: every enemy on the map is hit at once.
+        s.enemies.forEach((_e, eid) => this.damageEnemy(eid, skill.damage, id));
+        s.players.forEach((_v, vid) => {
+          if (this.isFoe(id, vid)) this.damagePlayer(vid, skill.damage * PVP_DAMAGE_SCALE, true, id);
+        });
+        this.addZone("domain", p.x, p.y, skill.radius, skill.duration ?? 1.5, { owner: id, every: Infinity, damage: 0 });
+        break;
+      case "timestop":
+        s.timeStop = skill.duration ?? 4;
+        s.timeStopBy = id;
+        break;
+      case "hurricane": {
+        // The storm gathers a little way ahead, where you aim.
+        const x = Math.min(WORLD_W - 20, Math.max(20, p.x + Math.cos(p.aim) * 120));
+        const y = Math.min(WORLD_H - 20, Math.max(20, p.y + Math.sin(p.aim) * 120));
+        this.addZone("hurricane", x, y, skill.radius, skill.duration ?? 3.5, { owner: id, every: 0.35, damage: skill.damage });
+        break;
+      }
+      case "asgard":
+        this.addZone("asgard", p.x, p.y, skill.radius, skill.duration ?? 10, { owner: id, every: 0.5, damage: skill.damage });
+        break;
+      case "clone":
+        this.spawnClone(id, p, skill);
+        break;
     }
+  }
+
+  /** Hit everything in a wide straight line (Deku's 100% SMASH). */
+  private lineHit(owner: string, x: number, y: number, angle: number, length: number, width: number, damage: number) {
+    const cos = Math.cos(angle);
+    const sin = Math.sin(angle);
+    const inLine = (tx: number, ty: number, r: number) => {
+      const along = (tx - x) * cos + (ty - y) * sin;
+      const across = Math.abs(-(tx - x) * sin + (ty - y) * cos);
+      return along >= -r && along <= length + r && across <= width / 2 + r;
+    };
+    this.state.enemies.forEach((e, eid) => {
+      if (inLine(e.x, e.y, ENEMIES[e.kind as EnemyKind].radius)) this.damageEnemy(eid, damage, owner);
+    });
+    this.state.players.forEach((v, vid) => {
+      if (!v.dead && this.isFoe(owner, vid) && inLine(v.x, v.y, PLAYER_RADIUS)) this.damagePlayer(vid, damage * PVP_DAMAGE_SCALE, true, owner);
+    });
+  }
+
+  // -------------------------------------------------------------- clones
+
+  /** Loki's clone: a copy with part of his HP that fights the nearest enemy by itself. */
+  private spawnClone(ownerId: string, owner: P, skill: SkillDef) {
+    const mine: string[] = [];
+    this.state.players.forEach((q, qid) => {
+      if (q.owner === ownerId) mine.push(qid);
+    });
+    if (mine.length >= MAX_CLONES) this.removePlayer(mine[0]);
+    const c = this.make.player();
+    c.name = "Clone";
+    c.hero = owner.hero;
+    c.owner = ownerId;
+    c.color = owner.color;
+    const a = owner.aim + Math.PI / 2;
+    const spot = moveCircle(owner.x + Math.cos(a) * 18, owner.y + Math.sin(a) * 18, 0, 0, PLAYER_RADIUS);
+    c.x = spot.x;
+    c.y = spot.y;
+    c.aim = owner.aim;
+    c.maxHp = Math.max(1, Math.round(owner.maxHp * skill.damage));
+    c.hp = c.maxHp;
+    const id = `c${this.nextId++}`;
+    this.state.players.set(id, c);
+    const brain = this.newBrain();
+    brain.cloneLife = skill.duration ?? 20;
+    this.brains.set(id, brain);
+  }
+
+  private updateClone(id: string, c: P, brain: PlayerBrain, hero: HeroDef, dt: number) {
+    const owner = this.state.players.get(c.owner);
+    brain.cloneLife -= dt;
+    if (!owner || brain.cloneLife <= 0 || c.dead) {
+      this.removePlayer(id);
+      return;
+    }
+    // Find something to fight: the nearest enemy, or a rival player in the arena.
+    let tx = 0;
+    let ty = 0;
+    let best = CLONE_SIGHT;
+    this.state.enemies.forEach((e) => {
+      const d = Math.hypot(e.x - c.x, e.y - c.y);
+      if (d < best) [best, tx, ty] = [d, e.x, e.y];
+    });
+    this.state.players.forEach((v, vid) => {
+      if (v.dead || !this.isFoe(id, vid)) return;
+      const d = Math.hypot(v.x - c.x, v.y - c.y);
+      if (d < best) [best, tx, ty] = [d, v.x, v.y];
+    });
+    let mx = 0;
+    let my = 0;
+    if (best < CLONE_SIGHT) {
+      c.aim = Math.atan2(ty - c.y, tx - c.x);
+      // Keep at casting distance.
+      const want = best > hero.range * 0.7 ? 1 : best < hero.range * 0.35 ? -1 : 0;
+      mx = Math.cos(c.aim) * want;
+      my = Math.sin(c.aim) * want;
+      if (brain.attackTimer <= 0 && best <= hero.range) {
+        brain.attackTimer = hero.attackCooldown * 1.3;
+        c.attackSeq++;
+        this.spawnBullet((hero.shot ?? "magic") as BulletKind, c.x, c.y, c.aim, hero.shotSpeed, { owner: id, damage: hero.damage, pierce: 0, life: hero.range / hero.shotSpeed, blast: hero.aoe });
+      }
+    } else {
+      // Nothing to fight: stay close to Loki.
+      const d = Math.hypot(owner.x - c.x, owner.y - c.y);
+      if (d > 40) {
+        mx = (owner.x - c.x) / d;
+        my = (owner.y - c.y) / d;
+        c.aim = Math.atan2(my, mx);
+      }
+    }
+    const moved = moveCircle(c.x, c.y, mx * hero.speed * dt, my * hero.speed * dt, PLAYER_RADIUS);
+    c.x = moved.x;
+    c.y = moved.y;
+    if (inLava(c.x, c.y, this.state.lavaRadius)) this.damagePlayer(id, LAVA_DPS * dt, true);
+  }
+
+  // --------------------------------------------------------------- zones
+
+  private addZone(kind: string, x: number, y: number, radius: number, life: number, brain: { owner: string; every: number; damage: number }) {
+    const z = this.make.zone();
+    z.kind = kind;
+    z.x = x;
+    z.y = y;
+    z.radius = radius;
+    z.life = life;
+    z.maxLife = life;
+    const id = `z${this.nextId++}`;
+    this.state.zones.set(id, z);
+    this.zoneBrains.set(id, { ...brain, tick: 0 });
+  }
+
+  private updateZones(dt: number, onlyOwner?: string) {
+    const s = this.state;
+    s.zones.forEach((z, id) => {
+      const brain = this.zoneBrains.get(id);
+      if (!brain || (onlyOwner && brain.owner !== onlyOwner)) return;
+      z.life -= dt;
+      brain.tick -= dt;
+      if (brain.tick <= 0) {
+        brain.tick += brain.every;
+        if (z.kind === "hurricane") {
+          this.sweep(brain.owner, z.x, z.y, 0, z.radius, Math.PI * 2, brain.damage);
+        } else if (z.kind === "asgard") {
+          // Everyone hostile inside the illusion loses a share of their max HP.
+          const share = brain.damage * brain.every;
+          s.enemies.forEach((e, eid) => {
+            if (Math.hypot(e.x - z.x, e.y - z.y) <= z.radius) this.damageEnemy(eid, e.maxHp * share, brain.owner);
+          });
+          s.players.forEach((v, vid) => {
+            if (!v.dead && this.isFoe(brain.owner, vid) && Math.hypot(v.x - z.x, v.y - z.y) <= z.radius) {
+              this.damagePlayer(vid, v.maxHp * share, true, brain.owner);
+            }
+          });
+        }
+      }
+      if (z.life <= 0) {
+        s.zones.delete(id);
+        this.zoneBrains.delete(id);
+      }
+    });
   }
   /** Hit every enemy inside a slice of a circle (a punch, a sword swing, or a full circle). */
   private sweep(owner: string, x: number, y: number, aim: number, range: number, arc: number, damage: number) {
@@ -477,7 +767,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
     });
     if (!this.pvpLive()) return;
     this.state.players.forEach((v, vid) => {
-      if (vid === owner || v.dead) return;
+      if (!this.isFoe(owner, vid) || v.dead) return;
       const dx = v.x - x;
       const dy = v.y - y;
       if (Math.hypot(dx, dy) > range + PLAYER_RADIUS) return;
@@ -505,9 +795,15 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
     }
     p.hp = Math.max(0, p.hp - amount);
     if (p.hp <= 0) {
+      if (p.owner) {
+        // Clones just vanish, and are worth no kills.
+        this.removePlayer(id);
+        return;
+      }
       p.dead = true;
       p.respawnIn = RESPAWN_TIME;
-      const killer = attacker && attacker !== id ? this.state.players.get(attacker) : undefined;
+      const root = this.rootOf(attacker);
+      const killer = root && root !== id ? this.state.players.get(root) : undefined;
       if (killer && this.pvpLive()) {
         killer.score++;
         if (killer.score >= PVP_KILLS_TO_WIN) {
@@ -562,14 +858,14 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
     if (e.hp <= 0) {
       this.state.enemies.delete(eid);
       this.enemyBrains.delete(eid);
-      const killer = owner && this.state.players.get(owner);
+      const killer = this.state.players.get(this.rootOf(owner));
       if (killer) killer.score += ENEMIES[e.kind as EnemyKind].score;
     }
   }
 
   /** More players means tougher enemies. */
   private hpScale() {
-    return 1 + 0.5 * Math.max(0, this.state.players.size - 1);
+    return 1 + 0.5 * Math.max(0, this.realPlayerCount() - 1);
   }
 
   private nearestPlayer(x: number, y: number): [string, P] | undefined {
@@ -710,10 +1006,11 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
     this.bulletBrains.delete(id);
   }
 
-  private updateBullets(dt: number) {
+  private updateBullets(dt: number, onlyOwner?: string) {
     const s = this.state;
     s.bullets.forEach((b, id) => {
       const brain = this.bulletBrains.get(id)!;
+      if (onlyOwner && brain.owner !== onlyOwner) return;
       b.x += b.vx * dt;
       b.y += b.vy * dt;
       brain.life -= dt;
@@ -739,7 +1036,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       const hitRadius = b.kind === "wave" ? 14 : b.kind === "fireball" ? 8 : 2;
       if (this.pvpLive()) {
         s.players.forEach((v, vid) => {
-          if (!s.bullets.has(id) || vid === brain.owner || v.dead || brain.hit.has(vid)) return;
+          if (!s.bullets.has(id) || !this.isFoe(brain.owner, vid) || v.dead || brain.hit.has(vid)) return;
           if (Math.hypot(v.x - b.x, v.y - b.y) >= PLAYER_RADIUS + hitRadius) return;
           if (brain.blast > 0) {
             this.sweep(brain.owner ?? "", b.x, b.y, 0, brain.blast, Math.PI * 2, brain.damage);

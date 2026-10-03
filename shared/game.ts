@@ -19,9 +19,48 @@ export const DASH_TIME = 0.15;
 export const DASH_COOLDOWN = 1.2;
 
 // Heroes. Every number here is safe to tweak for balance.
-export type HeroId = "superman" | "isekai" | "simo" | "killua" | "howl" | "ricardo";
+export type HeroId =
+  | "superman"
+  | "isekai"
+  | "simo"
+  | "killua"
+  | "howl"
+  | "ricardo"
+  | "saitama"
+  | "healer"
+  | "deku"
+  | "okita"
+  | "gojo"
+  | "starplatinum"
+  | "rudeus"
+  | "loki";
 export type AttackStyle = "punch" | "sword" | "rifle" | "lightning" | "magic";
-export type SkillKind = "smash" | "wave" | "burst" | "storm" | "fireball" | "jab";
+export type SkillKind =
+  | "smash"
+  | "wave"
+  | "burst"
+  | "storm"
+  | "fireball"
+  | "jab"
+  | "onepunch" // one huge sweep that kills anything
+  | "heal" // heal every ally nearby
+  | "line" // a wide straight blast
+  | "slashes" // many quick slashes all around
+  | "domain" // hits every enemy on the map
+  | "timestop" // everything but the caster freezes
+  | "hurricane" // a storm cloud that keeps striking an area
+  | "asgard" // an illusion kingdom that drains enemies standing in it
+  | "clone"; // a copy that fights on its own
+
+export interface SkillDef {
+  kind: SkillKind;
+  name: string;
+  cooldown: number;
+  damage: number; // for "heal": fraction of max HP restored; for "asgard": fraction of max HP lost per second
+  radius: number; // area of effect, or reach for waves, jabs and lines
+  width?: number; // for "line"
+  duration?: number; // for lasting skills (time stop, storms, illusions, clones)
+}
 
 export interface HeroDef {
   name: string;
@@ -37,13 +76,9 @@ export interface HeroDef {
   aoe: number; // blast radius for lightning strikes and magic explosions
   shotSpeed: number;
   pierce: number; // how many enemies one bullet can pass through
-  skill: {
-    kind: SkillKind;
-    name: string;
-    cooldown: number;
-    damage: number;
-    radius: number; // area of effect, or reach for waves and jabs
-  };
+  shot?: string; // projectile look for magic attacks (default "magic")
+  skill: SkillDef;
+  skill2?: SkillDef; // a second skill (E key / second button)
 }
 
 export const HEROES: Record<HeroId, HeroDef> = {
@@ -144,6 +179,138 @@ export const HEROES: Record<HeroId, HeroDef> = {
     // A jab is limited only by how fast fists move, not by a cooldown.
     skill: { kind: "jab", name: "JAB", cooldown: 0.12, damage: 11, radius: 16 },
   },
+  saitama: {
+    name: "Saitama",
+    role: "Hero for fun",
+    blurb: "A hundred times the HP of anyone else. ONE PUNCH ends any fight.",
+    maxHp: 10000,
+    speed: 105,
+    attack: "punch",
+    attackCooldown: 0.5,
+    damage: 30,
+    range: 20,
+    arc: 1.6,
+    aoe: 0,
+    shotSpeed: 0,
+    pierce: 0,
+    skill: { kind: "onepunch", name: "ONE PUNCH", cooldown: 5, damage: Infinity, radius: 42 },
+  },
+  healer: {
+    name: "Healer",
+    role: "Support",
+    blurb: "Holy bolts from afar. HEAL restores 50% HP to every ally nearby.",
+    maxHp: 110,
+    speed: 105,
+    attack: "magic",
+    attackCooldown: 0.6,
+    damage: 18,
+    range: 220,
+    arc: 0,
+    aoe: 0,
+    shotSpeed: 260,
+    pierce: 0,
+    shot: "holy",
+    skill: { kind: "heal", name: "HEAL", cooldown: 9, damage: 0.5, radius: 170 },
+  },
+  deku: {
+    name: "Deku",
+    role: "Brawler",
+    blurb: "Runs 1.5x faster. 100% SMASH blasts a wide line straight ahead.",
+    maxHp: 130,
+    speed: 160,
+    attack: "punch",
+    attackCooldown: 0.4,
+    damage: 32,
+    range: 20,
+    arc: 1.4,
+    aoe: 0,
+    shotSpeed: 0,
+    pierce: 0,
+    skill: { kind: "line", name: "100% SMASH", cooldown: 6, damage: 160, radius: 220, width: 48 },
+  },
+  okita: {
+    name: "Okita Souji",
+    role: "Swordswoman",
+    blurb: "Lightning-fast sword. DIMENSION SLASH cuts everything around her again and again.",
+    maxHp: 110,
+    speed: 125,
+    attack: "sword",
+    attackCooldown: 0.3,
+    damage: 26,
+    range: 36,
+    arc: 2.0,
+    aoe: 0,
+    shotSpeed: 0,
+    pierce: 0,
+    skill: { kind: "slashes", name: "DIMENSION SLASH", cooldown: 6, damage: 24, radius: 95, duration: 0.8 },
+  },
+  gojo: {
+    name: "Gojo",
+    role: "Sorcerer",
+    blurb: "Fights up close. DOMAIN EXPANSION hits every enemy on the whole map.",
+    maxHp: 140,
+    speed: 115,
+    attack: "punch",
+    attackCooldown: 0.4,
+    damage: 34,
+    range: 22,
+    arc: 1.6,
+    aoe: 0,
+    shotSpeed: 0,
+    pierce: 0,
+    skill: { kind: "domain", name: "DOMAIN EXPANSION", cooldown: 18, damage: 200, radius: 9999, duration: 1.6 },
+  },
+  starplatinum: {
+    name: "Star Platinum",
+    role: "Stand",
+    blurb: "Punches incredibly fast. TIME STOP freezes the whole map for 4s; only he can move.",
+    maxHp: 150,
+    speed: 110,
+    attack: "punch",
+    attackCooldown: 0.07,
+    damage: 9,
+    range: 22,
+    arc: 1.4,
+    aoe: 0,
+    shotSpeed: 0,
+    pierce: 0,
+    skill: { kind: "timestop", name: "TIME STOP", cooldown: 20, damage: 0, radius: 0, duration: 4 },
+  },
+  rudeus: {
+    name: "Rudeus Greyrat",
+    role: "Mage",
+    blurb: "Casts magic bolts. HURRICANE summons a huge storm cloud that rains lightning on an area.",
+    maxHp: 100,
+    speed: 105,
+    attack: "magic",
+    attackCooldown: 0.6,
+    damage: 26,
+    range: 240,
+    arc: 0,
+    aoe: 0,
+    shotSpeed: 280,
+    pierce: 0,
+    shot: "stone",
+    skill: { kind: "hurricane", name: "HURRICANE", cooldown: 12, damage: 26, radius: 140, duration: 3.5 },
+  },
+  loki: {
+    name: "Loki",
+    role: "Trickster god",
+    blurb: "Magic shots. ILLUSION raises Asgard for 10s (enemies inside lose 7% HP/s). CLONE makes a copy that fights.",
+    maxHp: 120,
+    speed: 110,
+    attack: "magic",
+    attackCooldown: 0.6,
+    damage: 24,
+    range: 230,
+    arc: 0,
+    aoe: 0,
+    shotSpeed: 260,
+    pierce: 0,
+    shot: "loki",
+    skill: { kind: "asgard", name: "ILLUSION", cooldown: 22, damage: 0.07, radius: 230, duration: 10 },
+    skill2: { kind: "clone", name: "CLONE", cooldown: 12, damage: 0.25, radius: 0, duration: 20 },
+  },
 };
 
 export const HERO_IDS = Object.keys(HEROES) as HeroId[];
@@ -221,6 +388,7 @@ export interface PlayerInput {
   shoot: boolean;
   dash: boolean;
   skill: boolean;
+  skill2?: boolean;
   /** Where the client has moved its own hero. The server follows it, within the hero's speed. */
   x?: number;
   y?: number;

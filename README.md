@@ -20,7 +20,15 @@ Design doc: see `docs/game-design-foundation.md`.
   - **Killua:** three times faster than anyone. Attacks call down lightning that hits an area. Skill THUNDERBOLT strikes everything around him.
   - **Howl:** long-range magic orbs that explode in a wide blast. Skill CALCIFER throws a big fireball with a huge explosion.
   - **Ricardo Martinez:** boxer with very short reach. Skill JAB has no cooldown, so hold it for rapid jabs.
-- Controls: attack with left mouse, aim with the mouse, dash with Space, and use your skill with Q, E or right mouse
+  - **Saitama:** 100x the HP of anyone else. Skill ONE PUNCH kills anything in front of him (Isekai Hero's reach).
+  - **Healer:** holy bolts from range. Skill HEAL restores 50% max HP to every ally nearby (and himself).
+  - **Deku:** runs 1.5x faster. Skill 100% SMASH blasts a wide straight line.
+  - **Okita Souji:** fast sword. Skill DIMENSION SLASH cuts everything around her 8 times.
+  - **Gojo:** close-range fighter. Skill DOMAIN EXPANSION hits every enemy on the whole map.
+  - **Star Platinum:** very fast punches. Skill TIME STOP freezes the whole map for 4 seconds; only he can move.
+  - **Rudeus Greyrat:** magic bolts. Skill HURRICANE summons a storm cloud that keeps striking lightning over a wide area.
+  - **Loki:** magic shots and two skills. ILLUSION raises Asgard for 10 seconds; enemies inside lose 7% of their max HP each second. CLONE (E) makes a copy with 25% of his HP that attacks enemies by itself.
+- Controls: attack with left mouse, aim with the mouse, dash with Space, use your skill with Q or right mouse (E too, unless the hero has a second skill, which E uses)
 - **Enemies:** Cinderlings (fast), Magma Brutes (tanky), Ash Casters (ranged), and the **Pyre Warden** boss on wave 5
 - **Co-op for up to 4 players.** Enemies get tougher with more players. Fallen players respawn after 5 seconds.
 - **Smooth multiplayer:** your own hero moves on your device at full frame rate and the server follows it (never faster than the hero can run), so there is no rubber-banding. The server still decides hits, damage and spawns. Other players and enemies are drawn ~60-150 ms in the past, blended between timestamped updates (30 a second), so they glide even when the network is jittery.

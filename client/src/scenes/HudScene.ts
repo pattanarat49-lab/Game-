@@ -6,6 +6,14 @@ import { TouchControls, isTouchDevice } from "../touch";
 
 const FONT = { fontFamily: '"Press Start 2P", monospace', fontSize: "12px", color: "#ffffff" };
 
+function realPlayers(state: any): number {
+  let n = 0;
+  state.players.forEach((p: any) => {
+    if (!p.owner) n++;
+  });
+  return n;
+}
+
 export class HudScene extends Phaser.Scene {
   private bars!: Phaser.GameObjects.Graphics;
   private hpText!: Phaser.GameObjects.Text;
@@ -13,6 +21,7 @@ export class HudScene extends Phaser.Scene {
   private banner!: Phaser.GameObjects.Text;
   private scores!: Phaser.GameObjects.Text;
   private skills!: Phaser.GameObjects.Text;
+  private special!: Phaser.GameObjects.Text;
   touch?: TouchControls;
 
   constructor() {
@@ -27,14 +36,17 @@ export class HudScene extends Phaser.Scene {
     this.banner = this.add
       .text(this.scale.width / 2, 120, "", { ...FONT, fontSize: "20px", align: "center", stroke: "#000", strokeThickness: 4 })
       .setOrigin(0.5);
+    this.special = this.add
+      .text(this.scale.width / 2, this.scale.height * 0.68, "", { ...FONT, fontSize: "18px", align: "center", stroke: "#000", strokeThickness: 5 })
+      .setOrigin(0.5);
     this.scores = this.add.text(this.scale.width - 20, 16, "", { ...FONT, fontSize: "10px", align: "right", lineSpacing: 6 }).setOrigin(1, 0);
     const hero = heroOf(this.registry.get("hero"));
     if (isTouchDevice()) {
-      this.touch = new TouchControls(this, hero.skill.name);
+      this.touch = new TouchControls(this, hero.skill.name, hero.skill2?.name);
       return;
     }
     this.add
-      .text(20, this.scale.height - 20, `WASD move  MOUSE aim/attack  SPACE dash  Q/RMB ${hero.skill.name}`, {
+      .text(20, this.scale.height - 20, `WASD move  MOUSE aim/attack  SPACE dash  Q/RMB ${hero.skill.name}${hero.skill2 ? `  E ${hero.skill2.name}` : ""}`, {
         ...FONT,
         fontSize: "9px",
         color: "#c9b8c0",
@@ -60,10 +72,15 @@ export class HudScene extends Phaser.Scene {
       const hero = heroOf(me.hero);
       const noCooldown = hero.skill.cooldown < 0.2; // e.g. Ricardo's jab
       const skill = noCooldown ? "NO COOLDOWN" : me.skillCooldown > 0 ? `${me.skillCooldown.toFixed(1)}s` : "READY";
-      this.skills.setText(`DASH   ${dash}\n${hero.skill.name.padEnd(6)} ${skill}`);
-      this.drawCooldown(220, 68, 1 - me.dashCooldown / DASH_COOLDOWN);
-      this.drawCooldown(220, 84, 1 - me.skillCooldown / hero.skill.cooldown);
-      this.touch?.draw(1 - me.skillCooldown / hero.skill.cooldown, 1 - me.dashCooldown / DASH_COOLDOWN);
+      const lines = [`DASH   ${dash}`, `${hero.skill.name.padEnd(6)} ${skill}`];
+      const skill2Ready = hero.skill2 ? 1 - me.skill2Cooldown / hero.skill2.cooldown : 1;
+      if (hero.skill2) lines.push(`${hero.skill2.name.padEnd(6)} ${me.skill2Cooldown > 0 ? `${me.skill2Cooldown.toFixed(1)}s` : "READY"}`);
+      this.skills.setText(lines.join("\n"));
+      const barX = Math.max(220, 20 + this.skills.width + 12);
+      this.drawCooldown(barX, 68, 1 - me.dashCooldown / DASH_COOLDOWN);
+      this.drawCooldown(barX, 84, 1 - me.skillCooldown / hero.skill.cooldown);
+      if (hero.skill2) this.drawCooldown(barX, 100, skill2Ready);
+      this.touch?.draw(1 - me.skillCooldown / hero.skill.cooldown, 1 - me.dashCooldown / DASH_COOLDOWN, skill2Ready);
     }
 
     const waveLabel = state.wave >= WAVE_COUNT ? "BOSS" : `${state.wave}/${WAVE_COUNT}`;
@@ -73,7 +90,7 @@ export class HudScene extends Phaser.Scene {
       if (state.phase === "victory") banner = `${state.winner} WINS!\nNext round in ${Math.ceil(state.phaseTimer)}`;
       else if (me?.dead) banner = `YOU FELL\nRespawning in ${Math.ceil(me.respawnIn)}`;
       else if (state.phase === "intermission") banner = `FIGHT!\nin ${Math.ceil(state.phaseTimer)}`;
-      else if (state.players.size < 2) banner = "Waiting for another player...\nShare the link with a friend";
+      else if (realPlayers(state) < 2) banner = "Waiting for another player...\nShare the link with a friend";
     } else if (state.stage === "boss") {
       // Boss room: a big health bar for Godzilla instead of a wave counter.
       this.waveText.setText("BOSS ROOM  GODZILLA");
@@ -99,14 +116,31 @@ export class HudScene extends Phaser.Scene {
     }
     this.banner.setText(banner);
 
+    // Big callouts for map-wide skills.
+    let special = "";
+    let color = "#ffffff";
+    state.zones?.forEach((z: any) => {
+      if (z.kind === "domain") [special, color] = ["DOMAIN EXPANSION\nUNLIMITED VOID", "#c9a8ff"];
+      else if (z.kind === "asgard" && !special) [special, color] = [z.maxLife - z.life < 1.5 ? "ILLUSION: ASGARD" : "", "#ffd86a"];
+    });
+    if (state.timeStop > 0) {
+      const by = state.players.get(state.timeStopBy);
+      [special, color] = [`TIME STOP!\n${by?.name ?? ""} ${state.timeStop.toFixed(1)}s`, "#9fd8ff"];
+    }
+    this.special.setText(special).setColor(color);
+
     const rows: string[] = [];
+    let count = 0;
     state.players.forEach((p: any, id: string) => {
+      if (p.owner) return; // Loki's clones are not players
+      count++;
       const marker = id === room!.sessionId ? ">" : " ";
       rows.push(`${marker}${p.name}  ${p.score}${state.stage === "pvp" ? " KO" : ""}`);
     });
-    this.scores.setText(`RIFTBORN ${state.players.size}/4\n${rows.join("\n")}`);
+    this.scores.setText(`RIFTBORN ${count}/4\n${rows.join("\n")}`);
     let i = 0;
     state.players.forEach((p: any) => {
+      if (p.owner) return;
       this.bars.fillStyle(Phaser.Display.Color.HexStringToColor(PLAYER_COATS[p.color % 4][0]).color, 1);
       this.bars.fillRect(this.scale.width - 12, 32 + i * 16, 6, 8);
       i++;
