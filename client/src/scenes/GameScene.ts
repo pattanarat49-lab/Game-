@@ -1595,6 +1595,26 @@ export class GameScene extends Phaser.Scene {
         }
         const drop = left * left * 420;
         img.setPosition(z.x, z.y - drop).setRotation(0.25 * left).setDepth(z.y + 50);
+      } else if (z.kind === "castle") {
+        // MOVING CASTLE: a huge walking castle, glided smoothly between server updates, with a shadow and dust.
+        let img = this.zoneImages.get(id);
+        if (!img) {
+          img = this.add.image(z.x, z.y, "castle").setOrigin(0.5, 0.85).setScale(3.4);
+          this.zoneImages.set(id, img);
+          this.cameras.main.shake(200, 0.006);
+        }
+        const nx = img.x + (z.x - img.x) * 0.35;
+        if (Math.abs(nx - img.x) > 0.01) img.setFlipX(nx < img.x);
+        const gy: number = img.getData("gy") ?? z.y;
+        const ny = gy + (z.y - gy) * 0.35;
+        const step = Math.abs(Math.sin(now / 140));
+        img.setPosition(nx, ny).setDepth(ny + 1);
+        img.y = ny - step * 3;
+        img.setData("gy", ny);
+        img.setAlpha(Math.min(1, age / 0.3));
+        floor.fillStyle(0x000000, 0.3).fillEllipse(nx, ny + 2, z.radius * 2.4, z.radius * 0.9);
+        if (Math.random() < 0.4) this.sparks.explode(1, nx + (Math.random() - 0.5) * z.radius * 2, ny);
+        if (Math.random() < 0.05) this.cameras.main.shake(80, 0.003);
       } else if (z.kind === "solve") {
         // SOLVE IT: a lock-on reticle snaps shut around the target.
         const t = 1 - z.life / z.maxLife;

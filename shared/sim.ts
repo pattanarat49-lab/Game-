@@ -69,6 +69,8 @@ const SNIPER_BURST_GAP = 0.15;
 const OKITA_SLASHES = 8;
 /** PvP / Bot Duel: the pause after a knockout before the next round starts. */
 const ROUND_RESET_PAUSE = 2;
+/** MOVING CASTLE walking speed (pixels/s). */
+const CASTLE_SPEED = 95;
 const ONE_PUNCH_DAMAGE = 1e9; // "infinity", but still a number the network can send
 const MAX_CLONES = 2;
 export const TITAN_ATTACK_COOLDOWN = 0.6;
@@ -284,6 +286,11 @@ interface ZoneBrain {
   damage: number;
   /** Portals: the id of the portal this one leads to. */
   link?: string;
+  /** MOVING CASTLE: it walks this fast (pixels/s) and hits each target once, stunning it this long. */
+  vx?: number;
+  vy?: number;
+  stun?: number;
+  hit?: Set<string>;
 }
 
 interface BulletBrain {
@@ -547,6 +554,28 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
     });
     this.state.players.forEach((v, vid) => {
       if (!v.dead && this.isFoe(id, vid) && inCone(v.x, v.y, PLAYER_RADIUS)) v.big = Math.max(v.big, t);
+    });
+  }
+
+  /** MOVING CASTLE: stride on, and hit (and stun) everything hostile it walks into, once each. */
+  private walkCastle(z: Z, brain: ZoneBrain, dt: number) {
+    z.x += (brain.vx ?? 0) * dt;
+    z.y += (brain.vy ?? 0) * dt;
+    const hit = brain.hit!;
+    const stun = brain.stun ?? 1;
+    this.state.enemies.forEach((e, eid) => {
+      if (hit.has(eid) || Math.hypot(e.x - z.x, e.y - z.y) > z.radius + this.er(e)) return;
+      hit.add(eid);
+      const def = ENEMIES[e.kind as EnemyKind];
+      this.damageEnemy(eid, brain.damage, brain.owner);
+      if (!def.boss && this.state.enemies.has(eid)) e.stun = Math.max(e.stun, stun);
+    });
+    if (!this.pvpLive()) return;
+    this.state.players.forEach((v, vid) => {
+      if (hit.has(vid) || v.dead || !this.isFoe(brain.owner, vid) || Math.hypot(v.x - z.x, v.y - z.y) > z.radius + this.pr(v)) return;
+      hit.add(vid);
+      this.damagePlayer(vid, brain.damage * PVP_DAMAGE_SCALE, true, brain.owner);
+      if (!v.dead) v.stun = Math.max(v.stun, stun);
     });
   }
 
@@ -1219,6 +1248,19 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       case "biglight":
         this.bigLight(id, p, skill);
         break;
+      case "castle": {
+        // MOVING CASTLE: it rises behind the wizard and walks straight on until it has left the map.
+        const vx = Math.cos(p.aim) * CASTLE_SPEED;
+        const vy = Math.sin(p.aim) * CASTLE_SPEED;
+        const x = p.x - Math.cos(p.aim) * 30;
+        const y = p.y - Math.sin(p.aim) * 30;
+        const tx = vx > 0 ? (WORLD_W + skill.radius - x) / vx : vx < 0 ? (-skill.radius - x) / vx : Infinity;
+        const ty = vy > 0 ? (WORLD_H + skill.radius - y) / vy : vy < 0 ? (-skill.radius - y) / vy : Infinity;
+        const life = Math.min(14, tx, ty);
+        const zid = this.addZone("castle", x, y, skill.radius, life, { owner: id, every: 0, damage: skill.damage });
+        Object.assign(this.zoneBrains.get(zid)!, { vx, vy, stun: skill.duration ?? 1, hit: new Set<string>() });
+        break;
+      }
       case "solve": {
         // SOLVE IT: the Detective has worked it out. The nearest target is locked on and stunned.
         const t = this.findTarget(id, p, skill.radius, true);
@@ -1558,6 +1600,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       z.life -= dt;
       brain.tick -= dt;
       if (brain.link) this.usePortal(id, z, brain.link);
+      if (z.kind === "castle") this.walkCastle(z, brain, dt);
       if (brain.tick <= 0) {
         brain.tick += brain.every;
         if (z.kind === "hurricane") {
@@ -2300,6 +2343,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       case "truck":
       case "biglight":
       case "solve":
+      case "castle":
       case "eyebeam":
       case "onepunch":
       case "smash":

@@ -23,7 +23,7 @@ Design doc: see `docs/game-design-foundation.md`.
   - **Reborn Knight:** mid-range sword sweeps that hit every enemy in the arc. Skill SKY SLASH throws a sword wave that cuts through enemies.
   - **Frost Sniper:** sniper with very long range and huge damage, but a slow reload. Shots pierce. Skill FROST VOLLEY fires three rapid shots.
   - **Volt Kid:** three times faster than anyone. Attacks call down lightning that hits an area. Skill THUNDERBOLT strikes everything around him.
-  - **Sky Wizard:** long-range magic orbs that explode in a wide blast. Skill FIRE SPIRIT throws a big fireball with a huge explosion.
+  - **Sky Wizard:** long-range magic orbs that explode in a wide blast. Skill FIRE SPIRIT throws a big fireball with a huge explosion. Skill 2 MOVING CASTLE (E) sends a giant walking castle on bird legs striding the way he aims until it walks off the map; everything it walks into takes damage and is stunned for 1 second (bosses are not stunned).
   - **Champ Rico:** fast boxer (1.5x speed, quick punches) with very short reach. Skill JAB (1s cooldown) fires a long straight jab that stuns monsters and rival players for 0.5 seconds (bosses are not stunned). DEATH CROSS (E) is a crushing straight right (150 damage) that sends everything it hits flying far away (bosses do not budge).
   - **Plain Hero:** 1.5x HP. Skill FINAL BLOW kills anything in front of him (Reborn Knight's reach), but takes 15 seconds to come back.
   - **Holy Healer:** holy bolts from range. Skill HEAL restores 50% max HP to every ally nearby (and himself).

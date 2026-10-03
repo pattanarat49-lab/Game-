@@ -13,6 +13,7 @@ import {
   TNT_BLOCK,
   CRAFT_BLOCK,
   TRUCK,
+  MOVING_CASTLE,
   TRIDENT,
   BRONZE_SWORD,
   GLADIUS,
@@ -136,6 +137,7 @@ export class BootScene extends Phaser.Scene {
     this.addCanvas("tntblock", renderPixelSprite(TNT_BLOCK));
     this.addCanvas("craftblock", renderPixelSprite(CRAFT_BLOCK));
     this.addCanvas("truck", renderPixelSprite(TRUCK));
+    this.addCanvas("castle", renderPixelSprite(MOVING_CASTLE));
     this.addCanvas("gladius", renderPixelSprite(GLADIUS));
     this.addCanvas("raygun", renderPixelSprite(RAYGUN));
     this.addCanvas("pistol", renderPixelSprite(PISTOL));

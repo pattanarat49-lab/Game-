@@ -103,6 +103,7 @@ export type SkillKind =
   | "truck" // stop time, then drop a truck on the aimed spot
   | "godrush" // a lightning-fast lunge that ends in a full spin cut (the Sword God's dash and whirl)
   | "fan" // a fan of flying sword slashes
+  | "castle" // a giant walking castle strides across the map, hitting and stunning whatever it walks into
   | "solve" // lock on to the nearest enemy anywhere in range and stun it
   | "biglight" // a flashlight beam: everything caught in it grows bigger (easier to hit) and slower
   | "diamond" // a diamond sword for a while: basic attacks become strong, fast, long sword swings
@@ -225,8 +226,8 @@ export const HEROES: Record<HeroId, HeroDef> = {
   howl: {
     name: "Sky Wizard",
     role: "Wizard",
-    blurb: "Long-range magic orbs that explode in a wide blast.",
-    stars: 3,
+    blurb: "Long-range magic orbs that explode in a wide blast. MOVING CASTLE (E) sends a giant walking castle striding the way he aims until it leaves the map: everything it walks into is hit and stunned for 1s.",
+    stars: 4,
     maxHp: 100,
     speed: 105,
     attack: "magic",
@@ -238,6 +239,8 @@ export const HEROES: Record<HeroId, HeroDef> = {
     shotSpeed: 240,
     pierce: 0,
     skill: { kind: "fireball", name: "FIRE SPIRIT", cooldown: 6, damage: 70, radius: 90 },
+    // MOVING CASTLE: the castle is `radius` wide (each side), walks at CASTLE_SPEED and hits each target once.
+    skill2: { kind: "castle", name: "MOVING CASTLE", cooldown: 16, damage: 60, radius: 40, duration: 1 },
   },
   ricardo: {
     name: "Champ Rico",
@@ -832,10 +835,10 @@ for (const def of Object.values(HEROES)) def.maxHp *= HP_SCALE;
  * The character select shows them in this order. Heroes missing here go at the end.
  */
 const PVP_RANKING: HeroId[] = [
-  "healer", "rudeus", "superman", "killua", "rick", "okita", "simo", "saitama", "vampire", "howl",
-  "sakamoto", "steve", "titan", "yaotsu", "rider", "agamemnon", "theworld", "kid", "loki", "gojo",
-  "joyboy", "ricardo", "deku", "hanuman", "starplatinum", "swordgod", "lawliet", "taekwondo", "trainer", "isekai", "badigadi",
-  "doraemon", "thorfinn",
+  "healer", "rudeus", "superman", "killua", "rick", "okita", "simo", "saitama", "vampire", "sakamoto",
+  "steve", "titan", "howl", "yaotsu", "rider", "agamemnon", "theworld", "kid", "loki", "gojo",
+  "joyboy", "ricardo", "deku", "hanuman", "starplatinum", "swordgod", "lawliet", "taekwondo", "trainer", "isekai",
+  "badigadi", "doraemon", "thorfinn",
 ];
 export const HERO_IDS = [
   ...PVP_RANKING,
@@ -855,7 +858,7 @@ export const DAMAGE_BALANCE: Partial<Record<HeroId, number>> = {
   rick: 1.36,
   killua: 2.16,
   joyboy: 1.61,
-  howl: 3.39,
+  howl: 2.8,
   agamemnon: 0.8,
   vampire: 1.98,
   deku: 1.36,

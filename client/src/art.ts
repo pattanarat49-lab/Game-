@@ -1485,3 +1485,32 @@ export const TRUCK: PixelSprite = {
 
 // The Sword God, now a playable hero, looks just like the dojo boss.
 HERO_SPRITES.swordgod = SWORD_GOD;
+
+/** MOVING CASTLE: a ramshackle walking castle on bird legs. */
+export const MOVING_CASTLE: PixelSprite = {
+  grid: [
+    "......kk......kk........",
+    ".....kssk....kssk.......",
+    ".....kssk..kkkssk..kk...",
+    "....kkbbkkkrrkbbk.kssk..",
+    "...kbbbbbbkrrkbbbkkssk..",
+    "..kbbmmbbbbkkbbbbbbbbk..",
+    ".kbbmmmmbbbbbbbbmmbbbbk.",
+    ".kbbbmmbbbwwwwbbmmbbbbk.",
+    "kbbgbbbbbwwyywwbbbbgbbbk",
+    "kbgggbbbbwyooywbbbbggbbk",
+    "kbbgbbbbbwwyywwbbbbbbbbk",
+    "kbbbbbbmmbwwwwbbmmbbbbk.",
+    ".kbbbbbmmbbbbbbbmmbbbk..",
+    "..kbbbbbbbbbbbbbbbbbk...",
+    "...kkbbbbbbbbbbbbbkk....",
+    ".....kkkbbbbbbbkkk......",
+    "......k.kk..kk.k........",
+    ".....kl.kl..kl.lk.......",
+    "....kl..kl..kl..lk......",
+    "...kl...kl..kl...lk.....",
+    "..kffk.kffk.kffk.kffk...",
+    "..kkkk.kkkk.kkkk.kkkk...",
+  ],
+  palette: { k: OUTLINE, s: "#5a5a64", b: "#8a7a6a", m: "#6a5a4a", r: "#c4452a", w: "#3a2a20", y: "#ffd23f", o: "#ff7a1a", g: "#4a8a5a", l: "#c8a45a", f: "#e8b84a" },
+};
