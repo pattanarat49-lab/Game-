@@ -101,6 +101,8 @@ export interface SimPlayer {
   kbx: number;
   kby: number;
   kbSeq: number;
+  /** Seconds left stunned (a rival's jab): no moving, attacking or skills. */
+  stun: number;
   /** 1 while a hero with a gun mode (SWAP MODE) has the gun out. */
   mode: number;
 }
@@ -117,6 +119,8 @@ export interface SimEnemy {
   beamAngle: number;
   /** The Sword God's current move (index into SWORD_GOD_MOVES; 0 = none). */
   move: number;
+  /** Seconds left stunned (Champ Rico's jab): a stunned enemy cannot move or attack. */
+  stun: number;
 }
 
 export type BulletKind = "snipe" | "wave" | "magic" | "fireball" | "enemy" | "banana" | "boulder" | "holy" | "stone" | "loki" | "glitch" | "bullet" | "slash";
@@ -505,6 +509,14 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
         return;
       }
 
+      if (p.stun > 0) {
+        // Stunned by a rival's jab: no moving, attacking or skills for a moment.
+        p.stun = Math.max(0, p.stun - dt);
+        brain.target = undefined;
+        brain.dashTimer = 0;
+        return;
+      }
+
       p.aim = input.aim;
       const dir = inputDirection(input);
 
@@ -633,8 +645,8 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
         this.spawnBullet("fireball", p.x, p.y, p.aim, speed, { owner: id, damage: skill.damage, pierce: 0, life: hero.range / speed, blast: skill.radius });
         break;
       }
-      case "jab": // a quick, short punch
-        this.sweep(id, p.x, p.y, p.aim, skill.radius, 1.0, skill.damage);
+      case "jab": // a long straight jab that stuns whoever it hits
+        this.lineHit(id, p.x, p.y, p.aim, skill.radius, skill.width ?? 16, skill.damage, skill.duration ?? 0);
         break;
       case "onepunch": // whatever is in front of Saitama simply stops existing
         this.sweep(id, p.x, p.y, p.aim, skill.radius, 2.4, ONE_PUNCH_DAMAGE);
@@ -713,7 +725,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
   }
 
   /** Hit everything in a wide straight line (Deku's 100% SMASH). */
-  private lineHit(owner: string, x: number, y: number, angle: number, length: number, width: number, damage: number) {
+  private lineHit(owner: string, x: number, y: number, angle: number, length: number, width: number, damage: number, stun = 0) {
     const cos = Math.cos(angle);
     const sin = Math.sin(angle);
     const inLine = (tx: number, ty: number, r: number) => {
@@ -722,10 +734,15 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       return along >= -r && along <= length + r && across <= width / 2 + r;
     };
     this.state.enemies.forEach((e, eid) => {
-      if (inLine(e.x, e.y, ENEMIES[e.kind as EnemyKind].radius)) this.damageEnemy(eid, damage, owner);
+      const def = ENEMIES[e.kind as EnemyKind];
+      if (!inLine(e.x, e.y, def.radius)) return;
+      this.damageEnemy(eid, damage, owner);
+      if (stun > 0 && !def.boss) e.stun = Math.max(e.stun, stun); // bosses shrug it off
     });
     this.state.players.forEach((v, vid) => {
-      if (!v.dead && this.isFoe(owner, vid) && inLine(v.x, v.y, PLAYER_RADIUS)) this.damagePlayer(vid, damage * PVP_DAMAGE_SCALE, true, owner);
+      if (v.dead || !this.isFoe(owner, vid) || !inLine(v.x, v.y, PLAYER_RADIUS)) return;
+      this.damagePlayer(vid, damage * PVP_DAMAGE_SCALE, true, owner);
+      if (stun > 0 && !v.dead) v.stun = Math.max(v.stun, stun);
     });
   }
 
@@ -1054,6 +1071,10 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
         const fade = Math.exp(-KNOCKBACK_DECAY * dt);
         brain.kbx *= fade;
         brain.kby *= fade;
+      }
+      if (e.stun > 0) {
+        e.stun = Math.max(0, e.stun - dt);
+        return; // seeing stars
       }
       const target = this.nearestPlayer(e.x, e.y);
       if (!target) return;

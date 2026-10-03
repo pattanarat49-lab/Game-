@@ -188,7 +188,7 @@ export const HEROES: Record<HeroId, HeroDef> = {
   ricardo: {
     name: "Champ Rico",
     role: "Boxer",
-    blurb: "His jab has no cooldown, but his reach is very short.",
+    blurb: "Boxer with very short reach. JAB fires a long straight jab that stuns enemies for 0.5s.",
     stars: 1,
     maxHp: 170,
     speed: 115,
@@ -200,8 +200,8 @@ export const HEROES: Record<HeroId, HeroDef> = {
     aoe: 0,
     shotSpeed: 0,
     pierce: 0,
-    // A jab is limited only by how fast fists move, not by a cooldown.
-    skill: { kind: "jab", name: "JAB", cooldown: 0.12, damage: 11, radius: 16 },
+    // JAB: a long, narrow straight punch (radius = reach, width = thickness) that stuns for `duration`.
+    skill: { kind: "jab", name: "JAB", cooldown: 1, damage: 30, radius: 62, width: 18, duration: 0.5 },
   },
   saitama: {
     name: "Plain Hero",

@@ -52,7 +52,7 @@ interface PlayerView {
 
 /** A short-lived swing, slash or shockwave drawn on top of the world. */
 interface Effect {
-  kind: "punch" | "sword" | "smash" | "muzzle" | "bolt" | "storm" | "blast" | "impact" | "heal" | "line" | "slashes" | "ripple";
+  kind: "punch" | "sword" | "smash" | "muzzle" | "bolt" | "storm" | "blast" | "impact" | "heal" | "line" | "slashes" | "ripple" | "jab";
   x: number;
   y: number;
   aim: number;
@@ -370,7 +370,8 @@ export class GameScene extends Phaser.Scene {
     if (!me) return;
     this.dashCooldown = Math.max(0, this.dashCooldown - dt);
     const state = this.room!.state;
-    const frozen = state.timeStop > 0 && state.timeStopBy !== this.room!.sessionId;
+    // Someone stopped time, or a rival's jab stunned us: we cannot move until it passes.
+    const frozen = (state.timeStop > 0 && state.timeStopBy !== this.room!.sessionId) || me.stun > 0;
     if (me.dead || me.warp !== this.warp) {
       this.warp = me.warp;
       this.predicted = { x: me.x, y: me.y };
@@ -629,7 +630,7 @@ export class GameScene extends Phaser.Scene {
     if (!room || room instanceof LocalRoom) return;
     const me = room.state.players.get(room.sessionId);
     const state = room.state;
-    if (!me || me.dead || (state.timeStop > 0 && state.timeStopBy !== room.sessionId)) return;
+    if (!me || me.dead || me.stun > 0 || (state.timeStop > 0 && state.timeStopBy !== room.sessionId)) return;
     const hero = heroOf(me.hero);
     const x = this.predicted.x;
     const y = this.predicted.y - 5;
@@ -689,7 +690,7 @@ export class GameScene extends Phaser.Scene {
         cam.shake(150, 0.008);
         break;
       case "jab":
-        this.effects.push({ kind: "punch", x, y, aim, range: skill.radius, arc: 1.0, age: 0, life: 0.08 });
+        this.effects.push({ kind: "jab", x, y, aim, range: skill.radius, arc: skill.width ?? 16, age: 0, life: 0.18 });
         break;
       case "onepunch":
         this.effects.push({ kind: "impact", x, y, aim, range: skill.radius * 2.2, arc: 2.4, age: 0, life: 0.5 });
@@ -742,10 +743,32 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
+  /** Stars circling the heads of stunned monsters and players. */
+  private drawStuns(g: Phaser.GameObjects.Graphics) {
+    const state = this.room?.state;
+    if (!state) return;
+    const spin = this.time.now / 150;
+    const stars = (x: number, y: number) => {
+      for (let i = 0; i < 3; i++) {
+        const a = spin + (i * Math.PI * 2) / 3;
+        g.fillStyle(0xffe14a, 1).fillRect(Math.round(x + Math.cos(a) * 7) - 1, Math.round(y + Math.sin(a) * 2.5) - 1, 3, 3);
+      }
+    };
+    state.enemies.forEach((e: any, id: string) => {
+      const view = this.enemies.get(id);
+      if (e.stun > 0 && view) stars(view.sprite.x, view.sprite.y - view.sprite.displayHeight * 0.75 - 3);
+    });
+    state.players.forEach((p: any, id: string) => {
+      const view = this.players.get(id);
+      if (p.stun > 0 && !p.dead && view) stars(view.body.x, view.body.y - view.body.displayHeight * 0.85 - 3);
+    });
+  }
+
   private drawEffects(dt: number) {
     const g = this.fx;
     g.clear();
     this.effects = this.effects.filter((e) => (e.age += dt) < e.life);
+    this.drawStuns(g);
     for (const e of this.effects) {
       const t = e.age / e.life;
       if (e.kind === "punch") {
@@ -810,6 +833,21 @@ export class GameScene extends Phaser.Scene {
           const py = e.y + Math.sin(a) * e.range * 0.5 * t - 20 * t;
           g.fillStyle(0xb8ffc8, 1 - t).fillRect(px - 3, py - 1, 7, 2).fillRect(px - 1, py - 3, 2, 7);
         }
+      } else if (e.kind === "jab") {
+        // A straight jab: a narrow band shoots out to full reach, with a flash where the fist lands.
+        const cos = Math.cos(e.aim);
+        const sin = Math.sin(e.aim);
+        const len = e.range * Math.min(1, t * 5);
+        const w = (e.arc / 2) * (1 - t * 0.5);
+        const pts = [
+          { x: e.x - sin * w, y: e.y + cos * w },
+          { x: e.x + cos * len - sin * w, y: e.y + sin * len + cos * w },
+          { x: e.x + cos * len + sin * w, y: e.y + sin * len - cos * w },
+          { x: e.x + sin * w, y: e.y - cos * w },
+        ];
+        g.fillStyle(0xffd400, 0.35 * (1 - t)).fillPoints(pts, true);
+        g.lineStyle(1, 0xffffff, 0.8 * (1 - t)).strokePoints(pts, true);
+        g.fillStyle(0xffffff, 0.9 * (1 - t)).fillCircle(e.x + cos * len, e.y + sin * len, 5 * (1 - t) + 2);
       } else if (e.kind === "line") {
         // 100% SMASH: a wide blast of green lightning straight ahead.
         const cos = Math.cos(e.aim);
