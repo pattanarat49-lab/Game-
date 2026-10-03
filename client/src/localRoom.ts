@@ -45,6 +45,7 @@ export class LocalRoom {
         skillSeq: 0,
         skill2Seq: 0,
         owner: "",
+        titan: 0,
         warp: 0,
         mt: 0,
       }),

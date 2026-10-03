@@ -20,6 +20,7 @@ export class Player extends Schema {
   @type("number") skillSeq = 0;
   @type("number") skill2Seq = 0;
   @type("string") owner = "";
+  @type("float32") titan = 0;
   @type("uint8") warp = 0;
   @type("float64") mt = 0;
 }

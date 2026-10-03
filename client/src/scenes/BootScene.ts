@@ -17,6 +17,7 @@ import {
   SPARK,
   SWORD,
   SWORD_WAVE,
+  TITAN_FORM,
   WARDEN,
   renderPixelSprite,
 } from "../art";
@@ -88,6 +89,7 @@ export class BootScene extends Phaser.Scene {
     this.addCanvas("stone", renderPixelSprite(WATER_ORB));
     this.addCanvas("lokishot", renderPixelSprite(LOKI_ORB));
     this.addCanvas("asgard", this.drawAsgard());
+    this.addCanvas("titanform", renderPixelSprite(TITAN_FORM));
     this.addCanvas("cinderling", renderPixelSprite(CINDERLING));
     this.addCanvas("brute", renderPixelSprite(BRUTE));
     this.addCanvas("caster", renderPixelSprite(CASTER));

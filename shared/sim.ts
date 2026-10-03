@@ -55,6 +55,7 @@ const SNIPER_BURST_GAP = 0.15;
 const OKITA_SLASHES = 8;
 const ONE_PUNCH_DAMAGE = 1e9; // "infinity", but still a number the network can send
 const MAX_CLONES = 2;
+const TITAN_ATTACK_COOLDOWN = 0.6;
 const CLONE_SIGHT = 300;
 
 export interface SimPlayer {
@@ -80,6 +81,8 @@ export interface SimPlayer {
   skill2Seq: number;
   /** For a summoned copy (Loki's clone): the id of the player who made it. Empty for real players. */
   owner: string;
+  /** Seconds left in Titan form (0 = human). */
+  titan: number;
   /** Goes up whenever the server teleports the player (spawn), so the client snaps instead of sliding. */
   warp: number;
   /** The owner's clock (ms) when they were at x, y, for smooth playback on other screens. */
@@ -438,6 +441,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       if (p.dead) {
         brain.burstLeft = 0;
         brain.slashLeft = 0;
+        p.titan = 0;
         p.respawnIn = Math.max(0, p.respawnIn - dt);
         if (p.respawnIn <= 0) {
           p.dead = false;
@@ -487,13 +491,18 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       p.dashing = brain.dashTimer > 0;
 
       // Basic attack
+      p.titan = Math.max(0, p.titan - dt);
       if (input.shoot && brain.attackTimer <= 0) {
         brain.attackTimer = hero.attackCooldown;
         p.attackSeq++;
-        if (hero.attack === "rifle") {
+        if (p.titan > 0) {
+          // A 50m Titan's blows crush everything around it.
+          brain.attackTimer = TITAN_ATTACK_COOLDOWN;
+          this.sweep(id, p.x, p.y, 0, hero.skill.radius, Math.PI * 2, hero.skill.damage);
+        } else if (hero.attack === "rifle") {
           this.spawnBullet("snipe", p.x, p.y, input.aim, hero.shotSpeed, { owner: id, damage: hero.damage, pierce: hero.pierce, life: hero.range / hero.shotSpeed });
         } else if (hero.attack === "magic") {
-          this.spawnBullet("magic", p.x, p.y, input.aim, hero.shotSpeed, { owner: id, damage: hero.damage, pierce: 0, life: hero.range / hero.shotSpeed, blast: hero.aoe });
+          this.spawnBullet((hero.shot ?? "magic") as BulletKind, p.x, p.y, input.aim, hero.shotSpeed, { owner: id, damage: hero.damage, pierce: 0, life: hero.range / hero.shotSpeed, blast: hero.aoe });
         } else if (hero.attack === "lightning") {
           // Lightning strikes the ground a short way ahead and hits everything nearby.
           const tx = p.x + Math.cos(input.aim) * hero.range;
@@ -505,7 +514,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       }
 
       // Skills
-      if (input.skill && p.skillCooldown <= 0) {
+      if (input.skill && p.skillCooldown <= 0 && hero.skill.kind !== "passive") {
         p.skillCooldown = hero.skill.cooldown;
         p.skillSeq++;
         this.useSkill(id, p, hero, hero.skill, brain);
@@ -609,6 +618,22 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
         break;
       case "clone":
         this.spawnClone(id, p, skill);
+        break;
+      case "rush": {
+        // Dash straight ahead (rocks stop you), cutting through everything on the way.
+        const end = moveCircle(p.x, p.y, Math.cos(p.aim) * skill.radius, Math.sin(p.aim) * skill.radius, PLAYER_RADIUS);
+        const len = Math.hypot(end.x - p.x, end.y - p.y);
+        this.lineHit(id, p.x, p.y, p.aim, len, skill.width ?? 24, skill.damage);
+        p.x = end.x;
+        p.y = end.y;
+        p.warp = (p.warp + 1) % 256; // the client jumps with us
+        brain.target = undefined;
+        brain.hurtTimer = Math.max(brain.hurtTimer, 0.3);
+        break;
+      }
+      case "titan":
+        p.titan = skill.duration ?? 10;
+        brain.attackTimer = 0;
         break;
     }
   }

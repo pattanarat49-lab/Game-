@@ -72,6 +72,9 @@ interface EnemyView {
   bar: Phaser.GameObjects.Graphics;
   x: number;
   y: number;
+  vx: number; // smoothed on-screen velocity, for L's foresight
+  vy: number;
+  ghost?: Phaser.GameObjects.Image;
 }
 
 /** A position, stamped with the time it was true (on our clock). */
@@ -235,7 +238,7 @@ export class GameScene extends Phaser.Scene {
     this.sendInput(input, dt);
 
     this.syncPlayers(state, dt);
-    this.syncEnemies(state);
+    this.syncEnemies(state, dt);
     this.syncBullets(state, dt);
     this.drawEffects(dt);
     this.drawAimGuide(state);
@@ -445,7 +448,19 @@ export class GameScene extends Phaser.Scene {
       }
       this.playAttackEffects(view, p, body.x, body.y - 5, aim);
 
-      view.label.setPosition(body.x, body.y - 18);
+      // Titan form: a giant body for the duration.
+      const titanNow = p.titan > 0 && !p.dead;
+      const texture = titanNow ? "titanform" : `hero_${p.hero}`;
+      if (body.texture.key !== texture) {
+        body.setTexture(texture).setScale(titanNow ? 2.6 : 1);
+        if (titanNow) {
+          this.effects.push({ kind: "bolt", x: body.x, y: body.y, aim: 0, range: 60, arc: 0, age: 0, life: 0.5 });
+          this.cameras.main.shake(400, 0.02);
+          this.cameras.main.flash(150, 255, 230, 160);
+          this.sparks.explode(40, body.x, body.y - 20);
+        } else this.sparks.explode(20, body.x, body.y - 6);
+      }
+      view.label.setPosition(body.x, body.y - (titanNow ? 66 : 18));
       view.label.setDepth(1000);
 
       if (p.hp < view.lastHp - 0.5) view.hurtFlash = 0.15;
@@ -489,7 +504,11 @@ export class GameScene extends Phaser.Scene {
     const hero = heroOf(p.hero);
     if (p.attackSeq !== view.attackSeq) {
       view.attackSeq = p.attackSeq;
-      if (hero.attack === "rifle") {
+      if (p.titan > 0) {
+        this.effects.push({ kind: "smash", x, y: y + 5, aim, range: hero.skill.radius, arc: Math.PI * 2, age: 0, life: 0.35 });
+        this.cameras.main.shake(150, 0.008);
+        this.sparks.explode(12, x, y + 5);
+      } else if (hero.attack === "rifle") {
         this.effects.push({ kind: "muzzle", x, y, aim, range: 16, arc: 0, age: 0, life: 0.08 });
         if (p === this.room?.state.players.get(this.room.sessionId)) this.cameras.main.shake(60, 0.004);
       } else if (hero.attack === "magic") {
@@ -557,6 +576,12 @@ export class GameScene extends Phaser.Scene {
       case "clone":
         this.sparks.explode(20, x, y);
         break;
+      case "rush":
+        // We are already at the end of the dash: draw the cut back along the path.
+        this.effects.push({ kind: "line", x: x - Math.cos(aim) * skill.radius, y: y - Math.sin(aim) * skill.radius, aim, range: skill.radius, arc: 10, age: 0, life: 0.3 });
+        break;
+      case "titan":
+        break; // the transformation is drawn when the body changes
     }
   }
 
@@ -639,10 +664,11 @@ export class GameScene extends Phaser.Scene {
           { x: e.x + cos * len + sin * w, y: e.y + sin * len - cos * w },
           { x: e.x + sin * w, y: e.y - cos * w },
         ];
-        g.fillStyle(0x2fd07a, 0.35 * (1 - t)).fillPoints(pts(e.arc / 2), true);
+        const thin = e.arc <= 12; // Thorfinn's dagger rush is a silver streak, not green lightning
+        g.fillStyle(thin ? 0xd8dde8 : 0x2fd07a, 0.35 * (1 - t)).fillPoints(pts(e.arc / 2), true);
         g.fillStyle(0xd8ffe8, 0.7 * (1 - t)).fillPoints(pts(e.arc / 6), true);
         g.lineStyle(2, 0x9fffc8, 1 - t);
-        for (let k = 0; k < 3; k++) {
+        for (let k = 0; k < (thin ? 0 : 3); k++) {
           g.beginPath();
           g.moveTo(e.x, e.y);
           for (let d = 20; d <= len; d += 20) {
@@ -724,7 +750,10 @@ export class GameScene extends Phaser.Scene {
 
   // ------------------------------------------------------------- enemies
 
-  private syncEnemies(state: any) {
+  private syncEnemies(state: any, dt: number) {
+    const me = state.players.get(this.room!.sessionId);
+    const foresight = !!me && !me.dead && heroOf(me.hero).skill.kind === "passive";
+    const ahead = foresight ? heroOf(me.hero).skill.duration ?? 0.5 : 0;
     const seen = new Set<string>();
     this.beams.clear();
     state.enemies.forEach((e: any, id: string) => {
@@ -734,13 +763,26 @@ export class GameScene extends Phaser.Scene {
         const sprite = this.add.image(e.x, e.y, e.kind).setOrigin(0.5, 0.75).setScale(ENEMY_SCALE[e.kind as EnemyKind]);
         sprite.setAlpha(0);
         this.tweens.add({ targets: sprite, alpha: 1, duration: 300 });
-        view = { sprite, bar: this.add.graphics(), x: e.x, y: e.y };
+        view = { sprite, bar: this.add.graphics(), x: e.x, y: e.y, vx: 0, vy: 0 };
         this.enemies.set(id, view);
       }
       const s = view.sprite;
       const at = this.smoothed(`e${id}`, e.x, e.y);
       if (Math.abs(at.x - s.x) > 0.05) s.setFlipX(at.x < s.x);
+      if (dt > 0 && !(state.timeStop > 0)) {
+        const k = 1 - Math.exp(-dt * 8);
+        view.vx += ((at.x - s.x) / dt - view.vx) * k;
+        view.vy += ((at.y - s.y) / dt - view.vy) * k;
+      }
       s.setPosition(at.x, at.y);
+      // L's foresight: a ghost shows where this monster will be in half a second.
+      if (foresight) {
+        if (!view.ghost) view.ghost = this.add.image(s.x, s.y, e.kind).setOrigin(0.5, 0.75).setScale(s.scale).setTint(0xd890ff);
+        const gx = Phaser.Math.Clamp(s.x + view.vx * ahead, 0, WORLD_W);
+        const gy = Phaser.Math.Clamp(s.y + view.vy * ahead, 0, WORLD_H);
+        view.ghost.setPosition(gx, gy).setFlipX(s.flipX).setDepth(gy - 0.5).setAlpha(0.5 + 0.1 * Math.sin(this.time.now / 120)).setVisible(true);
+        this.beams.lineStyle(1, 0xd070ff, 0.35).lineBetween(s.x, s.y - 3, gx, gy - 3);
+      } else view.ghost?.setVisible(false);
       s.setDepth(s.y);
       if (e.hitFlash > 0) s.setTintFill(0xffffff);
       else if (state.timeStop > 0) s.setTint(0x8a93b8);
@@ -768,6 +810,7 @@ export class GameScene extends Phaser.Scene {
       this.sparks.explode(view.sprite.scale > 2 ? 60 : 14, view.sprite.x, view.sprite.y - 4);
       if (view.sprite.scale > 2) this.cameras.main.shake(400, 0.01);
       view.sprite.destroy();
+      view.ghost?.destroy();
       view.bar.destroy();
       this.enemies.delete(id);
       this.tracks.delete(`e${id}`);

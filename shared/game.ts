@@ -33,7 +33,10 @@ export type HeroId =
   | "gojo"
   | "starplatinum"
   | "rudeus"
-  | "loki";
+  | "loki"
+  | "lawliet"
+  | "thorfinn"
+  | "titan";
 export type AttackStyle = "punch" | "sword" | "rifle" | "lightning" | "magic";
 export type SkillKind =
   | "smash"
@@ -50,7 +53,10 @@ export type SkillKind =
   | "timestop" // everything but the caster freezes
   | "hurricane" // a storm cloud that keeps striking an area
   | "asgard" // an illusion kingdom that drains enemies standing in it
-  | "clone"; // a copy that fights on its own
+  | "clone" // a copy that fights on its own
+  | "passive" // no button: the hero's power is always on
+  | "rush" // dash through enemies, cutting everything on the way
+  | "titan"; // transform into a giant: basic attacks hit all around
 
 export interface SkillDef {
   kind: SkillKind;
@@ -306,6 +312,58 @@ export const HEROES: Record<HeroId, HeroDef> = {
     pierce: 0,
     shot: "stone",
     skill: { kind: "hurricane", name: "HURRICANE", cooldown: 12, damage: 26, radius: 140, duration: 3.5 },
+  },
+  lawliet: {
+    name: "L",
+    role: "Detective",
+    blurb: "Weak hits, runs 1.1x faster. PASSIVE: sees where every monster and boss will be 0.5s ahead (ghost images).",
+    stars: 2,
+    maxHp: 100,
+    speed: 116,
+    attack: "punch",
+    attackCooldown: 0.45,
+    damage: 8,
+    range: 20,
+    arc: 1.4,
+    aoe: 0,
+    shotSpeed: 0,
+    pierce: 0,
+    skill: { kind: "passive", name: "FORESIGHT", cooldown: 1, damage: 0, radius: 0, duration: 0.5 },
+  },
+  thorfinn: {
+    name: "Thorfinn",
+    role: "Dagger warrior",
+    blurb: "Quick twin-dagger slashes. DAGGER RUSH dashes forward, cutting every enemy on the way.",
+    stars: 3,
+    maxHp: 120,
+    speed: 130,
+    attack: "sword",
+    attackCooldown: 0.28,
+    damage: 20,
+    range: 26,
+    arc: 1.8,
+    aoe: 0,
+    shotSpeed: 0,
+    pierce: 0,
+    skill: { kind: "rush", name: "DAGGER RUSH", cooldown: 4, damage: 55, radius: 120, width: 24 },
+  },
+  titan: {
+    name: "Titan",
+    role: "Shifter",
+    blurb: "Very weak hits as a human. TITAN turns him into a 50m Titan for 10s: every hit smashes everything around him.",
+    stars: 4,
+    maxHp: 140,
+    speed: 105,
+    attack: "punch",
+    attackCooldown: 0.5,
+    damage: 6,
+    range: 20,
+    arc: 1.4,
+    aoe: 0,
+    shotSpeed: 0,
+    pierce: 0,
+    // In Titan form: damage and radius of each smash, and seconds between smashes.
+    skill: { kind: "titan", name: "TITAN", cooldown: 20, damage: 90, radius: 75, duration: 10 },
   },
   loki: {
     name: "Loki",
