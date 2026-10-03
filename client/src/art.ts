@@ -1598,3 +1598,75 @@ export const GIANT_PALM: PixelSprite = {
   ],
   palette: { k: OUTLINE, y: "#f2c23a", o: "#d89a2a", r: "#d0402a" },
 };
+
+/** BAT FORM: the vampire as a big red-eyed bat. */
+export const BAT_FORM: PixelSprite = {
+  grid: [
+    "k..............k",
+    "kk....k..k....kk",
+    "kbk...kkkk...kbk",
+    "kbbk.kbbbbk.kbbk",
+    "kbbbkbrbbrbkbbbk",
+    "kbbbbbbbbbbbbbbk",
+    ".kbbbbbwwbbbbbk.",
+    ".kbbkbbbbbbkbbk.",
+    "..kbk.kbbk.kbk..",
+    "...k...kk...k...",
+  ],
+  palette: { k: OUTLINE, b: "#3a2440", r: "#ff2a3a", w: "#f2f2f2" },
+};
+
+/** MOTORCYCLE: the Hopper Rider's bike (drawn under him). */
+export const MOTORBIKE: PixelSprite = {
+  grid: [
+    "...........kk.......",
+    "..........kssk......",
+    ".kkk.....kggk.......",
+    "kgggkkkkkgggkkk.....",
+    "kgrrrrrrrrrrrrrk....",
+    ".kkrrrrrrrrrrrrrk...",
+    ".kkkkkkkkkkkkkkkkk..",
+    "kkkk..........kkkk..",
+    "ksskk........ksskk..",
+    "kswsk........kswsk..",
+    "ksskk........ksskk..",
+    ".kkk..........kkk...",
+  ],
+  palette: { k: OUTLINE, g: "#3aa84a", r: "#d0402a", s: "#5a5a62", w: "#c8c8d0" },
+};
+
+/** KNIFE STORM: a thrown knife (points right). */
+export const KNIFE_SHOT: PixelSprite = {
+  grid: [
+    "kk.......",
+    "bbkwwwwk.",
+    "kk.kkkkwk",
+  ],
+  palette: { k: OUTLINE, b: "#7a4e22", w: "#e8e8ec" },
+};
+
+/** RUBBER PUNCH: a big fist. */
+export const FIST_SHOT: PixelSprite = {
+  grid: [
+    ".kkkkk.",
+    "kssssk.",
+    "ksksksk",
+    "ksssssk",
+    "ksksssk",
+    "kssssk.",
+    ".kkkk..",
+  ],
+  palette: { k: OUTLINE, s: "#f0b88a" },
+};
+
+/** STAR SHOT: a small glowing star. */
+export const STAR_SHOT: PixelSprite = {
+  grid: [
+    "..y..",
+    ".ywy.",
+    "ywwwy",
+    ".ywy.",
+    "..y..",
+  ],
+  palette: { y: "#ffd23f", w: "#fff8d0" },
+};

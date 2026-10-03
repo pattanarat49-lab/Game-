@@ -61,6 +61,7 @@ export class LocalRoom {
         beam: 0,
         buff: 0,
         power: 1,
+        active2: 0,
         ready: false,
         stun: 0,
         big: 0,

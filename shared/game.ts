@@ -112,6 +112,17 @@ export type SkillKind =
   | "totem" // a healing totem on the ground: allies near it heal a share of max HP every half second
   | "palm" // a giant palm comes down from the sky and crushes (and stuns) the aimed spot
   | "doves" // vanish into a flock of doves: no damage taken for a moment
+  | "invis" // turn invisible for a moment
+  | "bat" // turn into a bat: very fast basic attacks that drink a share of the damage back as HP
+  | "sacrifice" // stab yourself: you and the nearest enemy each lose half of your max HP
+  | "yoyo" // switch basic attacks to a yoyo that locks on and never misses (use again to switch back)
+  | "bike" // ride a motorcycle: much faster, and ramming stuns and knocks back
+  | "excalibur" // light swords orbit you and cut whatever they touch
+  | "grab" // dart in, grab the nearest target, leap and slam it down (stun)
+  | "knives" // throw knives out in every direction
+  | "rubberpunch" // a stretching fist that bounces off walls through everything, then snaps back
+  | "purple" // one huge, crushing purple beam
+  | "starfinger" // a straight volley of shots
   | "solve" // lock on to the nearest enemy anywhere in range and stun it
   | "biglight" // a flashlight beam: everything caught in it grows bigger (easier to hit) and slower
   | "diamond" // a diamond sword for a while: basic attacks become strong, fast, long sword swings
@@ -183,8 +194,8 @@ export const HEROES: Record<HeroId, HeroDef> = {
   isekai: {
     name: "Reborn Knight",
     role: "Sword fighter",
-    blurb: "Mid-range sword sweeps that hit every enemy in the arc.",
-    stars: 5,
+    blurb: "Mid-range sword sweeps that hit every enemy in the arc. EXCALIBUR (E): four light swords circle him for 6s and cut whatever they touch.",
+    stars: 3,
     maxHp: 120,
     speed: 110,
     attack: "sword",
@@ -196,11 +207,13 @@ export const HEROES: Record<HeroId, HeroDef> = {
     shotSpeed: 0,
     pierce: 0,
     skill: { kind: "wave", name: "SKY SLASH", cooldown: 4, damage: 40, radius: 230 },
+    // EXCALIBUR: `count` light swords circle `radius` away for `duration` seconds.
+    skill2: { kind: "excalibur", name: "EXCALIBUR", cooldown: 14, damage: 18, radius: 40, duration: 6, count: 4 },
   },
   simo: {
     name: "Frost Sniper",
     role: "Sniper",
-    blurb: "Very long range and huge damage, but slow to reload. Shots pierce.",
+    blurb: "Very long range and huge damage, but slow to reload. Shots pierce. VANISH (E): invisible for 2s; monsters and rivals lose track of him.",
     stars: 3,
     maxHp: 90,
     speed: 105,
@@ -213,12 +226,14 @@ export const HEROES: Record<HeroId, HeroDef> = {
     shotSpeed: 720,
     pierce: 3,
     skill: { kind: "burst", name: "FROST VOLLEY", cooldown: 6, damage: 255, radius: 0 },
+    // VANISH: invisible for `duration` seconds (monsters and rivals lose track of him).
+    skill2: { kind: "invis", name: "VANISH", cooldown: 12, damage: 0, radius: 0, duration: 2 },
   },
   killua: {
     name: "Volt Kid",
     role: "Lightning assassin",
-    blurb: "Moves three times faster than anyone. Strikes call down lightning that hits an area.",
-    stars: 2,
+    blurb: "Moves three times faster than anyone. Strikes call down lightning that hits an area. YOYO MODE (E): basic attacks become a yoyo that locks on and never misses (weaker, no blast); use it again to switch back.",
+    stars: 3,
     maxHp: 100,
     speed: 320,
     attack: "lightning",
@@ -230,12 +245,14 @@ export const HEROES: Record<HeroId, HeroDef> = {
     shotSpeed: 0,
     pierce: 0,
     skill: { kind: "storm", name: "THUNDERBOLT", cooldown: 5, damage: 50, radius: 95 },
+    // YOYO MODE: basic attacks lock on to the nearest target within `radius` for `damage` (no blast); use again to switch back.
+    skill2: { kind: "yoyo", name: "YOYO MODE", cooldown: 0.8, damage: 15, radius: 140 },
   },
   howl: {
     name: "Sky Wizard",
     role: "Wizard",
     blurb: "Long-range magic orbs that explode in a wide blast. MOVING CASTLE (E) sends a giant walking castle striding the way he aims until it leaves the map: everything it walks into is hit and stunned for 1s.",
-    stars: 4,
+    stars: 3,
     maxHp: 100,
     speed: 105,
     attack: "magic",
@@ -273,9 +290,9 @@ export const HEROES: Record<HeroId, HeroDef> = {
   saitama: {
     name: "Plain Hero",
     role: "Hobby hero",
-    blurb: "1.5x HP. FINAL BLOW ends any fight, but takes 15s to come back.",
-    stars: 3,
-    maxHp: 150,
+    blurb: "FINAL BLOW ends any fight, but takes 15s to come back.",
+    stars: 4,
+    maxHp: 115,
     speed: 105,
     attack: "punch",
     attackCooldown: 0.5,
@@ -311,7 +328,7 @@ export const HEROES: Record<HeroId, HeroDef> = {
     name: "Green Rookie",
     role: "Brawler",
     blurb: "Runs 1.5x faster. FULL POWER SMASH blasts a wide line straight ahead.",
-    stars: 4,
+    stars: 3,
     maxHp: 130,
     speed: 160,
     attack: "punch",
@@ -327,8 +344,8 @@ export const HEROES: Record<HeroId, HeroDef> = {
   okita: {
     name: "Sakura Blade",
     role: "Swordswoman",
-    blurb: "Lightning-fast sword. PHANTOM SLASH cuts everything around her again and again.",
-    stars: 3,
+    blurb: "Lightning-fast sword. PHANTOM SLASH cuts everything around her again and again. SACRIFICE (E): she stabs herself for 50% of her max HP and the nearest enemy loses 50% of theirs; if both fall, the round is a draw.",
+    stars: 4,
     maxHp: 110,
     speed: 125,
     attack: "sword",
@@ -340,12 +357,14 @@ export const HEROES: Record<HeroId, HeroDef> = {
     shotSpeed: 0,
     pierce: 0,
     skill: { kind: "slashes", name: "PHANTOM SLASH", cooldown: 6, damage: 24, radius: 95, duration: 0.8 },
+    // SACRIFICE: she and the nearest enemy within `radius` each lose `damage` of their max HP (bosses a fifth of that).
+    skill2: { kind: "sacrifice", name: "SACRIFICE", cooldown: 20, damage: 0.5, radius: 220 },
   },
   gojo: {
     name: "Void Sorcerer",
     role: "Sorcerer",
-    blurb: "Fights up close. VOID REALM hits every enemy on the whole map.",
-    stars: 4,
+    blurb: "Fights up close. VOID REALM hits every enemy on the whole map. PURPLE BEAM (E): one huge purple beam that hits everything in a long line for heavy damage.",
+    stars: 3,
     maxHp: 140,
     speed: 115,
     attack: "punch",
@@ -357,12 +376,13 @@ export const HEROES: Record<HeroId, HeroDef> = {
     shotSpeed: 0,
     pierce: 0,
     skill: { kind: "domain", name: "VOID REALM", cooldown: 18, damage: 200, radius: 9999, duration: 1.6 },
+    skill2: { kind: "purple", name: "PURPLE BEAM", cooldown: 14, damage: 160, radius: 420, width: 40 },
   },
   starplatinum: {
     name: "Chrono Brawler",
     role: "Time brawler",
-    blurb: "Punches incredibly fast. TIME STOP freezes the whole map for 4s; only he can move.",
-    stars: 4,
+    blurb: "Punches incredibly fast. TIME STOP freezes the whole map for 4s; only he can move. STAR SHOT (E): fires 5 shots in a straight line.",
+    stars: 3,
     maxHp: 150,
     speed: 110,
     attack: "punch",
@@ -374,6 +394,8 @@ export const HEROES: Record<HeroId, HeroDef> = {
     shotSpeed: 0,
     pierce: 0,
     skill: { kind: "timestop", name: "TIME STOP", cooldown: 20, damage: 0, radius: 0, duration: 4 },
+    // STAR SHOT: `count` shots in a straight line, flying `radius` far.
+    skill2: { kind: "starfinger", name: "STAR SHOT", cooldown: 6, damage: 20, radius: 280, count: 5 },
   },
   rudeus: {
     name: "Storm Mage",
@@ -399,7 +421,7 @@ export const HEROES: Record<HeroId, HeroDef> = {
     name: "The Detective",
     role: "Detective",
     blurb: "Weak hits, runs 1.1x faster. PASSIVE: sees where every monster and boss will be 0.5s ahead (ghost images). SOLVE IT (E) locks on to the nearest enemy in range and stuns it for 5s.",
-    stars: 5,
+    stars: 4,
     maxHp: 100,
     speed: 116,
     attack: "punch",
@@ -417,8 +439,8 @@ export const HEROES: Record<HeroId, HeroDef> = {
   thorfinn: {
     name: "Viking Kid",
     role: "Dagger warrior",
-    blurb: "Quick twin-dagger slashes. DAGGER RUSH dashes forward, cutting every enemy on the way.",
-    stars: 5,
+    blurb: "Quick twin-dagger slashes. DAGGER RUSH dashes forward, cutting every enemy on the way. KNIFE STORM (E): throws 12 knives out in every direction.",
+    stars: 4,
     maxHp: 120,
     speed: 130,
     attack: "sword",
@@ -430,6 +452,8 @@ export const HEROES: Record<HeroId, HeroDef> = {
     shotSpeed: 0,
     pierce: 0,
     skill: { kind: "rush", name: "DAGGER RUSH", cooldown: 4, damage: 55, radius: 120, width: 24 },
+    // KNIFE STORM: `count` knives in a ring, flying `radius` far.
+    skill2: { kind: "knives", name: "KNIFE STORM", cooldown: 8, damage: 22, radius: 200, count: 12 },
   },
   titan: {
     name: "Giant Shifter",
@@ -455,7 +479,7 @@ export const HEROES: Record<HeroId, HeroDef> = {
     name: "Glitch God",
     role: "Indignia God",
     blurb: "2x HP, moves 2x faster. CREATOR builds a whole city: enemies inside lose 2% HP/s, he heals 2%/s. REALITY CHANGE turns every enemy into an ordinary human for 3s.",
-    stars: 4,
+    stars: 5,
     maxHp: 200,
     speed: 210,
     attack: "magic",
@@ -513,8 +537,8 @@ export const HEROES: Record<HeroId, HeroDef> = {
   joyboy: {
     name: "Rubber Pirate",
     role: "Rubber brawler",
-    blurb: "1.5x HP. Stretchy punches reach further. GATLING PUNCH fires a storm of fists down a medium-range lane.",
-    stars: 4,
+    blurb: "1.5x HP. Stretchy punches reach further. GATLING PUNCH fires a storm of fists down a medium-range lane. RUBBER PUNCH (E): a stretching fist bounces off walls and through everything for 3s, then snaps back.",
+    stars: 3,
     maxHp: 180,
     speed: 110,
     attack: "punch",
@@ -527,12 +551,14 @@ export const HEROES: Record<HeroId, HeroDef> = {
     pierce: 0,
     // GATLING PUNCH: `damage` per hit, every 0.1s for `duration`, in a lane `radius` long and `width` wide.
     skill: { kind: "gatling", name: "GATLING PUNCH", cooldown: 6, damage: 14, radius: 110, width: 40, duration: 1 },
+    // RUBBER PUNCH: the fist bounces around for `duration` seconds, then snaps back.
+    skill2: { kind: "rubberpunch", name: "RUBBER PUNCH", cooldown: 10, damage: 40, radius: 0, duration: 3 },
   },
   rick: {
     name: "Mad Scientist",
     role: "Inventor",
     blurb: "Laser gun. PORTAL GUN: shoot one portal, then another; walk into one to come out of the other. MISSILES: 10 homing missiles that chase targets until they hit.",
-    stars: 2,
+    stars: 3,
     maxHp: 110,
     speed: 110,
     attack: "magic",
@@ -552,7 +578,7 @@ export const HEROES: Record<HeroId, HeroDef> = {
     name: "Gadget Cat",
     role: "Robot cat",
     blurb: "1.5x HP. Air cannon blasts. BIG LIGHT shines a flashlight ahead: enemies caught in it grow bigger (easier to hit) and walk at half speed for 5s. GUNNER BOTS: 6 little gunner robots (15% of his HP each).",
-    stars: 5,
+    stars: 4,
     maxHp: 180,
     speed: 100,
     attack: "magic",
@@ -572,7 +598,7 @@ export const HEROES: Record<HeroId, HeroDef> = {
     name: "Monster Tamer",
     role: "Tamer",
     blurb: "Weak, slow punches. SPARK MOUSE: a fast electric mouse (60% HP) zaps enemies. FLAME DRAGON: a big fire dragon (200% HP). Pets stay until they fall or the Tamer does.",
-    stars: 5,
+    stars: 3,
     maxHp: 110,
     speed: 110,
     attack: "punch",
@@ -610,7 +636,7 @@ export const HEROES: Record<HeroId, HeroDef> = {
     name: "Hanuman",
     role: "Monkey god",
     blurb: "Runs 1.5x faster, quick trident thrusts. REVIVE: for 5s after pressing it, falling brings him straight back up. GIANT PALM (E): a giant palm comes down from the sky, crushing the spot and stunning for 2s.",
-    stars: 5,
+    stars: 2,
     maxHp: 130,
     speed: 165,
     attack: "sword",
@@ -629,8 +655,8 @@ export const HEROES: Record<HeroId, HeroDef> = {
   badigadi: {
     name: "Demon Lord",
     role: "Four-armed demon",
-    blurb: "3x HP, runs 1.2x faster. Slow, crushing four-armed blows hit a wide area. IMMORTAL: a barrier blocks all damage for 3s and heals 10% HP/s.",
-    stars: 5,
+    blurb: "3x HP, runs 1.2x faster. Slow, crushing four-armed blows hit a wide area. IMMORTAL: a barrier blocks all damage for 3s and heals 10% HP/s. GRAB SLAM (E): darts in, grabs the nearest target in front, leaps and slams it down, stunning for 2s.",
+    stars: 3,
     maxHp: 360,
     speed: 132,
     attack: "punch",
@@ -642,6 +668,8 @@ export const HEROES: Record<HeroId, HeroDef> = {
     shotSpeed: 0,
     pierce: 0,
     skill: { kind: "immortal", name: "IMMORTAL", cooldown: 18, damage: 0.1, radius: 0, duration: 3 },
+    // GRAB SLAM: reaches `radius`; the slam stuns `duration` seconds.
+    skill2: { kind: "grab", name: "GRAB SLAM", cooldown: 10, damage: 70, radius: 150, duration: 2 },
   },
   taekwondo: {
     name: "Taekwondo Master",
@@ -665,7 +693,7 @@ export const HEROES: Record<HeroId, HeroDef> = {
   theworld: {
     name: "Time Emperor",
     role: "Time tyrant",
-    blurb: "Punches incredibly fast. TRUCK SMASH stops time for 2s, then drops a truck on the spot he aimed at. He and the Chrono Brawler can move in each other's stopped time.",
+    blurb: "Punches incredibly fast. TRUCK SMASH stops time for 2s, then drops a truck on the spot he aimed at. He and the Chrono Brawler can move in each other's stopped time. TIME STOP (E): stops time for 4s.",
     stars: 4,
     maxHp: 150,
     speed: 110,
@@ -679,12 +707,13 @@ export const HEROES: Record<HeroId, HeroDef> = {
     pierce: 0,
     // TRUCK SMASH: the truck lands `radius` away at most and crushes everything within 60.
     skill: { kind: "truck", name: "TRUCK SMASH", cooldown: 18, damage: 140, radius: 170, duration: 2 },
+    skill2: { kind: "timestop", name: "TIME STOP", cooldown: 20, damage: 0, radius: 0, duration: 4 },
   },
   swordgod: {
     name: "Sword God",
     role: "Sword saint",
     blurb: "The Sword Dojo's master, now on your side. Quick forward cuts like his flurry. LIGHTNING DASH lunges ahead cutting everything on the way and ends in a full spin cut. SLASH FAN (E) throws a fan of 5 flying sword slashes.",
-    stars: 4,
+    stars: 3,
     maxHp: 130,
     speed: 120,
     attack: "sword",
@@ -741,8 +770,8 @@ export const HEROES: Record<HeroId, HeroDef> = {
   vampire: {
     name: "Vampire",
     role: "Night hunter",
-    blurb: "Quick claw swipes. BLOOD LATCH leaps onto the nearest target in front, clings to it for 3s and drains its blood to heal.",
-    stars: 3,
+    blurb: "Quick claw swipes. BLOOD LATCH leaps onto the nearest target in front, clings to it for 3s and drains its blood to heal. BAT FORM (E): 6s as a bat: attacks come about 3x as fast and heal 25% of the damage dealt.",
+    stars: 4,
     maxHp: 120,
     speed: 130,
     attack: "sword",
@@ -755,11 +784,13 @@ export const HEROES: Record<HeroId, HeroDef> = {
     pierce: 0,
     // BLOOD LATCH: leap up to `radius`, then `damage` per second for `duration`, healing the same.
     skill: { kind: "latch", name: "BLOOD LATCH", cooldown: 9, damage: 40, radius: 170, duration: 3 },
+    // BAT FORM: for `duration` seconds attacks come `width` times as often and heal `damage` of the damage dealt.
+    skill2: { kind: "bat", name: "BAT FORM", cooldown: 15, damage: 0.25, radius: 0, duration: 6, width: 0.35 },
   },
   rider: {
     name: "Hopper Rider",
     role: "Masked hero",
-    blurb: "1.5x HP, runs 1.5x faster, very fast punches. RIDER KICK leaps into a flying kick that stuns everything it hits for 2s.",
+    blurb: "1.5x HP, runs 1.5x faster, very fast punches. RIDER KICK leaps into a flying kick that stuns everything it hits for 2s. MOTORCYCLE (E): rides for 4s, 2.2x faster; whoever he rams is stunned 1s and knocked back.",
     stars: 4,
     maxHp: 165,
     speed: 165,
@@ -772,6 +803,8 @@ export const HEROES: Record<HeroId, HeroDef> = {
     shotSpeed: 0,
     pierce: 0,
     skill: { kind: "kick", name: "RIDER KICK", cooldown: 8, damage: 70, radius: 150, width: 30, duration: 2 },
+    // MOTORCYCLE: `width` times faster for `duration` seconds; ramming hits for `damage`, stuns 1s and knocks back.
+    skill2: { kind: "bike", name: "MOTORCYCLE", cooldown: 14, damage: 45, radius: 22, duration: 4, width: 2.2 },
   },
   // Summons (not pickable): their HP comes from the summoner's skill.
   gunbot: {
@@ -859,10 +892,10 @@ for (const def of Object.values(HEROES)) def.maxHp *= HP_SCALE;
  * The character select shows them in this order. Heroes missing here go at the end.
  */
 const PVP_RANKING: HeroId[] = [
-  "superman", "killua", "rick", "okita", "simo", "saitama", "vampire", "steve", "kid", "agamemnon",
-  "howl", "rudeus", "yaotsu", "rider", "healer", "taekwondo", "loki", "sakamoto", "titan", "theworld",
-  "gojo", "joyboy", "ricardo", "deku", "starplatinum", "swordgod", "hanuman", "lawliet", "trainer", "isekai",
-  "badigadi", "doraemon", "thorfinn",
+  "superman", "hanuman", "killua", "badigadi", "swordgod", "joyboy", "howl", "gojo", "trainer", "steve",
+  "rick", "kid", "simo", "agamemnon", "deku", "starplatinum", "isekai", "loki", "theworld", "okita",
+  "saitama", "vampire", "rudeus", "titan", "rider", "lawliet", "doraemon", "taekwondo", "ricardo", "sakamoto",
+  "healer", "thorfinn", "yaotsu",
 ];
 export const HERO_IDS = [
   ...PVP_RANKING,
@@ -874,39 +907,39 @@ export const HERO_IDS = [
  * Tuned from bot duels so no hero wins far more or far less than half its PvP fights.
  */
 export const DAMAGE_BALANCE: Partial<Record<HeroId, number>> = {
-  lawliet: 4,
-  theworld: 2.14,
-  superman: 0.62,
-  okita: 1.28,
-  healer: 2.5,
-  rick: 1.36,
+  lawliet: 4.18,
+  theworld: 1.5,
+  superman: 0.67,
+  okita: 1.29,
+  healer: 2.57,
+  rick: 1.68,
   killua: 2.16,
-  joyboy: 1.61,
-  howl: 2.8,
-  agamemnon: 0.93,
-  vampire: 1.98,
-  deku: 1.36,
-  rudeus: 1.8,
-  loki: 1.12,
-  sakamoto: 1.4,
-  simo: 0.55,
-  kid: 1.6,
-  rider: 1.42,
-  starplatinum: 2.16,
-  trainer: 5.05,
-  steve: 2.09,
-  doraemon: 0.61,
+  joyboy: 1.48,
+  howl: 2.85,
+  agamemnon: 0.99,
+  vampire: 1.29,
+  deku: 1.59,
+  rudeus: 1.84,
+  loki: 1.07,
+  sakamoto: 1.47,
+  simo: 0.48,
+  kid: 1.61,
+  rider: 0.81,
+  starplatinum: 1.47,
+  trainer: 6.92,
+  steve: 2.8,
+  doraemon: 0.73,
   ricardo: 0.62,
-  titan: 1.43,
-  taekwondo: 1.25,
-  hanuman: 1.1,
-  isekai: 3.16,
-  gojo: 2.27,
-  badigadi: 0.44,
-  thorfinn: 2.53,
-  swordgod: 1.1,
-  yaotsu: 0.35,
-  saitama: 0.1,
+  titan: 1.25,
+  taekwondo: 1.35,
+  hanuman: 1.07,
+  isekai: 1.83,
+  gojo: 1.62,
+  badigadi: 0.36,
+  thorfinn: 2.05,
+  swordgod: 1.19,
+  yaotsu: 0.51,
+  saitama: 0.05,
 };
 
 export function heroOf(id: string): HeroDef {
@@ -1079,6 +1112,13 @@ export function inputDirection(input: PlayerInput): { x: number; y: number } {
 export function movesInStoppedTime(hero: string): boolean {
   const kind = heroOf(hero).skill.kind;
   return kind === "timestop" || kind === "truck";
+}
+
+/** How fast a hero runs right now (BIG LIGHT slows, the Hopper Rider's motorcycle speeds up). */
+export function heroSpeed(p: { hero: string; big: number; active2?: number }): number {
+  const hero = heroOf(p.hero);
+  const bike = (p.active2 ?? 0) > 0 && hero.skill2?.kind === "bike" ? hero.skill2.width ?? 2 : 1;
+  return hero.speed * (p.big > 0 ? BIG_SLOW : 1) * bike;
 }
 
 /** The boxing ring the PvP Arena and Bot Duel are fought in: a small square with no cover. */

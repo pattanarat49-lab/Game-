@@ -38,11 +38,12 @@ import {
   HERO_SCALE,
   BIG_SCALE,
   BIG_SLOW,
+  heroSpeed,
 } from "../../../shared/game";
 import type { HudScene } from "./HudScene";
 import { LocalRoom } from "../localRoom";
 import { Lobby } from "../lobby";
-import { TITAN_ATTACK_COOLDOWN } from "../../../shared/sim";
+import { RiftSim, TITAN_ATTACK_COOLDOWN } from "../../../shared/sim";
 
 interface PlayerView {
   body: Phaser.GameObjects.Image;
@@ -57,11 +58,12 @@ interface PlayerView {
   glitch?: Phaser.GameObjects.Image[]; // Yaotsu's "error" afterimages
   heroId: string; // a hero swap (PvP player select) rebuilds the view
   spin?: number; // SPINNING KICK: seconds of the spin animation left
+  bike?: Phaser.GameObjects.Image; // MOTORCYCLE: the bike under the Hopper Rider
 }
 
 /** A short-lived swing, slash or shockwave drawn on top of the world. */
 interface Effect {
-  kind: "punch" | "sword" | "smash" | "muzzle" | "bolt" | "storm" | "blast" | "impact" | "heal" | "line" | "slashes" | "ripple" | "jab" | "gatling" | "rewind" | "kick" | "tkick" | "biglight" | "spinkick";
+  kind: "punch" | "sword" | "smash" | "muzzle" | "bolt" | "storm" | "blast" | "impact" | "heal" | "line" | "slashes" | "ripple" | "jab" | "gatling" | "rewind" | "kick" | "tkick" | "biglight" | "spinkick" | "purple";
   x: number;
   y: number;
   aim: number;
@@ -93,6 +95,9 @@ const BULLET_TEXTURE: Record<string, string> = {
   missile: "missile",
   air: "air",
   dragonfire: "dragonfire",
+  knife: "knife",
+  fist: "fist",
+  star: "starshot",
 };
 /** Summons drawn bigger than their pixel art. */
 const SUMMON_SCALE: Record<string, number> = { flamedragon: 1.4 };
@@ -451,6 +456,19 @@ export class GameScene extends Phaser.Scene {
     } else if (frozen) {
       // Someone stopped time: we cannot move until it flows again.
       this.dashTimer = 0;
+      if (me.stun > 0 && !(state.timeStop > 0)) {
+        // Stunned, but a ram (the motorcycle) still sends us flying.
+        if (me.kbSeq !== this.kbSeq) {
+          if (this.kbSeq >= 0) this.kbVel = { x: me.kbx, y: me.kby };
+          this.kbSeq = me.kbSeq;
+        }
+        if (Math.abs(this.kbVel.x) + Math.abs(this.kbVel.y) > 1) {
+          this.predicted = moveCircle(this.predicted.x, this.predicted.y, this.kbVel.x * dt, this.kbVel.y * dt, PLAYER_RADIUS, ringStage(state.stage));
+          const fade = Math.exp(-KNOCKBACK_DECAY * dt);
+          this.kbVel.x *= fade;
+          this.kbVel.y *= fade;
+        }
+      }
     } else {
       const dir = inputDirection(input);
       if (input.dash && this.dashTimer <= 0 && this.dashCooldown <= 0 && me.dashCooldown <= 0) {
@@ -458,8 +476,8 @@ export class GameScene extends Phaser.Scene {
         this.dashTimer = DASH_TIME;
         this.dashCooldown = DASH_COOLDOWN;
       }
-      let vx = dir.x * heroOf(me.hero).speed * (me.big > 0 ? BIG_SLOW : 1);
-      let vy = dir.y * heroOf(me.hero).speed * (me.big > 0 ? BIG_SLOW : 1);
+      let vx = dir.x * heroSpeed(me);
+      let vy = dir.y * heroSpeed(me);
       if (this.dashTimer > 0) {
         this.dashTimer -= dt;
         vx = this.dashDir.x * DASH_SPEED;
@@ -481,7 +499,7 @@ export class GameScene extends Phaser.Scene {
 
       // Safety net: if the server keeps us somewhere else, ease back to it.
       const err = Math.hypot(me.x - this.predicted.x, me.y - this.predicted.y);
-      const allowed = heroOf(me.hero).speed * 0.5 + 40;
+      const allowed = heroSpeed(me) * 0.5 + 40;
       this.driftTime = err > allowed ? this.driftTime + dt : 0;
       if (this.driftTime > 0.4) {
         const k = 1 - Math.exp(-8 * dt);
@@ -599,7 +617,9 @@ export class GameScene extends Phaser.Scene {
       const titanNow = p.titan > 0 && !p.dead;
       // Under Yaotsu's reality change, rival players are ordinary humans too.
       const humanized = state.reality > 0 && ringStage(state.stage) && (p.owner || id) !== state.realityBy && !p.dead;
-      const texture = humanized ? "human" : titanNow ? "titanform" : `hero_${p.hero}`;
+      const skill2 = heroOf(p.hero).skill2;
+      const batNow = !p.dead && p.active2 > 0 && skill2?.kind === "bat";
+      const texture = humanized ? "human" : titanNow ? "titanform" : batNow ? "batform" : `hero_${p.hero}`;
       body.setScale(k * (titanNow && !humanized ? 2.6 : humanized ? 1 : SUMMON_SCALE[p.hero] ?? 1));
       if (body.texture.key !== texture) {
         body.setTexture(texture);
@@ -618,9 +638,25 @@ export class GameScene extends Phaser.Scene {
       }
       // THE MAGICIAN: while he is a flock of doves, the hero himself is gone.
       const doveForm = p.barrier > 0 && heroOf(p.hero).skill2?.kind === "doves" && !p.dead;
-      if (doveForm) {
-        body.setAlpha(0);
+      if (doveForm || batNow) {
+        if (doveForm) body.setAlpha(0);
         view.weapon?.setVisible(false);
+      }
+      // VANISH: invisible to everyone else; a faint ghost on our own screen.
+      const vanished = !p.dead && p.active2 > 0 && skill2?.kind === "invis";
+      const unseen = vanished && !isMe;
+      if (vanished) {
+        body.setAlpha(isMe ? 0.3 : 0);
+        view.weapon?.setVisible(isMe);
+      }
+      view.label.setVisible(!unseen && !(p.owner && (p.hero === "gunbot" || p.hero === "gladiator")));
+      // MOTORCYCLE: the bike under him while he rides.
+      const riding = !p.dead && p.active2 > 0 && skill2?.kind === "bike";
+      if (riding && !view.bike) view.bike = this.add.image(body.x, body.y, "motorbike").setOrigin(0.5, 1);
+      if (view.bike) {
+        view.bike.setVisible(riding).setScale(k).setFlipX(Math.cos(aim) < 0);
+        view.bike.setPosition(body.x, body.y + 2 * k).setDepth(body.depth + 0.3);
+        if (riding && Math.random() < 0.3) this.sparks.explode(1, body.x - Math.sign(Math.cos(aim)) * 12 * k, body.y);
       }
       view.label.setPosition(body.x, body.y - (titanNow ? 66 : 18) * k);
       if (p.hero === "yaotsu") this.drawGlitch(view, p.dead);
@@ -635,7 +671,27 @@ export class GameScene extends Phaser.Scene {
       else body.clearTint();
 
       view.bar.clear();
-      if (!p.dead) {
+      if (!p.dead && !unseen) {
+        if (p.active2 > 0 && skill2?.kind === "excalibur") {
+          // EXCALIBUR: light swords circling him (the same spots the server cuts with).
+          for (let i = 0; i < (skill2.count ?? 4); i++) {
+            const sw = RiftSim.swordSpot(body.x, body.y - 6, skill2, p.active2, i);
+            const tx = Math.cos(sw.a + Math.PI / 2) * 9;
+            const ty = Math.sin(sw.a + Math.PI / 2) * 9;
+            view.bar.lineStyle(6, 0x9fd8ff, 0.3).lineBetween(sw.x - tx, sw.y - ty, sw.x + tx, sw.y + ty);
+            view.bar.lineStyle(2, 0xffffff, 1).lineBetween(sw.x - tx, sw.y - ty, sw.x + tx, sw.y + ty);
+            view.bar.fillStyle(0xffd23f, 1).fillRect(sw.x - tx * 0.7 - 1, sw.y - ty * 0.7 - 1, 3, 3);
+          }
+        }
+        if (skill2?.kind === "rubberpunch") {
+          // RUBBER PUNCH: the arm stretches all the way to the fist.
+          state.bullets.forEach((b: any, bid: string) => {
+            const fist = b.kind === "fist" ? this.bullets.get(bid) : undefined;
+            if (!fist) return;
+            view.bar.lineStyle(5, 0x7a4e22, 0.8).lineBetween(body.x, body.y - 6 * k, fist.x, fist.y);
+            view.bar.lineStyle(3, 0xf0b88a, 1).lineBetween(body.x, body.y - 6 * k, fist.x, fist.y);
+          });
+        }
         view.bar.fillStyle(PLAYER_MARKERS[p.color % 4], 0.5).fillEllipse(body.x, body.y + 1, 14 * k, 5 * k);
         view.bar.fillStyle(0x000000, 0.7).fillRect(body.x - 12, body.y + 3 + 2 * k, 24, 2);
         view.bar.fillStyle(0x4cd964, 1).fillRect(body.x - 12, body.y + 3 + 2 * k, 24 * (p.hp / p.maxHp), 2);
@@ -722,6 +778,7 @@ export class GameScene extends Phaser.Scene {
   private destroyView(view: PlayerView) {
     view.body.destroy();
     view.weapon?.destroy();
+    view.bike?.destroy();
     view.glitch?.forEach((g) => g.destroy());
     view.label.destroy();
     view.bar.destroy();
@@ -835,6 +892,8 @@ export class GameScene extends Phaser.Scene {
       if (p === this.room?.state.players.get(this.room.sessionId)) this.cameras.main.shake(60, 0.004);
     } else if (hero.attack === "magic") {
       this.effects.push({ kind: "muzzle", x, y, aim, range: 10, arc: 0, age: 0, life: 0.1 });
+    } else if (hero.skill2?.kind === "yoyo" && p.mode === 1) {
+      // YOYO MODE: the string is drawn where the yoyo lands.
     } else if (hero.attack === "lightning") {
       const tx = x + Math.cos(aim) * hero.range;
       const ty = y + 5 + Math.sin(aim) * hero.range;
@@ -967,6 +1026,36 @@ export class GameScene extends Phaser.Scene {
         break;
       case "fan":
         this.effects.push({ kind: "muzzle", x, y, aim, range: 10, arc: 0, age: 0, life: 0.1 });
+        break;
+      case "invis":
+        this.effects.push({ kind: "ripple", x, y, aim, range: 30, arc: 0, age: 0, life: 0.3 });
+        break;
+      case "bat":
+      case "yoyo":
+      case "excalibur":
+        this.sparks.explode(14, x, y);
+        if (skill.kind === "excalibur") cam.flash(120, 200, 230, 255);
+        break;
+      case "bike":
+        cam.shake(120, 0.006);
+        this.sparks.explode(10, x, y + 4);
+        break;
+      case "sacrifice":
+        cam.flash(150, 160, 0, 0);
+        cam.shake(200, 0.01);
+        break;
+      case "grab":
+        break; // the slam is drawn in the zone
+      case "knives":
+      case "rubberpunch":
+      case "starfinger":
+        this.effects.push({ kind: "muzzle", x, y, aim, range: 10, arc: 0, age: 0, life: 0.12 });
+        break;
+      case "purple":
+        // PURPLE BEAM: a huge violet blast straight ahead.
+        this.effects.push({ kind: "purple", x, y, aim, range: skill.radius, arc: skill.width ?? 40, age: 0, life: 0.5 });
+        cam.shake(300, 0.02);
+        cam.flash(120, 160, 60, 255);
         break;
       case "grapple":
         this.effects.push({ kind: "muzzle", x, y, aim, range: 10, arc: 0, age: 0, life: 0.12 });
@@ -1201,6 +1290,17 @@ export class GameScene extends Phaser.Scene {
         g.fillStyle(0xffffff, 0.3 * (1 - t));
         g.slice(e.x, e.y, e.range * 0.6, e.aim - e.arc * 0.4, e.aim + e.arc * 0.4);
         g.fillPath();
+      } else if (e.kind === "purple") {
+        // A thick violet beam that flares, then thins out.
+        const cos = Math.cos(e.aim);
+        const sin = Math.sin(e.aim);
+        const ex = e.x + cos * e.range;
+        const ey = e.y + sin * e.range;
+        const w = e.arc * (t < 0.15 ? t / 0.15 : 1 - (t - 0.15) / 0.85);
+        g.lineStyle(w + 10, 0x6a1aff, 0.35).lineBetween(e.x, e.y, ex, ey);
+        g.lineStyle(w, 0xa04aff, 0.85).lineBetween(e.x, e.y, ex, ey);
+        g.lineStyle(Math.max(1, w / 3), 0xf0d8ff, 1).lineBetween(e.x, e.y, ex, ey);
+        g.fillStyle(0xd0a0ff, 1 - t).fillCircle(e.x + cos * 10, e.y + sin * 10, e.arc * 0.6 * (1 - t));
       } else if (e.kind === "spinkick") {
         // SPINNING KICK: the kicking leg's trail whirls around him, ending in a shockwave.
         const turn = t * Math.PI * 4 + e.aim;
@@ -1314,6 +1414,13 @@ export class GameScene extends Phaser.Scene {
       case "grapple":
         lane(skill.radius, 3);
         break;
+      case "purple":
+      case "starfinger":
+        lane(skill.radius, skill.width ?? 8);
+        break;
+      case "rubberpunch":
+        lane(200, 10);
+        break;
       case "trojan":
       case "palm": {
         const w = skill.width ?? 60;
@@ -1374,6 +1481,7 @@ export class GameScene extends Phaser.Scene {
         break;
       case "dashkick":
       case "sticky":
+      case "grab":
       case "latch": {
         // A cone: the nearest target inside it gets bitten (or kicked).
         g.fillStyle(0xe02a3a, 0.12);
@@ -1780,6 +1888,38 @@ export class GameScene extends Phaser.Scene {
         sky.fillStyle(0x2a2a30, 1).fillCircle(z.x, z.y - 8, 4);
         sky.fillStyle(blink ? 0xff3030 : 0x601010, 1).fillRect(z.x - 1, z.y - 13, 2, 2);
         if (blink) sky.lineStyle(1, 0xff3030, 0.6).strokeCircle(z.x, z.y - 8, 7);
+      } else if (z.kind === "yoyo") {
+        // YOYO: the string runs from the Volt Kid's hand to the yoyo.
+        let best = Infinity;
+        let hand: Phaser.GameObjects.Image | undefined;
+        state.players.forEach((q: any, qid: string) => {
+          const v = this.players.get(qid);
+          if (!v || heroOf(q.hero).skill2?.kind !== "yoyo") return;
+          const d = Math.hypot(v.body.x - z.x, v.body.y - z.y);
+          if (d < best) [best, hand] = [d, v.body];
+        });
+        if (hand) sky.lineStyle(1, 0xffffff, 0.9).lineBetween(hand.x, hand.y - 8, z.x, z.y - 6);
+        sky.fillStyle(0x3aa8ff, 1).fillCircle(z.x, z.y - 6, 4);
+        sky.lineStyle(1, 0xffffff, 1).strokeCircle(z.x, z.y - 6, 4);
+      } else if (z.kind === "sacrifice") {
+        // SACRIFICE: a blade runs through, and blood sprays.
+        const t = 1 - z.life / z.maxLife;
+        sky.lineStyle(3, 0xd8dce8, 1 - t).lineBetween(z.x - 14, z.y - 22, z.x + 10, z.y + 2);
+        sky.lineStyle(1, 0xffffff, 1 - t).lineBetween(z.x - 14, z.y - 23, z.x + 10, z.y + 1);
+        for (let i = 0; i < 8; i++) {
+          const a = (i / 8) * Math.PI * 2;
+          sky.fillStyle(0xd0202a, 1 - t).fillRect(z.x + Math.cos(a) * 18 * t, z.y - 10 + Math.sin(a) * 12 * t + 10 * t * t, 2, 2);
+        }
+      } else if (z.kind === "slam") {
+        // GRAB SLAM: dust and a shockwave where the target hits the ground.
+        const t = 1 - z.life / z.maxLife;
+        if (!this.zoneImages.has(id)) {
+          this.zoneImages.set(id, this.add.image(z.x, z.y, "spark").setVisible(false));
+          this.cameras.main.shake(300, 0.02);
+          this.sparks.explode(24, z.x, z.y);
+        }
+        floor.lineStyle(3, 0xc8a878, 1 - t).strokeEllipse(z.x, z.y, z.radius * 2 * (0.4 + t), z.radius * (0.4 + t));
+        floor.fillStyle(0x6a5a4a, 0.4 * (1 - t)).fillEllipse(z.x, z.y, z.radius * 1.4, z.radius * 0.6);
       } else if (z.kind === "anchor") {
         // ODM GEAR: the hook bitten into the wall.
         sky.fillStyle(0x8a8a92, 1).fillCircle(z.x, z.y - 6, 2.5);
@@ -1871,7 +2011,7 @@ export class GameScene extends Phaser.Scene {
       if (!sprite) {
         const texture = b.kind.startsWith("card") ? b.kind : BULLET_TEXTURE[b.kind] ?? "snipe";
         sprite = this.add.image(b.x, b.y, texture).setDepth(900).setData("kind", b.kind);
-        if (b.kind === "wave" || b.kind === "snipe" || b.kind === "bullet" || b.kind === "slash" || b.kind === "godslash" || b.kind === "laser") sprite.setRotation(Math.atan2(b.vy, b.vx));
+        if (b.kind === "wave" || b.kind === "snipe" || b.kind === "bullet" || b.kind === "slash" || b.kind === "godslash" || b.kind === "laser" || b.kind === "knife") sprite.setRotation(Math.atan2(b.vy, b.vx));
         if (b.kind.startsWith("card")) sprite.setScale(1.3);
         if (b.kind === "wave") sprite.setScale(1.6);
         if (b.kind === "godslash") sprite.setScale(1.1); // his own slashes look like the heroes' sword waves, not the boss's red ones

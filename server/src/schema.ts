@@ -34,6 +34,7 @@ export class Player extends Schema {
   @type("float32") beam = 0;
   @type("float32") buff = 0;
   @type("float32") power = 1;
+  @type("float32") active2 = 0;
   @type("float32") stun = 0;
   @type("float32") big = 0;
 }
