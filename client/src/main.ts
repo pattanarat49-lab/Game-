@@ -91,6 +91,7 @@ function buildHeroPicker() {
     const reach = Math.min(1, (hero.range + hero.aoe) / 600 + 0.15);
     card.innerHTML = `
       <span class="name">${hero.name}</span>
+      <span class="stars" title="${hero.stars} of 5 stars">${"★".repeat(hero.stars)}<span class="dim">${"★".repeat(5 - hero.stars)}</span></span>
       <span class="role">${hero.role}</span>
       <span class="role">Skill: ${hero.skill.name}${hero.skill2 ? ` + ${hero.skill2.name}` : ""}</span>
       <div class="stats">
