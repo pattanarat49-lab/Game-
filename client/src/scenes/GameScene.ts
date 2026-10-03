@@ -1238,6 +1238,10 @@ export class GameScene extends Phaser.Scene {
       case "rush":
         lane(skill.radius, skill.width ?? 16);
         break;
+      case "frost":
+        lane(110, 4);
+        area(x + cos * 110, y + sin * 110, skill.radius);
+        break;
       case "godrush":
         lane(skill.radius, skill.width ?? 26);
         area(x + cos * skill.radius, y + sin * skill.radius, 66);
@@ -1595,6 +1599,28 @@ export class GameScene extends Phaser.Scene {
         }
         const drop = left * left * 420;
         img.setPosition(z.x, z.y - drop).setRotation(0.25 * left).setDepth(z.y + 50);
+      } else if (z.kind === "frost") {
+        // FROST SIGIL: a slowly turning circle of icy runes on the ground.
+        const spin = now / 900;
+        floor.fillStyle(0x9fe8ff, 0.14 * fade).fillCircle(z.x, z.y, z.radius);
+        floor.lineStyle(2, 0xbff4ff, 0.85 * fade).strokeCircle(z.x, z.y, z.radius);
+        floor.lineStyle(1, 0x6ad0ff, 0.8 * fade).strokeCircle(z.x, z.y, z.radius * 0.7);
+        const star: { x: number; y: number }[] = [];
+        for (let i = 0; i < 6; i++) {
+          const a = spin + (i * Math.PI * 2) / 6;
+          star.push({ x: z.x + Math.cos(a) * z.radius * 0.7, y: z.y + Math.sin(a) * z.radius * 0.7 });
+          floor.fillStyle(0xe8fbff, fade).fillRect(z.x + Math.cos(-a) * z.radius * 0.86 - 1, z.y + Math.sin(-a) * z.radius * 0.86 - 1, 3, 3);
+        }
+        floor.lineStyle(1, 0xbff4ff, 0.7 * fade);
+        for (let i = 0; i < 6; i++) floor.lineBetween(star[i].x, star[i].y, star[(i + 2) % 6].x, star[(i + 2) % 6].y);
+      } else if (z.kind === "ice") {
+        // Frozen solid: a block of ice around the victim, cracking as it thaws.
+        const r = z.radius + 6;
+        const thaw = z.life / z.maxLife;
+        sky.fillStyle(0x9fe8ff, 0.45 * Math.min(1, thaw * 3)).fillRect(z.x - r, z.y - r * 2.2, r * 2, r * 2.4);
+        sky.lineStyle(1, 0xe8fbff, 0.9 * Math.min(1, thaw * 3)).strokeRect(z.x - r, z.y - r * 2.2, r * 2, r * 2.4);
+        sky.lineStyle(1, 0xffffff, 0.8 * thaw).lineBetween(z.x - r + 3, z.y - r * 2.2 + 3, z.x - r + 3, z.y - r);
+        if (thaw < 0.35) sky.lineStyle(1, 0x3a8ac8, 0.8).lineBetween(z.x - r * 0.4, z.y - r * 1.8, z.x + r * 0.3, z.y - r * 0.3);
       } else if (z.kind === "castle") {
         // MOVING CASTLE: a huge walking castle, glided smoothly between server updates, with a shadow and dust.
         let img = this.zoneImages.get(id);

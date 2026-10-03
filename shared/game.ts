@@ -104,6 +104,7 @@ export type SkillKind =
   | "godrush" // a lightning-fast lunge that ends in a full spin cut (the Sword God's dash and whirl)
   | "fan" // a fan of flying sword slashes
   | "castle" // a giant walking castle strides across the map, hitting and stunning whatever it walks into
+  | "frost" // draw a frost sigil on the ground: whoever steps on it is frozen solid
   | "solve" // lock on to the nearest enemy anywhere in range and stun it
   | "biglight" // a flashlight beam: everything caught in it grows bigger (easier to hit) and slower
   | "diamond" // a diamond sword for a while: basic attacks become strong, fast, long sword swings
@@ -368,8 +369,8 @@ export const HEROES: Record<HeroId, HeroDef> = {
   rudeus: {
     name: "Storm Mage",
     role: "Mage",
-    blurb: "Casts magic bolts. HURRICANE summons a huge storm cloud that rains lightning on an area.",
-    stars: 2,
+    blurb: "Casts magic bolts. HURRICANE summons a huge storm cloud that rains lightning on an area. FROST SIGIL (E) draws a magic circle on the ground: any enemy that steps on it is frozen solid for 3s.",
+    stars: 4,
     maxHp: 100,
     speed: 105,
     attack: "magic",
@@ -382,6 +383,8 @@ export const HEROES: Record<HeroId, HeroDef> = {
     pierce: 0,
     shot: "stone",
     skill: { kind: "hurricane", name: "HURRICANE", cooldown: 12, damage: 26, radius: 140, duration: 3.5 },
+    // FROST SIGIL: drawn FROST_SIGIL_REACH ahead, `radius` wide, lasts 10s; each enemy is frozen `duration` once.
+    skill2: { kind: "frost", name: "FROST SIGIL", cooldown: 14, damage: 20, radius: 42, duration: 3 },
   },
   lawliet: {
     name: "The Detective",
@@ -835,8 +838,8 @@ for (const def of Object.values(HEROES)) def.maxHp *= HP_SCALE;
  * The character select shows them in this order. Heroes missing here go at the end.
  */
 const PVP_RANKING: HeroId[] = [
-  "healer", "rudeus", "superman", "killua", "rick", "okita", "simo", "saitama", "vampire", "sakamoto",
-  "steve", "titan", "howl", "yaotsu", "rider", "agamemnon", "theworld", "kid", "loki", "gojo",
+  "healer", "superman", "killua", "rick", "okita", "simo", "saitama", "vampire", "sakamoto", "steve",
+  "titan", "howl", "rudeus", "yaotsu", "rider", "agamemnon", "theworld", "kid", "loki", "gojo",
   "joyboy", "ricardo", "deku", "hanuman", "starplatinum", "swordgod", "lawliet", "taekwondo", "trainer", "isekai",
   "badigadi", "doraemon", "thorfinn",
 ];
@@ -862,7 +865,7 @@ export const DAMAGE_BALANCE: Partial<Record<HeroId, number>> = {
   agamemnon: 0.8,
   vampire: 1.98,
   deku: 1.36,
-  rudeus: 1.59,
+  rudeus: 1.8,
   loki: 0.99,
   sakamoto: 1.7,
   simo: 0.55,

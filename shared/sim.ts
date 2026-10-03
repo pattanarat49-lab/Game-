@@ -71,6 +71,9 @@ const OKITA_SLASHES = 8;
 const ROUND_RESET_PAUSE = 2;
 /** MOVING CASTLE walking speed (pixels/s). */
 const CASTLE_SPEED = 95;
+/** FROST SIGIL: how far ahead it is drawn, and how long it waits on the ground. */
+const FROST_SIGIL_REACH = 110;
+const FROST_SIGIL_LIFE = 10;
 const ONE_PUNCH_DAMAGE = 1e9; // "infinity", but still a number the network can send
 const MAX_CLONES = 2;
 export const TITAN_ATTACK_COOLDOWN = 0.6;
@@ -576,6 +579,31 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       hit.add(vid);
       this.damagePlayer(vid, brain.damage * PVP_DAMAGE_SCALE, true, brain.owner);
       if (!v.dead) v.stun = Math.max(v.stun, stun);
+    });
+  }
+
+  /** FROST SIGIL: anything hostile standing on the circle is frozen solid (once per sigil). */
+  private frostSigil(z: Z, brain: ZoneBrain) {
+    const hit = brain.hit!;
+    const freeze = brain.stun ?? 3;
+    const iceAt = (x: number, y: number, r: number) => this.addZone("ice", x, y, r, freeze, { owner: brain.owner, every: Infinity, damage: 0 });
+    this.state.enemies.forEach((e, eid) => {
+      const def = ENEMIES[e.kind as EnemyKind];
+      if (def.block || hit.has(eid) || Math.hypot(e.x - z.x, e.y - z.y) > z.radius + this.er(e) * 0.5) return;
+      hit.add(eid);
+      this.damageEnemy(eid, brain.damage, brain.owner);
+      if (def.boss || !this.state.enemies.has(eid)) return;
+      e.stun = Math.max(e.stun, freeze);
+      iceAt(e.x, e.y, this.er(e));
+    });
+    if (!this.pvpLive()) return;
+    this.state.players.forEach((v, vid) => {
+      if (hit.has(vid) || v.dead || !this.isFoe(brain.owner, vid) || Math.hypot(v.x - z.x, v.y - z.y) > z.radius) return;
+      hit.add(vid);
+      this.damagePlayer(vid, brain.damage * PVP_DAMAGE_SCALE, true, brain.owner);
+      if (v.dead) return;
+      v.stun = Math.max(v.stun, freeze);
+      iceAt(v.x, v.y, this.pr(v));
     });
   }
 
@@ -1248,6 +1276,13 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       case "biglight":
         this.bigLight(id, p, skill);
         break;
+      case "frost": {
+        // FROST SIGIL: a magic circle on the ground, a little way ahead. It waits for someone to step on it.
+        const spot = this.move(p.x, p.y, Math.cos(p.aim) * FROST_SIGIL_REACH, Math.sin(p.aim) * FROST_SIGIL_REACH, 4);
+        const zid = this.addZone("frost", spot.x, spot.y, skill.radius, FROST_SIGIL_LIFE, { owner: id, every: 0, damage: skill.damage });
+        Object.assign(this.zoneBrains.get(zid)!, { stun: skill.duration ?? 3, hit: new Set<string>() });
+        break;
+      }
       case "castle": {
         // MOVING CASTLE: it rises behind the wizard and walks straight on until it has left the map.
         const vx = Math.cos(p.aim) * CASTLE_SPEED;
@@ -1601,6 +1636,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       brain.tick -= dt;
       if (brain.link) this.usePortal(id, z, brain.link);
       if (z.kind === "castle") this.walkCastle(z, brain, dt);
+      if (z.kind === "frost") this.frostSigil(z, brain);
       if (brain.tick <= 0) {
         brain.tick += brain.every;
         if (z.kind === "hurricane") {
@@ -2344,6 +2380,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       case "biglight":
       case "solve":
       case "castle":
+      case "frost":
       case "eyebeam":
       case "onepunch":
       case "smash":
@@ -2354,6 +2391,8 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
         return dist < 120;
       case "diamond":
         return dist < 140;
+      case "frost":
+        return dist < 160;
       case "build":
         return dist < 200;
       case "hurricane":

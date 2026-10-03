@@ -31,7 +31,7 @@ Design doc: see `docs/game-design-foundation.md`.
   - **Sakura Blade:** fast sword. Skill PHANTOM SLASH cuts everything around her 8 times.
   - **Void Sorcerer:** close-range fighter. Skill VOID REALM hits every enemy on the whole map.
   - **Chrono Brawler:** very fast punches. Skill TIME STOP freezes the whole map for 4 seconds; only he can move.
-  - **Storm Mage:** magic bolts. Skill HURRICANE summons a storm cloud that keeps striking lightning over a wide area.
+  - **Storm Mage:** magic bolts. Skill HURRICANE summons a storm cloud that keeps striking lightning over a wide area. Skill 2 FROST SIGIL (E) draws a magic circle on the ground a little way ahead; it stays for 10 seconds, and any enemy (or PvP rival) that steps on it is frozen solid for 3 seconds (once per sigil; bosses only take the damage).
   - **Trickster:** magic shots and two skills. ILLUSION raises a golden city for 10 seconds; enemies inside lose 7% of their max HP each second. CLONE (E) makes a copy with 25% of his HP that attacks enemies by itself.
   - **The Detective:** runs 1.1x faster. PASSIVE FORESIGHT shows a ghost of where every monster and boss will be 0.5 seconds ahead. SOLVE IT (E) needs no aiming: it locks on to the nearest enemy (or PvP rival) within range and stuns it for 5 seconds (bosses are not stunned).
   - **Viking Kid:** quick twin-dagger slashes. Skill DAGGER RUSH dashes forward, cutting every enemy on the way.
