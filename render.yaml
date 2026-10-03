@@ -2,8 +2,11 @@
 # A single web service builds the client and runs the game server, which also serves the client.
 services:
   - type: web
-    name: riftborn
+    name: riftborn-sg
     runtime: node
+    # Singapore is closest to players in Thailand. Render cannot move an existing service,
+    # so this is a new service (the old Oregon one can be deleted once this one works).
+    region: singapore
     plan: free
     buildCommand: npm install --include=dev && npm install --prefix server --include=dev && npm install --prefix client --include=dev && npm run build
     startCommand: npm start
