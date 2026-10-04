@@ -23,6 +23,8 @@ export class LocalRoom {
     lavaRadius: 0,
     winner: "",
     notice: "",
+    botHero: "superman",
+    botLevel: 2,
   };
   private sim: RiftSim<SimPlayer, SimEnemy, SimBullet>;
 
@@ -80,8 +82,12 @@ export class LocalRoom {
     this.sim.update(Math.min(dt, 0.1));
   }
 
-  send(_type: "input", input: PlayerInput) {
-    this.sim.setInput(this.sessionId, input);
+  send(type: string, data: any) {
+    if (type === "input") this.sim.setInput(this.sessionId, data as PlayerInput);
+    else if (type === "pick") this.sim.pickHero(this.sessionId, String(data));
+    else if (type === "ready") this.sim.setReady(this.sessionId, !!data);
+    else if (type === "bothero") this.sim.setBot(String(data));
+    else if (type === "botlevel") this.sim.setBot(undefined, Number(data));
   }
 
   onLeave(_cb: () => void) {

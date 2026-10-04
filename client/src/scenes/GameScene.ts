@@ -29,6 +29,7 @@ import {
   SWORD_GOD,
   stageOf,
   ringStage,
+  selectStage,
   EMPTY_INPUT,
   heroOf,
   inLava,
@@ -294,6 +295,7 @@ export class GameScene extends Phaser.Scene {
 
     if (this.registry.get("solo")) {
       this.room = new LocalRoom(this.registry.get("playerName"), this.registry.get("hero"), stage, this.registry.get("botHero"));
+      if (stage === "pve") this.openLobby(stage);
       this.scene.launch("Hud");
       return;
     }
@@ -316,17 +318,25 @@ export class GameScene extends Phaser.Scene {
     this.time.addEvent({ delay: 2000, loop: true, callback: ping });
     this.room.onLeave(() => this.game.events.emit("connection-error", new Error("Disconnected from server")));
     this.room.onStateChange((state: any) => this.recordSnapshot(state));
-    if (stage === "pvp") {
-      // PvP player select screen (both players pick, then READY).
-      const lobby = new Lobby(
-        (hero) => room.send("pick", hero),
-        (ready) => room.send("ready", ready),
-      );
-      this.lobby = lobby;
-      this.events.once(Phaser.Scenes.Events.DESTROY, () => lobby.destroy());
-      this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => lobby.destroy());
-    }
+    if (selectStage(stage)) this.openLobby(stage);
     this.scene.launch("Hud");
+  }
+
+  /** PvP and PvE Squad player select screen (everyone picks, then READY). */
+  private openLobby(stage: string) {
+    const room = this.room!;
+    const lobby = new Lobby(
+      {
+        pick: (hero) => room.send("pick", hero),
+        setReady: (ready) => room.send("ready", ready),
+        botHero: (hero) => room.send("bothero", hero),
+        botLevel: (level) => room.send("botlevel", level),
+      },
+      stage === "pve" ? "pve" : "pvp",
+    );
+    this.lobby = lobby;
+    this.events.once(Phaser.Scenes.Events.DESTROY, () => lobby.destroy());
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => lobby.destroy());
   }
 
   update(_time: number, deltaMs: number) {

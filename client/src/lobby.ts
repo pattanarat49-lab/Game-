@@ -1,8 +1,10 @@
 // PvP player select, fighting-game style: your pick (1P) on the left, your opponent's (2P) on the
 // right, every hero in a grid between them. Both players see each other's cursor move live, then
 // press READY; the match starts when everyone is ready.
+// PvE Squad uses the same screen with four player slots (1P-4P), a small bot slot at the top centre
+// (tap it, then a hero, to choose who the bot plays) and the bot's difficulty under it.
 
-import { HEROES, HERO_IDS, HeroId, heroOf } from "../../shared/game";
+import { BOT_LEVELS, HEROES, HERO_IDS, HeroId, heroOf } from "../../shared/game";
 import { HERO_SPRITES, renderPixelSprite } from "./art";
 import { heroPortrait } from "./heroArt";
 
@@ -44,6 +46,36 @@ const CSS = `
   background: #ffd23f; color: #1a0f14; cursor: pointer; box-shadow: 0 4px 0 #8a6a10; }
 #lobby .readyBtn.cancel { background: #c9b8c0; box-shadow: 0 4px 0 #5a4a50; }
 #lobby .hint { font-size: clamp(6px, 1.5vh, 10px); color: #8a7a90; }
+#lobby .col { flex: 0 0 18%; display: flex; flex-direction: column; gap: 1vh; min-width: 0; }
+#lobby .col .side { flex: 1 1 0; padding: 0.5vh 0.3vw; gap: 0.3vh; }
+#lobby .col .side .tag { font-size: clamp(12px, 3.6vh, 26px); }
+#lobby .col .side canvas { width: min(9vh, 8vw); }
+#lobby .col .side .hname { font-size: clamp(7px, 1.7vh, 12px); }
+#lobby .col .side .status { font-size: clamp(6px, 1.4vh, 10px); padding: 0.3vh 0.5vw; }
+#lobby .p3 .tag { color: #5aff7a; text-shadow: 3px 3px 0 #0a4a1a; }
+#lobby .p4 .tag { color: #ffd23f; text-shadow: 3px 3px 0 #5a4a0a; }
+#lobby .side.you { border-color: #ffffff; }
+#lobby .tile.p3 { outline: 3px solid #5aff7a; outline-offset: -3px; background: #10401a; }
+#lobby .tile.p4 { outline: 3px solid #ffd23f; outline-offset: -3px; background: #403a10; }
+#lobby .tile.bot { outline: 3px solid #c97aff; outline-offset: -3px; background: #2a1040; }
+#lobby .tile .mark.p3 { left: 0; bottom: 0; top: auto; background: #5aff7a; color: #04200a; }
+#lobby .tile .mark.p4 { right: 0; bottom: 0; top: auto; background: #ffd23f; color: #2e2604; }
+#lobby .tile .mark.bot { left: 50%; transform: translateX(-50%); background: #c97aff; color: #1a0428; }
+#lobby .botbox { display: flex; align-items: center; gap: 1vw; }
+#lobby .botslot { font: inherit; display: flex; align-items: center; gap: 0.6vw; padding: 0.4vh 1vw; cursor: pointer; color: #fff;
+  background: #1e1430; border: 3px solid #6a4a9a; border-radius: 6px; }
+#lobby .botslot.on { border-color: #c97aff; box-shadow: 0 0 10px #c97aff; background: #2a1a44; }
+#lobby .botslot canvas { width: min(6vh, 6vw); height: auto; image-rendering: pixelated; }
+#lobby .botslot .bt { font-size: clamp(7px, 1.6vh, 11px); text-align: left; line-height: 1.6; }
+#lobby .botslot .bt b { color: #c97aff; }
+#lobby .levels { display: flex; gap: 3px; }
+#lobby .levels button { font: inherit; font-size: clamp(6px, 1.4vh, 10px); padding: 0.7vh 0.6vw; cursor: pointer; border: 2px solid #2a2440;
+  border-radius: 4px; background: #15121e; color: #8a7a90; }
+#lobby .levels button.on { color: #1a0f14; border-color: #1a0f14; }
+#lobby .levels button.on.l0 { background: #5aff7a; }
+#lobby .levels button.on.l1 { background: #ffd23f; }
+#lobby .levels button.on.l2 { background: #ff8a3a; }
+#lobby .levels button.on.l3 { background: #ff3a4a; color: #fff; }
 `;
 
 interface Side {
@@ -55,19 +87,37 @@ interface Side {
   shown?: string;
 }
 
+/** What the lobby can ask the room to do. */
+export interface LobbyActions {
+  pick: (hero: HeroId) => void;
+  setReady: (ready: boolean) => void;
+  botHero?: (hero: HeroId) => void;
+  botLevel?: (level: number) => void;
+}
+
+const SLOT_TAGS = ["1P", "2P", "3P", "4P"];
+
 export class Lobby {
   private root: HTMLElement;
   private tiles = new Map<string, HTMLButtonElement>();
   private p1: Side;
   private p2: Side;
+  private slots: Side[] = []; // PvE Squad: 1P, 2P, 3P, 4P
   private readyBtn: HTMLButtonElement;
   private notice: HTMLElement;
   private me?: { hero: string; ready: boolean };
+  private pick: (hero: HeroId) => void;
+  private setReady: (ready: boolean) => void;
+  private pve: boolean;
+  private botSlot?: { button: HTMLButtonElement; art: HTMLCanvasElement; name: HTMLElement; shown?: string };
+  private levelButtons: HTMLButtonElement[] = [];
+  /** PvE: tapping a hero picks it for the bot instead of for me. */
+  private botMode = false;
 
-  constructor(
-    private pick: (hero: HeroId) => void,
-    private setReady: (ready: boolean) => void,
-  ) {
+  constructor(private actions: LobbyActions, mode: "pvp" | "pve" = "pvp") {
+    this.pick = actions.pick;
+    this.setReady = actions.setReady;
+    this.pve = mode === "pve";
     if (!document.getElementById("lobby-style")) {
       const style = document.createElement("style");
       style.id = "lobby-style";
@@ -77,9 +127,11 @@ export class Lobby {
     this.root = document.createElement("div");
     this.root.id = "lobby";
     this.root.hidden = true;
-    this.root.innerHTML = `<div class="title">PLAYER SELECT<small>PVP ARENA - 1 VS 1</small></div><div class="row"></div><div class="bottom"></div>`;
+    const sub = this.pve ? "PVE SQUAD - 1 TO 4 PLAYERS VS BOT" : "PVP ARENA - 1 VS 1";
+    this.root.innerHTML = `<div class="title">PLAYER SELECT<small>${sub}</small></div><div class="row"></div><div class="bottom"></div>`;
     const row = this.root.querySelector(".row")!;
     this.p1 = this.side("p1", "1P");
+    if (this.pve) this.buildBotBox();
     const grid = document.createElement("div");
     grid.className = "grid";
     for (const id of HERO_IDS) {
@@ -88,12 +140,26 @@ export class Lobby {
       tile.className = "tile";
       tile.title = HEROES[id].name;
       tile.append(heroPortrait(id));
-      tile.addEventListener("click", () => this.pick(id));
+      tile.addEventListener("click", () => {
+        if (this.botMode) {
+          this.actions.botHero?.(id);
+          this.botMode = false;
+        } else this.pick(id);
+      });
       grid.append(tile);
       this.tiles.set(id, tile);
     }
     this.p2 = this.side("p2", "2P");
-    row.append(this.p1.root, grid, this.p2.root);
+    if (this.pve) {
+      this.slots = SLOT_TAGS.map((tag, i) => (i === 0 ? this.p1 : i === 1 ? this.p2 : this.side(`p${i + 1}`, tag)));
+      const left = document.createElement("div");
+      left.className = "col";
+      left.append(this.slots[0].root, this.slots[2].root);
+      const right = document.createElement("div");
+      right.className = "col";
+      right.append(this.slots[1].root, this.slots[3].root);
+      row.append(left, grid, right);
+    } else row.append(this.p1.root, grid, this.p2.root);
     const bottom = this.root.querySelector(".bottom")!;
     this.notice = document.createElement("div");
     this.notice.className = "notice";
@@ -103,9 +169,36 @@ export class Lobby {
     this.readyBtn.addEventListener("click", () => this.setReady(!this.me?.ready));
     const hint = document.createElement("div");
     hint.className = "hint";
-    hint.textContent = "Pick a hero, then press READY. The fight starts when both players are ready.";
+    hint.textContent = this.pve
+      ? "Pick a hero, then READY. Tap the BOT slot, then a hero, to choose who the bot plays."
+      : "Pick a hero, then press READY. The fight starts when both players are ready.";
     bottom.append(this.notice, this.readyBtn, hint);
     document.body.append(this.root);
+  }
+
+  /** PvE: the small bot slot at the top centre, with its difficulty under it. */
+  private buildBotBox() {
+    const box = document.createElement("div");
+    box.className = "botbox";
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "botslot";
+    button.innerHTML = `<canvas></canvas><div class="bt"><b>BOT</b><br><span></span></div>`;
+    button.addEventListener("click", () => (this.botMode = !this.botMode));
+    const levels = document.createElement("div");
+    levels.className = "levels";
+    BOT_LEVELS.forEach((lv, i) => {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = `l${i}`;
+      b.textContent = lv.name;
+      b.addEventListener("click", () => this.actions.botLevel?.(i));
+      levels.append(b);
+      this.levelButtons.push(b);
+    });
+    box.append(button, levels);
+    this.botSlot = { button, art: button.querySelector("canvas")!, name: button.querySelector("span")! };
+    this.root.querySelector(".title")!.after(box);
   }
 
   private side(cls: string, tag: string): Side {
@@ -123,9 +216,10 @@ export class Lobby {
 
   /** Called every frame with the room state: shows the screen during PvP player select. */
   update(state: any, myId: string) {
-    const show = state?.stage === "pvp" && state.phase === "select";
+    const show = (state?.stage === "pvp" || state?.stage === "pve") && state.phase === "select";
     this.root.hidden = !show;
     if (!show) return;
+    if (this.pve) return this.updatePve(state, myId);
     const me = state.players.get(myId);
     let foe: any;
     state.players.forEach((p: any, id: string) => {
@@ -153,6 +247,56 @@ export class Lobby {
     this.notice.textContent = state.notice || (!foe ? "Share the link with a friend to fight." : ready && !foe.ready ? "Waiting for 2P to get ready..." : "");
   }
 
+  /** PvE Squad: four player slots in join order, plus the bot's hero and difficulty. */
+  private updatePve(state: any, myId: string) {
+    const team: [string, any][] = [];
+    state.players.forEach((p: any, id: string) => {
+      if (!p.owner && id !== "bot") team.push([id, p]);
+    });
+    const me = state.players.get(myId);
+    this.me = me ? { hero: me.hero, ready: me.ready } : undefined;
+    this.slots.forEach((side, i) => {
+      const [id, p] = team[i] ?? [];
+      this.fill(side, p, i === 0 ? "" : "Open slot");
+      side.root.classList.toggle("you", id === myId);
+      side.who.textContent = p ? `${p.name}${id === myId ? " (YOU)" : ""}` : "Open slot";
+    });
+    const botHero = state.botHero || "superman";
+    const slot = this.botSlot!;
+    if (slot.shown !== botHero) {
+      slot.shown = botHero;
+      const sprite = renderPixelSprite(HERO_SPRITES[botHero as HeroId]);
+      slot.art.width = sprite.width;
+      slot.art.height = sprite.height;
+      const ctx = slot.art.getContext("2d")!;
+      ctx.drawImage(sprite, 0, 0);
+      slot.art.style.transform = "scaleX(-1)";
+      slot.name.textContent = heroOf(botHero).name;
+    }
+    slot.button.classList.toggle("on", this.botMode);
+    this.levelButtons.forEach((b, i) => b.classList.toggle("on", i === (state.botLevel ?? 2)));
+    for (const [id, tile] of this.tiles) {
+      const slotsHere = team.map(([, p], i) => (p.hero === id ? i : -1)).filter((i) => i >= 0);
+      const bot = botHero === id;
+      ["me", "foe", "p3", "p4"].forEach((c, i) => tile.classList.toggle(c, slotsHere.includes(i)));
+      tile.classList.toggle("bot", bot);
+      tile.disabled = !this.botMode && !!me?.ready;
+      const marks = slotsHere.map((i) => `<span class="mark p${i + 1}">${SLOT_TAGS[i]}</span>`).join("") + (bot ? '<span class="mark bot">BOT</span>' : "");
+      if (tile.dataset.marks !== marks) {
+        tile.dataset.marks = marks;
+        tile.querySelectorAll(".mark").forEach((m) => m.remove());
+        tile.insertAdjacentHTML("beforeend", marks);
+      }
+    }
+    const ready = !!me?.ready;
+    this.readyBtn.textContent = ready ? "CANCEL READY" : "READY";
+    this.readyBtn.classList.toggle("cancel", ready);
+    const waiting = team.filter(([, p]) => !p.ready).length;
+    this.notice.textContent = this.botMode
+      ? "Tap a hero for the BOT to play"
+      : state.notice || (ready && waiting ? `Waiting for ${waiting} player${waiting > 1 ? "s" : ""} to get ready...` : "");
+  }
+
   private fill(side: Side, p: any, empty: string) {
     side.root.style.opacity = p ? "1" : "0.5";
     side.who.textContent = p ? p.name : empty;
@@ -165,7 +309,7 @@ export class Lobby {
         side.art.width = sprite.width;
         side.art.height = sprite.height;
         ctx.drawImage(sprite, 0, 0);
-        if (side.root.classList.contains("p2")) side.art.style.transform = "scaleX(-1)"; // 2P faces 1P
+        if (side.root.classList.contains("p2") || side.root.classList.contains("p4")) side.art.style.transform = "scaleX(-1)"; // 2P faces 1P
       } else {
         side.art.width = 16;
         side.art.height = 18;

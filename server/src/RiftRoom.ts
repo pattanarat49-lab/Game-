@@ -20,6 +20,9 @@ export class RiftRoom extends Room<RiftState> {
     // PvP player select.
     this.onMessage("pick", (client, hero: string) => this.sim.pickHero(client.sessionId, String(hero)));
     this.onMessage("ready", (client, ready: boolean) => this.sim.setReady(client.sessionId, !!ready));
+    // PvE Squad player select: anyone picks the bot's hero and difficulty.
+    this.onMessage("bothero", (_client, hero: string) => this.sim.setBot(String(hero)));
+    this.onMessage("botlevel", (_client, level: number) => this.sim.setBot(undefined, Number(level)));
     if (this.state.stage === "pvp") this.maxClients = 2; // the PvP Arena is a 1v1
     // ~30 updates a second so other players and enemies move smoothly.
     this.setPatchRate(TICK_MS);

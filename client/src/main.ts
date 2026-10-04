@@ -48,6 +48,7 @@ function buildStagePicker() {
     boss: { floor: ["#2a2f36", "#31373f", "#4a5562"], boss: renderPixelSprite(GODZILLA) },
     pvp: { floor: ["#3f5fa8", "#d42020", "#4a6ab4"], boss: versus() },
     duel: { floor: ["#3f5fa8", "#2a6ad8", "#4a6ab4"], boss: versus() },
+    pve: { floor: ["#3f5fa8", "#2fae6a", "#4a6ab4"], boss: versus() },
   };
   for (const id of STAGE_IDS) {
     const stage = STAGES[id];
@@ -67,7 +68,7 @@ function buildStagePicker() {
       for (let x = 0; x < 48; x += 4) {
         // Lava creeps in from the edges; the boss room is plain concrete.
         // The ring stages show the mat with ropes round the edge.
-        const edge = (id === "lava" || id === "pvp" || id === "duel") && (x < 8 || x > 36 || y < 4 || y > 24);
+        const edge = (id === "lava" || id === "pvp" || id === "duel" || id === "pve") && (x < 8 || x > 36 || y < 4 || y > 24);
         ctx.fillStyle = edge ? floor[1 + ((x + y) % 8 === 0 ? 1 : 0)] : floor[(x * 7 + y * 3) % 3 === 0 && id !== "lava" ? 1 : 0];
         ctx.fillRect(x, y, 4, 4);
       }

@@ -1,5 +1,5 @@
 import Phaser from "phaser";
-import { DASH_COOLDOWN, PVP_KILLS_TO_WIN, WAVE_COUNT, heroOf, ringStage } from "../../../shared/game";
+import { BOT_LEVELS, DASH_COOLDOWN, PVP_KILLS_TO_WIN, WAVE_COUNT, heroOf, ringStage } from "../../../shared/game";
 import { PLAYER_COATS } from "../art";
 import type { GameScene } from "./GameScene";
 import { TouchControls, isTouchDevice } from "../touch";
@@ -104,8 +104,20 @@ export class HudScene extends Phaser.Scene {
     const waveLabel = state.wave >= WAVE_COUNT ? "BOSS" : `${state.wave}/${WAVE_COUNT}`;
     let banner = "";
     if (ringStage(state.stage)) {
-      this.waveText.setText(`${state.stage === "duel" ? "BOT DUEL" : "PVP ARENA"}  FIRST TO ${PVP_KILLS_TO_WIN} KILLS`);
-      if (state.phase === "victory") banner = `${state.winner} WINS!\nNext round in ${Math.ceil(state.phaseTimer)}`;
+      const pve = state.stage === "pve";
+      const level = pve ? `  ${BOT_LEVELS[state.botLevel ?? 2]?.name ?? ""}` : "";
+      this.waveText.setText(`${pve ? "PVE SQUAD" : state.stage === "duel" ? "BOT DUEL" : "PVP ARENA"}  FIRST TO ${PVP_KILLS_TO_WIN} ${pve ? "ROUNDS" : "KILLS"}${level}`);
+      if (state.phase === "victory") banner = `${state.winner === "TEAM" ? "YOUR TEAM" : state.winner} WINS!\nNext round in ${Math.ceil(state.phaseTimer)}`;
+      else if (pve && state.phase === "intermission") {
+        // PvE Squad: the team's rounds against the bot's.
+        const bot = state.players.get("bot");
+        let team = 0;
+        state.players.forEach((p: any, id: string) => {
+          if (!p.owner && id !== "bot") team = Math.max(team, p.score);
+        });
+        const round = team + (bot?.score ?? 0) + 1;
+        banner = `ROUND ${round}${round > 1 ? `\nTEAM ${team} - ${bot?.score ?? 0} BOT` : ""}\nFIGHT! in ${Math.ceil(state.phaseTimer)}`;
+      } else if (pve && me?.dead) banner = "YOU FELL\nYour team fights on!";
       else if (me?.dead) banner = `YOU FELL\nRespawning in ${Math.ceil(me.respawnIn)}`;
       else if (state.phase === "intermission") {
         // Every knockout resets the ring: show the round and the score so far.
@@ -117,7 +129,7 @@ export class HudScene extends Phaser.Scene {
         const score = fighters.length === 2 ? `\n${fighters[0].name} ${fighters[0].score} - ${fighters[1].score} ${fighters[1].name}` : "";
         banner = `ROUND ${round}${round > 1 ? score : ""}\nFIGHT! in ${Math.ceil(state.phaseTimer)}`;
       }
-      else if (realPlayers(state) < 2) banner = "Waiting for another player...\nShare the link with a friend";
+      else if (!pve && realPlayers(state) < 2) banner = "Waiting for another player...\nShare the link with a friend";
     } else if (state.stage === "boss") {
       // Boss room: a big health bar for Godzilla instead of a wave counter.
       this.waveText.setText("BOSS ROOM  ATOMIC KAIJU");

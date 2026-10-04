@@ -4,6 +4,9 @@
 
 import {
   movesInStoppedTime,
+  BOT_LEVELS,
+  DEFAULT_BOT_LEVEL,
+  selectStage,
   CENTER_X,
   CENTER_Y,
   DASH_COOLDOWN,
@@ -75,6 +78,8 @@ const SNIPER_BURST_GAP = 0.15;
 const OKITA_SLASHES = 8;
 /** PvP / Bot Duel: the pause after a knockout before the next round starts. */
 const ROUND_RESET_PAUSE = 2;
+/** PvE Squad: the bot gets (players ^ this) shares of HP, since a team also splits its attention. */
+const PVE_BOT_HP_EXP = 1.6;
 /** MOVING CASTLE walking speed (pixels/s). */
 const CASTLE_SPEED = 95;
 /** FROST SIGIL: how far ahead it is drawn, and how long it waits on the ground. */
@@ -257,6 +262,9 @@ export interface SimState<P extends SimPlayer, E extends SimEnemy, B extends Sim
   winner: string;
   /** PvP Arena: a message for the player select screen (a voided match). */
   notice: string;
+  /** PvE Squad: the hero the bot plays, and its difficulty (index into BOT_LEVELS). */
+  botHero: string;
+  botLevel: number;
 }
 
 export interface SimFactory<P, E, B, Z = SimZone> {
@@ -299,7 +307,7 @@ interface PlayerBrain {
   volleyAim?: number;
   eyebeamTick: number;
   /** Bot Duel: this player is driven by the simulation itself. */
-  bot?: { strafe: number; strafeTimer: number; think: number; aimErr: number };
+  bot?: { strafe: number; strafeTimer: number; think: number; aimErr: number; level: number; hp: number };
   /** The portal we just came out of: it cannot send us back until we step off it. */
   portalLock?: string;
   cloneLife: number; // seconds a clone has left
@@ -412,12 +420,27 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
   }
 
   /** Bot Duel: a computer-controlled hero that fights the other players. */
-  addBot(hero: string, id = "bot"): P {
+  addBot(hero: string, id = "bot", level = DEFAULT_BOT_LEVEL, hpMul = 1): P {
     const def = heroOf(hero);
     const p = this.addPlayer(id, "BOT", hero);
     p.name = `BOT ${def.name}`;
-    this.brains.get(id)!.bot = { strafe: 1, strafeTimer: 0, think: 0, aimErr: 0 };
+    const hp = BOT_LEVELS[level].hp * hpMul;
+    this.brains.get(id)!.bot = { strafe: 1, strafeTimer: 0, think: 0, aimErr: 0, level, hp };
+    p.maxHp = p.hp = Math.round(def.maxHp * hp);
     return p;
+  }
+
+  /** A hero's max HP for this player (the PvE bot gets more, by difficulty and team size). */
+  private maxHpOf(id: string, hero: string): number {
+    return Math.round(heroOf(hero).maxHp * (this.brains.get(id)?.bot?.hp ?? 1));
+  }
+
+  /** PvE Squad player select: anyone can change the bot's hero and difficulty. */
+  setBot(hero?: string, level?: number) {
+    const s = this.state;
+    if (s.stage !== "pve" || s.phase !== "select") return;
+    if (hero !== undefined && (HERO_IDS as string[]).includes(hero)) s.botHero = hero;
+    if (level !== undefined && Number.isInteger(level) && level >= 0 && level < BOT_LEVELS.length) s.botLevel = level;
   }
 
   private newBrain(): PlayerBrain {
@@ -492,7 +515,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
     s.reality = 0;
     const helpers: string[] = [];
     s.players.forEach((p, pid) => {
-      if (p.owner) return helpers.push(pid);
+      if (p.owner || pid === "bot") return helpers.push(pid); // the PvE bot is added when the match starts
       p.ready = false;
       p.dead = false;
       p.hp = p.maxHp;
@@ -571,6 +594,11 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       const brain = this.brains.get(id);
       if (brain) brain.target = undefined;
     });
+    if (s.stage === "pve") {
+      // PvE Squad: one bot against the whole team, with a share of HP for every player.
+      const bot = this.addBot(s.botHero || "superman", "bot", s.botLevel, this.realPlayerCount() ** PVE_BOT_HP_EXP);
+      this.placeAtSpawn(bot);
+    }
     s.notice = "";
     s.phase = "intermission";
     s.phaseTimer = PVP_COUNTDOWN;
@@ -580,7 +608,8 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
   private dmgMul(attacker: string | undefined): number {
     const p = this.state.players.get(this.rootOf(attacker));
     if (!p) return 1;
-    return (p.power || 1) * (DAMAGE_BALANCE[(heroOf(p.hero).formOf ?? p.hero) as HeroId] ?? 1); // an alien form hits like its hero
+    const bot = this.brains.get(this.rootOf(attacker))?.bot;
+    return (bot ? BOT_LEVELS[bot.level].damage : 1) * (p.power || 1) * (DAMAGE_BALANCE[(heroOf(p.hero).formOf ?? p.hero) as HeroId] ?? 1); // an alien form hits like its hero
   }
 
   /** How far from its centre an enemy can be hit (BIG LIGHT makes it bigger). */
@@ -759,7 +788,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       this.addZone("sacrifice", v.x, v.y, 16, 0.7, { owner: id, every: Infinity, damage: 0 });
       const shielded = heroOf(v.hero).invincible || v.barrier > 0 || v.dashing;
       const bothFall = !shielded && v.hp <= v.maxHp * share && p.hp <= p.maxHp * share && p.revive <= 0 && v.revive <= 0;
-      if (bothFall && this.ring && this.state.phase === "fight") {
+      if (bothFall && this.ring && this.state.stage !== "pve" && this.state.phase === "fight") {
         // Both fall together: a draw. Nobody scores and a fresh round starts.
         for (const q of [p, v]) {
           q.hp = 0;
@@ -862,7 +891,12 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
 
   /** True if attacks from `attacker` can hurt player `victim` (PvP, and never your own side). */
   private isFoe(attacker: string | undefined, victim: string): boolean {
-    return this.pvpLive() && !!attacker && this.rootOf(attacker) !== this.rootOf(victim);
+    if (!this.pvpLive() || !attacker) return false;
+    const a = this.rootOf(attacker);
+    const v = this.rootOf(victim);
+    // PvE Squad: the players are one team; only the bot (and what it summons) is on the other side.
+    if (this.state.stage === "pve") return (a === "bot") !== (v === "bot");
+    return a !== v;
   }
 
   setInput(id: string, input: Partial<PlayerInput>) {
@@ -1011,8 +1045,8 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
     const s = this.state;
     s.phase = "intermission";
     s.wave = wave;
-    if (s.stage === "pvp") {
-      // PvP Arena: pick heroes and get ready before each match.
+    if (selectStage(s.stage)) {
+      // PvP Arena and PvE Squad: pick heroes and get ready before each match.
       s.lavaRadius = 5000;
       this.startSelect();
       return;
@@ -1037,11 +1071,11 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       let fighters = 0;
       let ready = 0;
       s.players.forEach((p) => {
-        if (p.owner) return;
+        if (p.owner || p === s.players.get("bot")) return;
         fighters++;
         if (p.ready) ready++;
       });
-      if (fighters >= 2 && ready === fighters) this.beginMatch();
+      if (fighters >= (s.stage === "pve" ? 1 : 2) && ready === fighters) this.beginMatch();
     } else if (s.phase === "intermission") {
       s.phaseTimer -= dt;
       if (s.phaseTimer <= 0) s.phase = "fight";
@@ -1147,7 +1181,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
         brain.volleyLeft = 0;
         brain.zip = undefined;
         p.respawnIn = Math.max(0, p.respawnIn - dt);
-        if (p.respawnIn <= 0) {
+        if (p.respawnIn <= 0 && s.stage !== "pve") {
           p.dead = false;
           p.hp = Math.round(p.maxHp / 2);
           this.placeAtSpawn(p);
@@ -1396,7 +1430,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
         const share = p.hp / p.maxHp;
         brain.formHp = p.hp;
         p.hero = form;
-        p.maxHp = heroOf(form).maxHp;
+        p.maxHp = this.maxHpOf(id, form);
         p.hp = Math.max(1, Math.round(p.maxHp * share));
         p.buff = skill.duration ?? 10;
         p.skillCooldown = 0.5; // the alien's own skill (if any) is ready almost at once
@@ -1449,7 +1483,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       case "heal":
         s.players.forEach((q, qid) => {
           if (q.dead || Math.hypot(q.x - p.x, q.y - p.y) > skill.radius) return;
-          if (this.pvpLive() && this.rootOf(qid) !== id) return; // no healing your rivals
+          if (this.rootOf(qid) !== id && this.isFoe(id, qid)) return; // no healing your rivals
           q.hp = Math.min(q.maxHp, q.hp + q.maxHp * skill.damage);
         });
         break;
@@ -1913,7 +1947,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
     if (!base) return;
     const share = p.hp / p.maxHp;
     p.hero = base;
-    p.maxHp = heroOf(base).maxHp;
+    p.maxHp = this.maxHpOf(this.idOf(p), base);
     const back = brain?.formHp ?? p.maxHp * share;
     p.hp = p.dead ? 0 : Math.max(1, Math.min(p.maxHp, Math.round(back)));
     if (brain) brain.formHp = undefined;
@@ -2125,7 +2159,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
           // HEAL TOTEM: everyone on the healer's side near it heals a share of their max HP.
           s.players.forEach((q, qid) => {
             if (q.dead || Math.hypot(q.x - z.x, q.y - z.y) > z.radius) return;
-            if (this.pvpLive() && this.rootOf(qid) !== this.rootOf(brain.owner)) return;
+            if (this.rootOf(qid) !== this.rootOf(brain.owner) && this.isFoe(brain.owner, qid)) return;
             q.hp = Math.min(q.maxHp, q.hp + q.maxHp * brain.damage);
           });
         } else if (z.kind === "hurricane") {
@@ -2287,7 +2321,9 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       p.respawnIn = RESPAWN_TIME;
       const root = this.rootOf(attacker);
       const killer = root && root !== id ? this.state.players.get(root) : undefined;
-      if (killer && this.pvpLive()) {
+      if (this.state.stage === "pve") {
+        if (this.pvpLive()) this.pveKnockout();
+      } else if (killer && this.pvpLive()) {
         killer.score++;
         if (killer.score >= PVP_KILLS_TO_WIN) {
           this.state.phase = "victory";
@@ -2296,8 +2332,38 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
         }
       }
       // PvP and Bot Duel: every knockout starts a fresh round (handled at the start of the next tick).
-      if (this.ring && this.state.phase === "fight") this.roundOver = true;
+      if (this.ring && this.state.stage !== "pve" && this.state.phase === "fight") this.roundOver = true;
     }
+  }
+
+  /** PvE Squad: someone fell. The round goes to the team when the bot is down, to the bot when every player is. */
+  private pveKnockout() {
+    const s = this.state;
+    const bot = s.players.get("bot");
+    const team: P[] = [];
+    s.players.forEach((p, id) => {
+      if (!p.owner && id !== "bot") team.push(p);
+    });
+    let won: P[] = [];
+    if (bot?.dead) won = team;
+    else if (bot && team.every((p) => p.dead)) won = [bot];
+    if (!won.length) return;
+    for (const p of won) p.score++;
+    this.roundOver = true;
+    if (won[0].score >= PVP_KILLS_TO_WIN) {
+      s.phase = "victory";
+      s.phaseTimer = 8;
+      s.winner = won[0] === bot ? bot.name : "TEAM";
+    }
+  }
+
+  /** The id this player is stored under. */
+  private idOf(p: P): string {
+    let found = "";
+    this.state.players.forEach((q, id) => {
+      if (q === p) found = id;
+    });
+    return found;
   }
 
   /** BAT FORM: the vampire drinks back a share of all the damage he deals. */
@@ -2321,6 +2387,24 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
         else index++;
       });
       a = index === 0 ? Math.PI : index === 1 ? 0 : (index * Math.PI) / 2 + Math.PI / 4;
+      if (this.state.stage === "pve") {
+        // PvE Squad: the team lines up on the left, the bot waits in the right corner.
+        if (p === this.state.players.get("bot")) a = 0;
+        else {
+          let team = 0;
+          let mine = 0;
+          this.state.players.forEach((q, qid) => {
+            if (q.owner || qid === "bot") return;
+            if (q === p) mine = team;
+            team++;
+          });
+          if (!this.state.players.has(this.idOf(p))) mine = team++; // not stored yet: joins at the end of the line
+          const spot = this.move(CENTER_X - 110, CENTER_Y + (mine - (team - 1) / 2) * 50, 0, 0, PLAYER_RADIUS);
+          [p.x, p.y] = [spot.x, spot.y];
+          p.warp = (p.warp + 1) % 256;
+          return;
+        }
+      }
     }
     // In the arena, spread players out so nobody spawns on top of an enemy player.
     const r = this.ring ? 110 : 30;
@@ -2855,7 +2939,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
     let foe: P | undefined;
     let dist = Infinity;
     this.state.players.forEach((v, vid) => {
-      if (v.dead || this.rootOf(vid) === id || this.hidden(v)) return;
+      if (v.dead || !this.isFoe(id, vid) || this.hidden(v)) return;
       const d = Math.hypot(v.x - p.x, v.y - p.y);
       if (d < dist) [dist, foe] = [d, v];
     });
@@ -2870,7 +2954,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       // Every so often change which way to circle, and wobble the aim a little: no perfect shots.
       bot.strafe = Math.random() < 0.5 ? -1 : 1;
       bot.strafeTimer = 0.8 + Math.random() * 1.2;
-      bot.aimErr = (Math.random() - 0.5) * 0.16;
+      bot.aimErr = (Math.random() - 0.5) * BOT_LEVELS[bot.level].aimErr;
     }
     const gun = !!hero.gun && p.mode === 1;
     const melee = p.titan > 0 || (!gun && (hero.attack === "punch" || hero.attack === "sword"));
@@ -2889,10 +2973,11 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
     input.down = my > 0.3;
     input.aim = Math.atan2(uy, ux) + bot.aimErr;
     input.shoot = dist <= reach + PLAYER_RADIUS + 6;
-    if (p.dashCooldown <= 0 && Math.random() < dt * 0.8 && ((melee && dist > 120) || fleeing)) input.dash = true;
+    if (p.dashCooldown <= 0 && Math.random() < dt * BOT_LEVELS[bot.level].dash && ((melee && dist > 120) || fleeing)) input.dash = true;
     bot.think -= dt;
     if (bot.think <= 0) {
-      bot.think = 0.25 + Math.random() * 0.35; // reaction time
+      const [least, extra] = BOT_LEVELS[bot.level].think;
+      bot.think = least + Math.random() * extra; // reaction time
       if (p.skillCooldown <= 0 && this.botWants(hero.skill, p, dist)) input.skill = true;
       else if (hero.skill2 && p.skill2Cooldown <= 0 && this.botWants(hero.skill2, p, dist)) input.skill2 = true;
     }

@@ -91,6 +91,9 @@ export class RiftState extends Schema {
   @type("float32") phaseTimer = 0;
   @type("float32") lavaRadius = 0;
   @type("string") winner = "";
+  /** PvE Squad: the bot's hero and difficulty. */
+  @type("string") botHero = "superman";
+  @type("uint8") botLevel = 2;
   /** Server clock (ms) at this update, so clients can space updates evenly however they arrive. */
   @type("float64") time = 0;
 }

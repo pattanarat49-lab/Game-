@@ -1274,8 +1274,31 @@ export const RING = { x: CENTER_X, y: CENTER_Y, half: 150 };
 
 /** Stages fought in the boxing ring (hero against hero). */
 export function ringStage(stage: string): boolean {
-  return stage === "pvp" || stage === "duel";
+  return stage === "pvp" || stage === "duel" || stage === "pve";
 }
+
+/** Stages that open on the player select screen. */
+export function selectStage(stage: string): boolean {
+  return stage === "pvp" || stage === "pve";
+}
+
+/** PvE Squad bot difficulty, Easy to Nightmare. Hard is the Bot Duel bot as it always was. */
+export interface BotLevel {
+  name: string;
+  think: [number, number]; // reaction time between skill decisions (min, extra random)
+  aimErr: number; // how far off its aim can wobble (radians, full spread)
+  damage: number; // multiplier on everything it hits for
+  hp: number; // multiplier on its max HP (on top of one share per player)
+  dash: number; // chance per second to dash when it wants to
+}
+
+export const BOT_LEVELS: BotLevel[] = [
+  { name: "EASY", think: [0.9, 0.8], aimErr: 0.7, damage: 0.5, hp: 0.6, dash: 0.3 },
+  { name: "MEDIUM", think: [0.5, 0.5], aimErr: 0.35, damage: 0.75, hp: 0.8, dash: 0.5 },
+  { name: "HARD", think: [0.25, 0.35], aimErr: 0.16, damage: 1, hp: 1, dash: 0.8 },
+  { name: "NIGHTMARE", think: [0.08, 0.12], aimErr: 0.03, damage: 1.5, hp: 1.6, dash: 1.6 },
+];
+export const DEFAULT_BOT_LEVEL = 2;
 
 /**
  * Move a circle by (dx, dy), keeping it inside the world and out of rocks; in the boxing ring
@@ -1314,7 +1337,7 @@ export function inLava(x: number, y: number, lavaRadius: number): boolean {
 }
 
 // Stages
-export type StageId = "lava" | "jungle" | "dojo" | "boss" | "pvp" | "duel";
+export type StageId = "lava" | "jungle" | "dojo" | "boss" | "pvp" | "duel" | "pve";
 
 export interface StageDef {
   name: string;
@@ -1328,6 +1351,7 @@ export const STAGES: Record<StageId, StageDef> = {
   boss: { name: "Boss Room", blurb: "No waves. Fight the Atomic Kaiju straight away. Dodge the atomic beam!" },
   pvp: { name: "PvP Arena", blurb: "Players fight each other in a small boxing ring. First to 3 kills wins. Online only." },
   duel: { name: "Bot Duel", blurb: "1v1 in the boxing ring against a bot playing the hero you pick. First to 3 KOs. Solo." },
+  pve: { name: "PvE Squad", blurb: "1 to 4 players team up against one bot. Pick its hero and difficulty. First to 3 KOs. Solo or online." },
 };
 
 export const STAGE_IDS = Object.keys(STAGES) as StageId[];

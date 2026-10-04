@@ -201,6 +201,7 @@ export class BootScene extends Phaser.Scene {
     this.addCanvas("ground_boss", this.drawGround(BOSS_THEME));
     this.addCanvas("ground_pvp", this.drawRing());
     this.addCanvas("ground_duel", this.drawRing());
+    this.addCanvas("ground_pve", this.drawRing());
     this.addCanvas("godzilla", renderPixelSprite(GODZILLA));
     this.addCanvas("lava", this.drawLavaTiles());
 
