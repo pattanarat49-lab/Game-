@@ -53,6 +53,8 @@ import {
   WORLD_W,
   heroOf,
   heroSpeed,
+  MOVE_SCALE,
+  SHOT_SPEED_SCALE,
   DAMAGE_BALANCE,
   HeroId,
   hitsRock,
@@ -1946,7 +1948,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
     });
     const len = Math.hypot(mx, my);
     if (len > 1) [mx, my] = [mx / len, my / len];
-    const moved = this.move(c.x, c.y, mx * hero.speed * dt, my * hero.speed * dt, PLAYER_RADIUS);
+    const moved = this.move(c.x, c.y, mx * hero.speed * MOVE_SCALE * dt, my * hero.speed * MOVE_SCALE * dt, PLAYER_RADIUS);
     c.x = moved.x;
     c.y = moved.y;
     if (inLava(c.x, c.y, this.state.lavaRadius)) this.damagePlayer(id, LAVA_DPS * dt, true);
@@ -2349,7 +2351,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
         dirX = -dirX;
         dirY = -dirY;
       }
-      const speed = def.speed * (e.big > 0 ? BIG_SLOW : 1);
+      const speed = def.speed * MOVE_SCALE * (e.big > 0 ? BIG_SLOW : 1);
       const moved = this.move(e.x, e.y, dirX * speed * dt, dirY * speed * dt, def.radius);
       const walled = this.blockAt(moved.x, moved.y, def.radius);
       if (!walled) {
@@ -2558,6 +2560,9 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
     speed: number,
     opts: { owner?: string; damage: number; pierce: number; life: number; blast?: number },
   ) {
+    // Slower shots, same reach (homing missiles and the rubber fist keep their own timers).
+    speed *= SHOT_SPEED_SCALE;
+    const life = kind === "missile" || kind === "fist" ? opts.life : opts.life / SHOT_SPEED_SCALE;
     const b = this.make.bullet();
     b.kind = kind;
     b.x = x;
@@ -2567,7 +2572,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
     b.hostile = kind === "enemy" || kind === "banana" || kind === "boulder" || kind === "slash";
     const id = `b${this.nextId++}`;
     this.state.bullets.set(id, b);
-    this.bulletBrains.set(id, { owner: opts.owner, damage: opts.damage, pierceLeft: opts.pierce, life: opts.life, hit: new Set(), blast: opts.blast ?? 0 });
+    this.bulletBrains.set(id, { owner: opts.owner, damage: opts.damage, pierceLeft: opts.pierce, life, hit: new Set(), blast: opts.blast ?? 0 });
     return id;
   }
 
