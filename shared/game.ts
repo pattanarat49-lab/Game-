@@ -144,7 +144,8 @@ export type SkillKind =
   | "mitosis" // every copy of you splits in two, sharing its HP half and half
   | "eat" // eat a snack: heal a share of max HP
   | "thunderdash" // a lightning dash that cuts the lane; if it hits, it can be used once more within 2s
-  | "seventh"; // a lightning dash cutting a wide lane, which keeps crackling with lightning for a while
+  | "seventh" // a lightning dash cutting a wide lane, which keeps crackling with lightning for a while
+  | "charge"; // hold to charge (walking slower), let go to smash: the longer the charge, the harder and longer it hits
 
 export interface SkillDef {
   kind: SkillKind;
@@ -352,7 +353,7 @@ export const HEROES: Record<HeroId, HeroDef> = {
   deku: {
     name: "Green Rookie",
     role: "Brawler",
-    blurb: "Runs 1.5x faster. FULL POWER SMASH blasts a wide line straight ahead.",
+    blurb: "Runs 1.5x faster. FULL POWER SMASH blasts a wide line straight ahead. MAX SMASH (E): hold to charge (walking 60% slower) and let go to smash; the gauge shows how hard it will hit, up to 4x.",
     stars: 4,
     maxHp: 130,
     speed: 160,
@@ -365,6 +366,8 @@ export const HEROES: Record<HeroId, HeroDef> = {
     shotSpeed: 0,
     pierce: 0,
     skill: { kind: "line", name: "FULL POWER SMASH", cooldown: 6, damage: 160, radius: 220, width: 48 },
+    // MAX SMASH: a smash lane `radius` long and `width` wide at no charge; a full charge multiplies it (chargePower).
+    skill2: { kind: "charge", name: "MAX SMASH", cooldown: 8, damage: 60, radius: 120, width: 40 },
   },
   okita: {
     name: "Sakura Blade",
@@ -1212,6 +1215,20 @@ export const ROCKS: Rock[] = [
   { x: 760, y: 360, r: 14 },
 ];
 
+/** MAX SMASH charge: full after this many seconds; the hero walks at this share of their speed while charging. */
+export const CHARGE_FULL = 2.5;
+export const CHARGE_SLOW = 0.4;
+
+/** How much a MAX SMASH charged for `held` seconds hits (x1 at once, up to x4 at full charge). */
+export function chargePower(held: number): number {
+  return 1 + 3 * Math.min(1, Math.max(0, held) / CHARGE_FULL);
+}
+
+/** How long (and wide) the MAX SMASH lane is at that power: up to 1.8x. */
+export function chargeReach(power: number): number {
+  return 1 + ((power - 1) / 3) * 0.8;
+}
+
 export interface PlayerInput {
   left: boolean;
   right: boolean;
@@ -1222,6 +1239,8 @@ export interface PlayerInput {
   dash: boolean;
   skill: boolean;
   skill2?: boolean;
+  /** MAX SMASH: seconds the second skill was held (charged) before it was let go. */
+  charge2?: number;
   /** Where the client has moved its own hero. The server follows it, within the hero's speed. */
   x?: number;
   y?: number;

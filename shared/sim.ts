@@ -4,6 +4,9 @@
 
 import {
   movesInStoppedTime,
+  CHARGE_FULL,
+  chargePower,
+  chargeReach,
   BOT_LEVELS,
   DEFAULT_BOT_LEVEL,
   selectStage,
@@ -920,6 +923,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       dash: !!input.dash,
       skill: !!input.skill,
       skill2: !!input.skill2,
+      charge2: Math.min(CHARGE_FULL, Math.max(0, Number(input.charge2) || 0)),
     };
     const p = this.state.players.get(id);
     if (p && Number.isFinite(input.x) && Number.isFinite(input.y) && input.warp === p.warp) {
@@ -1553,8 +1557,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
         break;
       }
       case "thunderdash": {
-        // THUNDER DASH: a lightning dash cutting the lane. A hit opens a second dash for a moment.
-        const second = (brain.thunderWindow ?? 0) > 0;
+        // THUNDER DASH: a lightning dash cutting the lane. Every hit opens another dash for a moment.
         const end = this.move(p.x, p.y, Math.cos(p.aim) * skill.radius, Math.sin(p.aim) * skill.radius, PLAYER_RADIUS);
         const len = Math.hypot(end.x - p.x, end.y - p.y);
         const hits = this.lineHit(id, p.x, p.y, p.aim, len, skill.width ?? 26, skill.damage);
@@ -1563,7 +1566,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
         p.warp = (p.warp + 1) % 256;
         brain.target = undefined;
         brain.hurtTimer = Math.max(brain.hurtTimer, 0.25);
-        if (!second && hits > 0) {
+        if (hits > 0) {
           brain.thunderWindow = skill.duration ?? 2;
           p.mode = 1; // shown on the HUD: one more dash ready
           p.skillCooldown = 0.25;
@@ -1601,6 +1604,13 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
           const d = (len * i) / n;
           this.addZone("bolt", sx + Math.cos(p.aim) * d, sy + Math.sin(p.aim) * d, width / 2, life, { owner: id, every: Infinity, damage: 0 });
         }
+        break;
+      }
+      case "charge": {
+        // MAX SMASH: the longer it was charged, the harder and further it hits (the bot charges halfway).
+        const power = chargePower(brain.bot ? CHARGE_FULL / 2 : brain.input.charge2 ?? 0);
+        const reach = chargeReach(power);
+        this.lineHit(id, p.x, p.y, p.aim, skill.radius * reach, (skill.width ?? 40) * reach, skill.damage * power, 0, 1 + power / 2);
         break;
       }
       case "godrush": {
@@ -3104,6 +3114,8 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
         return dist <= reach;
       case "seventh":
         return dist <= reach * 0.8;
+      case "charge":
+        return dist <= skill.radius * chargeReach(chargePower(CHARGE_FULL / 2));
       case "grapple":
         return dist > 130;
       case "trojan":

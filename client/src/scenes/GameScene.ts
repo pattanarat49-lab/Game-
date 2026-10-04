@@ -40,6 +40,10 @@ import {
   BIG_SCALE,
   BIG_SLOW,
   heroSpeed,
+  CHARGE_FULL,
+  CHARGE_SLOW,
+  chargePower,
+  chargeReach,
   alienForms,
   formAngle,
   formFromAim,
@@ -226,6 +230,10 @@ export class GameScene extends Phaser.Scene {
   private kbSeq = -1;
   private skillHeld = { 1: false, 2: false };
   private skillCastUntil = { 1: 0, 2: 0 };
+  /** MAX SMASH: when the charge started (ms, 0 = not charging), and how long it has been held (s). */
+  private chargeStart = 0;
+  private charge2 = 0;
+  private charging2 = false;
   private skillCancelled = { 1: false, 2: false }; // last knockback we applied to our own hero
   private kbVel = { x: 0, y: 0 };
   private sendTimer = 0;
@@ -377,6 +385,7 @@ export class GameScene extends Phaser.Scene {
     const me = this.room?.state.players.get(this.room.sessionId);
     const alive = !!me && !me.dead;
     const touch = (this.scene.get("Hud") as HudScene | undefined)?.touch;
+    this.updateCharge(me, alive);
 
     if (touch) {
       this.aim = touch.aimAngle;
@@ -391,6 +400,7 @@ export class GameScene extends Phaser.Scene {
         dash: alive && touch.dashing,
         skill: alive && touch.skilling,
         skill2: alive && touch.skilling2,
+        charge2: Math.round(this.charge2 * 10) / 10,
       };
     }
 
@@ -408,7 +418,20 @@ export class GameScene extends Phaser.Scene {
       dash: alive && k.SPACE.isDown,
       skill: alive && this.castOnRelease(1, k.Q.isDown || k.ONE.isDown || pointer.rightButtonDown() || (!this.hasSkill2(me) && k.E.isDown)),
       skill2: alive && this.hasSkill2(me) && this.castOnRelease(2, k.E.isDown || k.TWO.isDown),
+      charge2: Math.round(this.charge2 * 10) / 10,
     };
+  }
+
+  /** MAX SMASH: while its button is held (and ready) the charge builds up and the hero slows down. */
+  private updateCharge(me: any, alive: boolean) {
+    const now = performance.now();
+    this.charging2 = alive && heroOf(me.hero).skill2?.kind === "charge" && this.aimingSkill() === 2 && me.skill2Cooldown <= 0;
+    if (!this.charging2) {
+      this.chargeStart = 0; // the last charge stays in charge2 while the cast goes out
+      return;
+    }
+    if (!this.chargeStart) this.chargeStart = now;
+    this.charge2 = Math.min(CHARGE_FULL, (now - this.chargeStart) / 1000);
   }
 
   /**
@@ -502,8 +525,9 @@ export class GameScene extends Phaser.Scene {
         this.dashTimer = DASH_TIME;
         this.dashCooldown = DASH_COOLDOWN;
       }
-      let vx = dir.x * heroSpeed(me);
-      let vy = dir.y * heroSpeed(me);
+      const slow = this.charging2 ? CHARGE_SLOW : 1; // charging MAX SMASH
+      let vx = dir.x * heroSpeed(me) * slow;
+      let vy = dir.y * heroSpeed(me) * slow;
       if (this.dashTimer > 0) {
         this.dashTimer -= dt;
         vx = this.dashDir.x * DASH_SPEED;
@@ -1016,6 +1040,15 @@ export class GameScene extends Phaser.Scene {
         this.effects.push({ kind: "line", x, y, aim, range: skill.radius, arc: skill.width ?? 40, age: 0, life: 0.45 });
         cam.shake(250, 0.015);
         break;
+      case "charge": {
+        // MAX SMASH: as big as our own charge (someone else's charge is not known: drawn half charged).
+        const mine = !!view && view === this.players.get(this.room?.sessionId ?? "");
+        const power = chargePower(mine ? this.charge2 : CHARGE_FULL / 2);
+        const reach = chargeReach(power);
+        this.effects.push({ kind: "line", x, y, aim, range: skill.radius * reach, arc: (skill.width ?? 40) * reach, age: 0, life: 0.45 });
+        cam.shake(150 + power * 60, 0.006 * power);
+        break;
+      }
       case "slashes":
         this.effects.push({ kind: "slashes", x, y: y + 5, aim, range: skill.radius, arc: 0, age: 0, life: skill.duration ?? 0.8 });
         break;
@@ -1483,6 +1516,7 @@ export class GameScene extends Phaser.Scene {
 
   /** A faint guide showing where your attack will land, so aiming with a thumb is easy. */
   private drawAimGuide(state: any) {
+    this.chargeLabel?.setVisible(false);
     const g = this.aimGuide;
     g.clear();
     this.drawFormWheel(undefined, 0, 0);
@@ -1496,6 +1530,7 @@ export class GameScene extends Phaser.Scene {
     this.drawFormWheel(skill?.kind === "omnitrix" ? me.hero : undefined, x, y);
     if (skill) {
       this.drawSkillGuide(g, skill, hero.range, x, y);
+      if (skill.kind === "charge" && this.charging2) this.drawChargeGauge(g, x, y);
       return;
     }
     if (hero.attack === "lightning") {
@@ -1546,6 +1581,23 @@ export class GameScene extends Phaser.Scene {
   }
 
   /** While a skill is held: where it will land (a lane for straight skills, an area for the rest). */
+  /** MAX SMASH: a gauge over the hero's head fills up (green, yellow, red) with the power it will hit with. */
+  private drawChargeGauge(g: Phaser.GameObjects.Graphics, x: number, y: number) {
+    const share = Math.min(1, this.charge2 / CHARGE_FULL);
+    const w = 34;
+    const top = y - 42; // above the name tag
+    g.fillStyle(0x1a0f14, 0.9).fillRect(x - w / 2 - 1, top - 1, w + 2, 6);
+    const color = share >= 1 ? (Math.floor(performance.now() / 120) % 2 ? 0xffffff : 0xff3a2a) : share > 0.66 ? 0xff3a2a : share > 0.33 ? 0xffd23f : 0x5aff7a;
+    g.fillStyle(color, 1).fillRect(x - w / 2, top, w * share, 4);
+    for (let i = 1; i < 3; i++) g.fillStyle(0x1a0f14, 1).fillRect(x - w / 2 + (w * i) / 3, top, 1, 4);
+    if (!this.chargeLabel) {
+      this.chargeLabel = this.add.text(0, 0, "", { fontFamily: "monospace", fontSize: "8px", color: "#ffffff", stroke: "#1a0f14", strokeThickness: 2 }).setOrigin(0.5, 1).setDepth(10000);
+    }
+    this.chargeLabel.setText(`x${chargePower(this.charge2).toFixed(1)}`).setPosition(x, top - 1).setVisible(true);
+  }
+
+  private chargeLabel?: Phaser.GameObjects.Text;
+
   private drawSkillGuide(g: Phaser.GameObjects.Graphics, skill: SkillDef, heroRange: number, x: number, y: number) {
     const cos = Math.cos(this.aim);
     const sin = Math.sin(this.aim);
@@ -1596,6 +1648,11 @@ export class GameScene extends Phaser.Scene {
       case "seventh":
         lane(skill.radius, skill.width ?? 26);
         break;
+      case "charge": {
+        const reach = chargeReach(chargePower(this.charging2 ? this.charge2 : 0));
+        lane(skill.radius * reach, (skill.width ?? 40) * reach);
+        break;
+      }
       case "godrush":
         lane(skill.radius, skill.width ?? 26);
         area(x + cos * skill.radius, y + sin * skill.radius, 66);
