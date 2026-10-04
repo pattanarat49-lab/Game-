@@ -951,6 +951,28 @@ export const HERO_SPRITES: Record<string, PixelSprite> = {
     ],
     palette: { k: OUTLINE, w: "#f2f4f8", b: "#1a1a2a", g: "#3aff7a", G: "#8a8a9a" },
   },
+  raptor: {
+    grid: [
+      "................",
+      "......kkkkkk....",
+      ".....kbbbbbbk...",
+      "....kbbccccbbk..",
+      "....kbcccccbk...",
+      "...kbbbbbbbbk...",
+      "..kbbwbbbbbk....",
+      ".kbbkbbbbbbk....",
+      "kbbk.kbbwbbbk...",
+      "kbk..kbbbbbbbk..",
+      ".k...kbbbbbbbbk.",
+      "....kbbkkbbkbbbk",
+      "....kbk..kbk.kbk",
+      "...kbbk..kbbk.kk",
+      "...kwwk..kwwk...",
+      "...kkkk..kkkk...",
+      "................",
+    ],
+    palette: { k: OUTLINE, b: "#1a3a8a", c: "#5af0ff", w: "#e8e8f0" },
+  },
 };
 
 // Titan form: a 50m Attack Titan (drawn bigger and scaled up in game).

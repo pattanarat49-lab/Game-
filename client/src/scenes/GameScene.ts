@@ -60,6 +60,8 @@ interface PlayerView {
   skillSeq: number;
   skill2Seq: number;
   glitch?: Phaser.GameObjects.Image[]; // Yaotsu's "error" afterimages
+  trail?: Phaser.GameObjects.Image[]; // Speed Raptor's afterimages
+  trailPts?: { x: number; y: number }[]; // where the body was over the last frames
   heroId: string; // a hero swap (PvP player select) rebuilds the view
   spin?: number; // SPINNING KICK: seconds of the spin animation left
   bike?: Phaser.GameObjects.Image; // MOTORCYCLE: the bike under the Hopper Rider
@@ -707,6 +709,7 @@ export class GameScene extends Phaser.Scene {
       }
       view.label.setPosition(body.x, body.y - (titanNow ? 66 : 18) * k);
       if (p.hero === "yaotsu") this.drawGlitch(view, p.dead);
+      if (heroOf(p.hero).ram) this.drawTrail(view, p.dead);
       view.label.setDepth(1000);
 
       if (p.hp < view.lastHp - 0.5) view.hurtFlash = 0.15;
@@ -827,8 +830,31 @@ export class GameScene extends Phaser.Scene {
     view.weapon?.destroy();
     view.bike?.destroy();
     view.glitch?.forEach((g) => g.destroy());
+    view.trail?.forEach((g) => g.destroy());
     view.label.destroy();
     view.bar.destroy();
+  }
+
+  /** Speed Raptor: a fading line of afterimages along the way it just ran. */
+  private drawTrail(view: PlayerView, dead: boolean) {
+    const body = view.body;
+    const pts = (view.trailPts ??= []);
+    pts.unshift({ x: body.x, y: body.y });
+    if (pts.length > 16) pts.pop();
+    if (!view.trail) {
+      view.trail = [0, 1, 2, 3, 4].map(() => this.add.image(body.x, body.y, body.texture.key).setOrigin(body.originX, body.originY).setTint(0x5af0ff));
+    }
+    view.trail.forEach((g, i) => {
+      const at = pts[Math.min(pts.length - 1, (i + 1) * 3)];
+      const gap = Math.hypot(at.x - body.x, at.y - body.y);
+      g.setTexture(body.texture.key)
+        .setScale(body.scaleX, body.scaleY)
+        .setFlipX(body.flipX)
+        .setPosition(at.x, at.y)
+        .setDepth(body.depth - 0.1 - i * 0.01)
+        .setAlpha(0.45 * (1 - i / 5))
+        .setVisible(!dead && gap > 6); // only while running
+    });
   }
 
   /** Yaotsu looks like a rendering error: red and cyan copies jitter around the body. */

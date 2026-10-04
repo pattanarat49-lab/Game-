@@ -89,6 +89,8 @@ const STICKY_BLAST = 40;
 const BIKE_STUN = 1;
 const BIKE_KNOCK = 2.5;
 const BIKE_REHIT = 0.8;
+/** Speed Raptor: how often running into the same foe hurts it again. */
+const RAM_REHIT = 0.5;
 /** EXCALIBUR: how fast the light swords circle (radians/s), how close they cut, and how often each target can be cut. */
 export const ORBIT_SPEED = 5;
 const ORBIT_REACH = 12;
@@ -266,6 +268,8 @@ export interface SimFactory<P, E, B, Z = SimZone> {
 // Data that players do not need to see.
 interface PlayerBrain {
   input: PlayerInput;
+  /** ALIEN TRANSFORM: HP when the transform started; turning back restores it. */
+  formHp?: number;
   attackTimer: number;
   dashTimer: number;
   dashX: number;
@@ -525,7 +529,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
     const helpers: string[] = [];
     s.players.forEach((p, id) => {
       if (p.owner) return helpers.push(id);
-      if (heroOf(p.hero).formOf) this.endForm(p);
+      if (heroOf(p.hero).formOf) this.endForm(p, this.brains.get(id));
       p.dead = false;
       p.respawnIn = 0;
       p.hp = p.maxHp;
@@ -692,6 +696,21 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       if (v.dead || !this.isFoe(id, vid) || Math.hypot(v.x - p.x, v.y - p.y) > skill.radius + this.pr(v) || !this.canRehit(brain, `p:${vid}`, BIKE_REHIT)) return;
       this.damagePlayer(vid, skill.damage * PVP_DAMAGE_SCALE, true, id);
       this.stunKnockPlayer(vid, v.x - p.x, v.y - p.y, BIKE_STUN, BIKE_KNOCK);
+    });
+  }
+
+  /** Speed Raptor's charge: hit every foe it is touching (each one again only every RAM_REHIT seconds). */
+  private ramInto(id: string, p: P, brain: PlayerBrain, damage: number) {
+    this.state.enemies.forEach((e, eid) => {
+      const def = ENEMIES[e.kind as EnemyKind];
+      if (def.block || Math.hypot(e.x - p.x, e.y - p.y) > PLAYER_RADIUS + this.er(e) + 4 || !this.canRehit(brain, eid, RAM_REHIT)) return;
+      this.damageEnemy(eid, damage, id);
+      if (!def.boss && this.state.enemies.has(eid)) this.knockEnemy(eid, e.x - p.x, e.y - p.y, 1);
+    });
+    this.state.players.forEach((v, vid) => {
+      if (v.dead || !this.isFoe(id, vid) || Math.hypot(v.x - p.x, v.y - p.y) > PLAYER_RADIUS + this.pr(v) + 4 || !this.canRehit(brain, `p:${vid}`, RAM_REHIT)) return;
+      this.damagePlayer(vid, damage * PVP_DAMAGE_SCALE, true, id);
+      this.knockPlayer(vid, v.x - p.x, v.y - p.y, 1);
     });
   }
 
@@ -1090,7 +1109,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       if (!brain) return;
       if (brain.bot) this.botThink(id, p, brain, dt);
       // ALIEN TRANSFORM: back to human when the time is up (or on falling).
-      if (!p.owner && heroOf(p.hero).formOf && (p.dead || p.buff <= 0)) this.endForm(p);
+      if (!p.owner && heroOf(p.hero).formOf && (p.dead || p.buff <= 0)) this.endForm(p, brain);
       const input = brain.input;
       const hero = heroOf(p.hero);
       brain.hurtTimer = Math.max(0, brain.hurtTimer - dt);
@@ -1210,6 +1229,8 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       p.y = moved.y;
       if (p.latch > 0 && !brain.zip && hero.skill.kind === "latch") this.updateLatch(id, p, brain, hero, dt);
       p.dashing = brain.dashTimer > 0;
+      // Speed Raptor: running into a foe hurts it.
+      if (hero.ram && (dir.x !== 0 || dir.y !== 0)) this.ramInto(id, p, brain, hero.ram);
       if (p.active2 > 0 && hero.skill2) {
         if (hero.skill2.kind === "bike") this.rideBike(id, p, brain, hero.skill2);
         if (hero.skill2.kind === "excalibur") this.spinSwords(id, p, brain, hero.skill2);
@@ -1374,6 +1395,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
         const form = formFromAim(p.hero, p.aim);
         if (!form) break;
         const share = p.hp / p.maxHp;
+        brain.formHp = p.hp;
         p.hero = form;
         p.maxHp = heroOf(form).maxHp;
         p.hp = Math.max(1, Math.round(p.maxHp * share));
@@ -1886,14 +1908,16 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
 
   // -------------------------------------------------------------- clones
 
-  /** ALIEN TRANSFORM is over: back to the human hero, keeping the same share of HP. */
-  private endForm(p: P) {
+  /** ALIEN TRANSFORM is over: back to the human hero, with the HP he had before transforming. */
+  private endForm(p: P, brain?: PlayerBrain) {
     const base = heroOf(p.hero).formOf;
     if (!base) return;
     const share = p.hp / p.maxHp;
     p.hero = base;
     p.maxHp = heroOf(base).maxHp;
-    p.hp = p.dead ? 0 : Math.max(1, Math.round(p.maxHp * share));
+    const back = brain?.formHp ?? p.maxHp * share;
+    p.hp = p.dead ? 0 : Math.max(1, Math.min(p.maxHp, Math.round(back)));
+    if (brain) brain.formHp = undefined;
     p.buff = 0;
     p.skillCooldown = heroOf(base).skill.cooldown;
   }

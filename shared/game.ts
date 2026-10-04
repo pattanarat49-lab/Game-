@@ -74,7 +74,8 @@ export type HeroId =
   | "omni"
   | "blaze"
   | "quad"
-  | "echo";
+  | "echo"
+  | "raptor";
 export type AttackStyle = "punch" | "sword" | "rifle" | "lightning" | "magic" | "flame";
 export type SkillKind =
   | "smash"
@@ -187,6 +188,8 @@ export interface HeroDef {
   knock?: number;
   /** Basic attacks slow whatever they hit for this many seconds. */
   slowHit?: number;
+  /** Running into a foe hits it for this much (again every RAM_REHIT seconds while still touching). */
+  ram?: number;
 }
 
 export const HEROES: Record<HeroId, HeroDef> = {
@@ -903,7 +906,7 @@ export const HEROES: Record<HeroId, HeroDef> = {
   omni: {
     name: "Omni Kid",
     role: "Alien shifter",
-    blurb: "A kid with an alien watch. ALIEN TRANSFORM: hold and aim at the alien you want on the wheel, release to turn into it for 10s (no skills while an alien, except Echo Mite's MITOSIS): Blaze Alien (flamethrower that burns and slows), Quad Brute (fast, huge HP, crushing punches that knock far) or Echo Mite (long-range sonic blasts; MITOSIS splits every copy in two, sharing HP). SNACK (E): eat to heal 10% HP.",
+    blurb: "A kid with an alien watch. ALIEN TRANSFORM: hold and aim at the alien you want on the wheel, release to turn into it for 10s (no skills while an alien, except Echo Mite's MITOSIS): Blaze Alien (flamethrower that burns and slows), Quad Brute (fast, huge HP, crushing punches that knock far) Echo Mite (long-range sonic blasts; MITOSIS splits every copy in two, sharing HP) or Speed Raptor (10x speed, running into foes hurts them). Turning back restores the HP he had before the transform. SNACK (E): eat to heal 10% HP.",
     stars: 4,
     maxHp: 110,
     speed: 112,
@@ -977,6 +980,25 @@ export const HEROES: Record<HeroId, HeroDef> = {
     shot: "sonic",
     // MITOSIS: every copy splits in two (each keeps half its HP), up to `count` copies in all.
     skill: { kind: "mitosis", name: "MITOSIS", cooldown: 2, damage: 0, radius: 0, count: 16 },
+  },
+  raptor: {
+    name: "Speed Raptor",
+    role: "Alien form",
+    blurb: "",
+    stars: 3,
+    formOf: "omni",
+    maxHp: 100,
+    speed: 1120, // ten times a normal hero
+    attack: "punch",
+    attackCooldown: 0.3,
+    damage: 10,
+    range: 22,
+    arc: 1.4,
+    aoe: 0,
+    shotSpeed: 0,
+    pierce: 0,
+    ram: 14,
+    skill: { kind: "passive", name: "ALIEN", cooldown: 1, damage: 0, radius: 0 },
   },
 };
 
