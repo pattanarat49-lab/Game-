@@ -2017,6 +2017,13 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       this.removePlayer(id);
       return;
     }
+    c.big = Math.max(0, c.big - dt);
+    c.slow = Math.max(0, c.slow - dt);
+    if (c.stun > 0) {
+      // Stuns and freezes hold copies and summons too.
+      c.stun = Math.max(0, c.stun - dt);
+      return;
+    }
     // Find something to fight: the nearest enemy, or a rival player in the arena.
     let tx = 0;
     let ty = 0;
@@ -2069,7 +2076,8 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
     });
     const len = Math.hypot(mx, my);
     if (len > 1) [mx, my] = [mx / len, my / len];
-    const moved = this.move(c.x, c.y, mx * hero.speed * MOVE_SCALE * dt, my * hero.speed * MOVE_SCALE * dt, PLAYER_RADIUS);
+    const speed = heroSpeed(c); // BIG LIGHT and burns slow them as well
+    const moved = this.move(c.x, c.y, mx * speed * dt, my * speed * dt, PLAYER_RADIUS);
     c.x = moved.x;
     c.y = moved.y;
     if (inLava(c.x, c.y, this.state.lavaRadius)) this.damagePlayer(id, LAVA_DPS * dt, true);
