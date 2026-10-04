@@ -90,7 +90,15 @@ export class TouchControls {
     scene.input.on("pointerupoutside", (p: Phaser.Input.Pointer) => this.onUp(p));
   }
 
-  get dashing() {
+  /** Rename the skill buttons (ALIEN TRANSFORM changes what they do without a new HUD). */
+  setLabels(skillName: string, skill2Name = "") {
+    const names = [skillName, skill2Name];
+    this.labels.forEach((l, i) => {
+      if (l.text !== names[i]) l.setText(names[i]);
+    });
+  }
+
+    get dashing() {
     return performance.now() < this.dashUntil;
   }
 

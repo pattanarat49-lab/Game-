@@ -97,6 +97,7 @@ export class HudScene extends Phaser.Scene {
       else this.drawCooldown(barX, 84, 1 - me.skillCooldown / hero.skill.cooldown);
       if (hero.formOf && hero.skill.kind !== "passive") this.drawCooldown(barX, 100, (me.buff ?? 0) / formTime);
       if (hero.skill2) this.drawCooldown(barX, 100, skill2Ready);
+      this.touch?.setLabels(hero.skill.kind === "passive" ? "ALIEN" : hero.skill.name, hero.skill2?.name ?? "");
       this.touch?.draw(1 - me.skillCooldown / hero.skill.cooldown, 1 - me.dashCooldown / DASH_COOLDOWN, skill2Ready);
     }
 

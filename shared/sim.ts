@@ -54,6 +54,7 @@ import {
   heroOf,
   heroSpeed,
   BURN_SLOW,
+  formFromAim,
   MOVE_SCALE,
   SHOT_SPEED_SCALE,
   DAMAGE_BALANCE,
@@ -1369,10 +1370,9 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
         break;
       }
       case "omnitrix": {
-        // ALIEN TRANSFORM: a random alien form, keeping the same share of HP.
-        const forms = (Object.keys(HEROES) as HeroId[]).filter((h) => HEROES[h].formOf === p.hero);
-        if (!forms.length) break;
-        const form = forms[Math.floor(Math.random() * forms.length)];
+        // ALIEN TRANSFORM: the alien picked on the wheel (by aiming at it), keeping the same share of HP.
+        const form = formFromAim(p.hero, p.aim);
+        if (!form) break;
         const share = p.hp / p.maxHp;
         p.hero = form;
         p.maxHp = heroOf(form).maxHp;

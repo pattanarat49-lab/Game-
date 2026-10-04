@@ -39,6 +39,9 @@ import {
   BIG_SCALE,
   BIG_SLOW,
   heroSpeed,
+  alienForms,
+  formAngle,
+  formFromAim,
 } from "../../../shared/game";
 import type { HudScene } from "./HudScene";
 import { LocalRoom } from "../localRoom";
@@ -233,6 +236,8 @@ export class GameScene extends Phaser.Scene {
   private effects: Effect[] = [];
   private fx!: Phaser.GameObjects.Graphics;
   private aimGuide!: Phaser.GameObjects.Graphics;
+  /** ALIEN TRANSFORM's pick wheel: one icon and name per alien. */
+  private formIcons: { img: Phaser.GameObjects.Image; label: Phaser.GameObjects.Text }[] = [];
   private beams!: Phaser.GameObjects.Graphics;
   private zoneFloor!: Phaser.GameObjects.Graphics;
   private zoneSky!: Phaser.GameObjects.Graphics;
@@ -266,6 +271,7 @@ export class GameScene extends Phaser.Scene {
     this.sparks.setDepth(50);
     this.fx = this.add.graphics().setDepth(950);
     this.aimGuide = this.add.graphics().setDepth(-1);
+    this.formIcons = [];
     this.beams = this.add.graphics().setDepth(940);
     this.zoneFloor = this.add.graphics().setDepth(-3);
     this.zoneSky = this.add.graphics().setDepth(960);
@@ -331,9 +337,11 @@ export class GameScene extends Phaser.Scene {
     this.lobby?.update(state, room.sessionId);
     const selecting = state.phase === "select";
     const me = state.players.get(room.sessionId);
-    if (me && me.hero !== this.registry.get("hero") && !selecting) {
+    // (An ALIEN TRANSFORM is still the same hero: the HUD stays, so held sticks and buttons carry on.)
+    const baseHero = me ? heroOf(me.hero).formOf ?? me.hero : undefined;
+    if (me && baseHero !== this.registry.get("hero") && !selecting) {
       // We picked a different hero on the select screen: rebuild the HUD and buttons for it.
-      this.registry.set("hero", me.hero);
+      this.registry.set("hero", baseHero);
       this.scene.get("Hud").scene.restart();
     }
     // Nobody moves or attacks while picking heroes.
@@ -1411,6 +1419,7 @@ export class GameScene extends Phaser.Scene {
   private drawAimGuide(state: any) {
     const g = this.aimGuide;
     g.clear();
+    this.drawFormWheel(undefined, 0, 0);
     const me = state.players.get(this.room!.sessionId);
     if (!me || me.dead) return;
     const hero = heroOf(me.hero);
@@ -1418,6 +1427,7 @@ export class GameScene extends Phaser.Scene {
     const y = this.predicted.y - 5 * HERO_SCALE;
     const aiming = this.aimingSkill();
     const skill = aiming === 2 ? hero.skill2 : aiming === 1 ? hero.skill : undefined;
+    this.drawFormWheel(skill?.kind === "omnitrix" ? me.hero : undefined, x, y);
     if (skill) {
       this.drawSkillGuide(g, skill, hero.range, x, y);
       return;
@@ -1441,6 +1451,32 @@ export class GameScene extends Phaser.Scene {
       g.arc(x, y, hero.range, this.aim - hero.arc / 2, this.aim + hero.arc / 2);
       g.strokePath();
     }
+  }
+
+  /** ALIEN TRANSFORM held: the aliens on a wheel around the hero; the one aimed at lights up. */
+  private drawFormWheel(hero: string | undefined, x: number, y: number) {
+    const forms = hero ? alienForms(hero) : [];
+    const picked = hero ? formFromAim(hero, this.aim) : undefined;
+    while (this.formIcons.length < forms.length) {
+      this.formIcons.push({
+        img: this.add.image(0, 0, "hero_omni").setDepth(1200),
+        label: this.add.text(0, 0, "", { fontFamily: "monospace", fontSize: "16px", color: "#ffffff" }).setScale(0.4).setOrigin(0.5, 0).setResolution(2).setDepth(1200),
+      });
+    }
+    this.formIcons.forEach((icon, i) => {
+      const show = i < forms.length;
+      icon.img.setVisible(show);
+      icon.label.setVisible(show);
+      if (!show) return;
+      const a = formAngle(i, forms.length);
+      const ix = x + Math.cos(a) * 46;
+      const iy = y + Math.sin(a) * 46;
+      const on = forms[i] === picked;
+      this.aimGuide.fillStyle(on ? 0x3ad13a : 0x000000, on ? 0.45 : 0.35).fillCircle(ix, iy, 15);
+      this.aimGuide.lineStyle(on ? 2 : 1, on ? 0x9fff9f : 0xffffff, on ? 1 : 0.4).strokeCircle(ix, iy, 15);
+      icon.img.setTexture(`hero_${forms[i]}`).setPosition(ix, iy + 1).setScale(on ? 1.15 : 0.9).setAlpha(on ? 1 : 0.6);
+      icon.label.setText(heroOf(forms[i]).name).setPosition(ix, iy + 15).setAlpha(on ? 1 : 0.5);
+    });
   }
 
   /** While a skill is held: where it will land (a lane for straight skills, an area for the rest). */

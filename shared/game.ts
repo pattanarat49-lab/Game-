@@ -903,7 +903,7 @@ export const HEROES: Record<HeroId, HeroDef> = {
   omni: {
     name: "Omni Kid",
     role: "Alien shifter",
-    blurb: "A kid with an alien watch. ALIEN TRANSFORM: turn into a random alien for 10s (no skills while an alien, except Echo Mite's MITOSIS): Blaze Alien (flamethrower that burns and slows), Quad Brute (fast, huge HP, crushing punches that knock far) or Echo Mite (long-range sonic blasts; MITOSIS splits every copy in two, sharing HP). SNACK (E): eat to heal 10% HP.",
+    blurb: "A kid with an alien watch. ALIEN TRANSFORM: hold and aim at the alien you want on the wheel, release to turn into it for 10s (no skills while an alien, except Echo Mite's MITOSIS): Blaze Alien (flamethrower that burns and slows), Quad Brute (fast, huge HP, crushing punches that knock far) or Echo Mite (long-range sonic blasts; MITOSIS splits every copy in two, sharing HP). SNACK (E): eat to heal 10% HP.",
     stars: 4,
     maxHp: 110,
     speed: 112,
@@ -1213,6 +1213,29 @@ export function movesInStoppedTime(hero: string): boolean {
 }
 
 /** How fast a hero runs right now (BIG LIGHT slows, the Hopper Rider's motorcycle speeds up). */
+/** ALIEN TRANSFORM: a hero's alien forms, in wheel order (the first at the top, then clockwise). */
+export function alienForms(hero: string): HeroId[] {
+  return (Object.keys(HEROES) as HeroId[]).filter((h) => HEROES[h].formOf === hero);
+}
+
+/** Where alien form `i` of `n` sits on the pick wheel (screen angle). */
+export function formAngle(i: number, n: number): number {
+  return -Math.PI / 2 + (i * Math.PI * 2) / n;
+}
+
+/** ALIEN TRANSFORM: the form picked by aiming at it on the wheel. */
+export function formFromAim(hero: string, aim: number): HeroId | undefined {
+  const forms = alienForms(hero);
+  let best: HeroId | undefined;
+  let bestDiff = Infinity;
+  forms.forEach((f, i) => {
+    let d = aim - formAngle(i, forms.length);
+    d = Math.abs(Math.atan2(Math.sin(d), Math.cos(d)));
+    if (d < bestDiff) [best, bestDiff] = [f, d];
+  });
+  return best;
+}
+
 /** Burned by the Blaze Alien's flamethrower: moves this much slower. */
 export const BURN_SLOW = 0.55;
 
