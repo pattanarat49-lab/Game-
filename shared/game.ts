@@ -145,6 +145,7 @@ export type SkillKind =
   | "eat" // eat a snack: heal a share of max HP
   | "thunderdash" // a lightning dash that cuts the lane; if it hits, it can be used once more within 2s
   | "seventh" // a lightning dash cutting a wide lane, which keeps crackling with lightning for a while
+  | "whip" // a black whip locks on to the nearest target in range and ties its legs (it cannot walk)
   | "charge"; // hold to charge (walking slower), let go to smash: the longer the charge, the harder and longer it hits
 
 export interface SkillDef {
@@ -353,7 +354,7 @@ export const HEROES: Record<HeroId, HeroDef> = {
   deku: {
     name: "Green Rookie",
     role: "Brawler",
-    blurb: "Runs 1.5x faster. FULL POWER SMASH blasts a wide line straight ahead. MAX SMASH (E): hold to charge (walking 60% slower) and let go to smash; the gauge shows how hard it will hit, up to 4x.",
+    blurb: "Runs 1.5x faster. SHADOW WHIP: a black whip shoots out to the nearest target and ties its legs, so it cannot walk for 2s. MAX SMASH (E): hold to charge (walking 60% slower) and let go to smash; the gauge shows how hard it will hit, up to 4x.",
     stars: 4,
     maxHp: 130,
     speed: 160,
@@ -365,7 +366,8 @@ export const HEROES: Record<HeroId, HeroDef> = {
     aoe: 0,
     shotSpeed: 0,
     pierce: 0,
-    skill: { kind: "line", name: "FULL POWER SMASH", cooldown: 6, damage: 160, radius: 220, width: 48 },
+    // SHADOW WHIP: locks on to the nearest target within `radius`; its legs are tied for `duration` seconds.
+    skill: { kind: "whip", name: "SHADOW WHIP", cooldown: 7, damage: 20, radius: 220, duration: 2 },
     // MAX SMASH: a smash lane `radius` long and `width` wide at no charge; a full charge multiplies it (chargePower).
     skill2: { kind: "charge", name: "MAX SMASH", cooldown: 8, damage: 60, radius: 120, width: 40 },
   },
@@ -1306,7 +1308,8 @@ export function formFromAim(hero: string, aim: number): HeroId | undefined {
 /** Burned by the Blaze Alien's flamethrower: moves this much slower. */
 export const BURN_SLOW = 0.55;
 
-export function heroSpeed(p: { hero: string; big: number; active2?: number; slow?: number }): number {
+export function heroSpeed(p: { hero: string; big: number; active2?: number; slow?: number; root?: number }): number {
+  if ((p.root ?? 0) > 0) return 0; // SHADOW WHIP: legs tied
   const hero = heroOf(p.hero);
   const bike = (p.active2 ?? 0) > 0 && hero.skill2?.kind === "bike" ? hero.skill2.width ?? 2 : 1;
   return hero.speed * MOVE_SCALE * (p.big > 0 ? BIG_SLOW : 1) * ((p.slow ?? 0) > 0 ? BURN_SLOW : 1) * bike;

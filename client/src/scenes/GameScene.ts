@@ -520,7 +520,7 @@ export class GameScene extends Phaser.Scene {
       }
     } else {
       const dir = inputDirection(input);
-      if (input.dash && this.dashTimer <= 0 && this.dashCooldown <= 0 && me.dashCooldown <= 0) {
+      if (input.dash && this.dashTimer <= 0 && this.dashCooldown <= 0 && me.dashCooldown <= 0 && !(me.root > 0)) {
         this.dashDir = dir.x || dir.y ? dir : { x: Math.cos(input.aim), y: Math.sin(input.aim) };
         this.dashTimer = DASH_TIME;
         this.dashCooldown = DASH_COOLDOWN;
@@ -2145,6 +2145,44 @@ export class GameScene extends Phaser.Scene {
         // ODM GEAR: the hook bitten into the wall.
         sky.fillStyle(0x8a8a92, 1).fillCircle(z.x, z.y - 6, 2.5);
         sky.lineStyle(1, 0xffffff, 0.8).strokeCircle(z.x, z.y - 6, 4 * fade);
+      } else if (z.kind === "whip") {
+        // SHADOW WHIP: a black whip lashes out from the Green Rookie, then coils around the target's legs.
+        const age = z.maxLife - z.life;
+        if (age < 0.35) {
+          let from: any;
+          let best = Infinity;
+          state.players.forEach((q: any) => {
+            if (q.dead || (heroOf(q.hero).formOf ?? q.hero) !== "deku") return;
+            const d = Math.hypot(q.x - z.x, q.y - z.y);
+            if (d < best && d > 4) [best, from] = [d, q];
+          });
+          if (from) {
+            const reach = Math.min(1, age / 0.12);
+            const ex = from.x + (z.x - from.x) * reach;
+            const ey = from.y + (z.y - from.y) * reach;
+            for (const [w, c] of [[4, 0x2a1240], [2, 0x0a0a0a]] as const) {
+              sky.lineStyle(w, c, 1 - age / 0.35).beginPath();
+              sky.moveTo(from.x, from.y - 6);
+              for (let i = 1; i <= 8; i++) {
+                const k = i / 8;
+                const wave = Math.sin(k * Math.PI * 3 + now / 40) * 4 * (1 - k);
+                const lx = from.x + (ex - from.x) * k;
+                const ly = from.y - 6 + (ey - from.y) * k;
+                const len = Math.hypot(ex - from.x, ey - from.y) || 1;
+                sky.lineTo(lx - ((ey - from.y) / len) * wave, ly + ((ex - from.x) / len) * wave);
+              }
+              sky.strokePath();
+            }
+          }
+        }
+        // Coils round the legs, with a dark glow while they hold.
+        const fade = Math.min(1, z.life / 0.3);
+        floor.fillStyle(0x6a2aa0, 0.45 * fade).fillEllipse(z.x, z.y + 4, 34, 11);
+        for (let i = 0; i < 3; i++) {
+          const yy = z.y - 4 + i * 4;
+          sky.lineStyle(3, 0x9a4aff, 0.5 * fade).strokeEllipse(z.x, yy, 24 + Math.sin(now / 90 + i) * 2, 7);
+          sky.lineStyle(2, 0x0a0a0a, 0.95 * fade).strokeEllipse(z.x, yy, 22 + Math.sin(now / 90 + i) * 2, 6);
+        }
       } else if (z.kind === "solve") {
         // SOLVE IT: a lock-on reticle snaps shut around the target.
         const t = 1 - z.life / z.maxLife;

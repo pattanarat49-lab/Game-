@@ -174,6 +174,8 @@ export interface SimPlayer {
   big: number;
   /** Seconds left burned by the Blaze Alien's flamethrower: slower. */
   slow: number;
+  /** SHADOW WHIP: legs tied, cannot walk (seconds left). */
+  root: number;
   /** 1 while a hero with a gun mode (SWAP MODE) has the gun out. */
   mode: number;
   /** Seconds left in which falling brings the hero straight back up (REVIVE). */
@@ -212,6 +214,8 @@ export interface SimEnemy {
   big: number;
   /** Seconds left burned by the Blaze Alien's flamethrower: slower. */
   slow: number;
+  /** SHADOW WHIP: legs tied, cannot walk (seconds left). */
+  root: number;
 }
 
 export type BulletKind =
@@ -567,7 +571,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       p.dead = false;
       p.respawnIn = 0;
       p.hp = p.maxHp;
-      p.titan = p.barrier = p.revive = p.latch = p.beam = p.stun = p.big = p.buff = p.active2 = p.slow = 0;
+      p.titan = p.barrier = p.revive = p.latch = p.beam = p.stun = p.big = p.buff = p.active2 = p.slow = p.root = 0;
       p.dashing = false;
       this.placeAtSpawn(p);
       const brain = this.brains.get(id);
@@ -1225,6 +1229,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       p.active2 = Math.max(0, p.active2 - dt);
       p.big = Math.max(0, p.big - dt);
       p.slow = Math.max(0, p.slow - dt);
+      p.root = Math.max(0, p.root - dt);
       if (p.barrier > 0) {
         // IMMORTAL: untouchable, and healing fast. (THE MAGICIAN's doves are just untouchable.)
         p.barrier = Math.max(0, p.barrier - dt);
@@ -1236,7 +1241,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       const dir = inputDirection(input);
 
       // Dash
-      if (input.dash && p.dashCooldown <= 0 && brain.dashTimer <= 0) {
+      if (input.dash && p.dashCooldown <= 0 && brain.dashTimer <= 0 && !(p.root > 0)) {
         const d = dir.x || dir.y ? dir : { x: Math.cos(input.aim), y: Math.sin(input.aim) };
         brain.dashTimer = DASH_TIME;
         brain.dashX = d.x;
@@ -1809,6 +1814,25 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
         Object.assign(this.zoneBrains.get(zid)!, { vx, vy, stun: skill.duration ?? 1, hit: new Set<string>() });
         break;
       }
+      case "whip": {
+        // SHADOW WHIP: a black whip shoots out to the nearest target in range and ties its legs.
+        const t = this.findTarget(id, p, skill.radius, true);
+        if (!t) break;
+        const hold = skill.duration ?? 2;
+        if (t.key.startsWith("p:")) {
+          const vid = t.key.slice(2);
+          this.damagePlayer(vid, skill.damage * PVP_DAMAGE_SCALE, true, id);
+          const v = s.players.get(vid);
+          if (v && !v.dead) v.root = Math.max(v.root, hold);
+        } else {
+          const e = s.enemies.get(t.key);
+          this.damageEnemy(t.key, skill.damage, id);
+          if (e && s.enemies.has(t.key)) e.root = Math.max(e.root, hold);
+        }
+        const zid = this.addZone("whip", t.x, t.y, 12, hold, { owner: id, every: Infinity, damage: 0 });
+        this.zoneBrains.get(zid)!.stick = t.key;
+        break;
+      }
       case "solve": {
         // SOLVE IT: the Detective has worked it out. The nearest target is locked on and stunned.
         const t = this.findTarget(id, p, skill.radius, true);
@@ -2134,6 +2158,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
     }
     c.big = Math.max(0, c.big - dt);
     c.slow = Math.max(0, c.slow - dt);
+    c.root = Math.max(0, c.root - dt);
     if (c.stun > 0) {
       // Stuns and freezes hold copies and summons too.
       c.stun = Math.max(0, c.stun - dt);
@@ -2229,7 +2254,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       if (brain.link) this.usePortal(id, z, brain.link);
       if (z.kind === "castle") this.walkCastle(z, brain, dt);
       if (z.kind === "frost") this.frostSigil(z, brain);
-      if (z.kind === "sticky" && brain.stick) {
+      if ((z.kind === "sticky" || z.kind === "whip") && brain.stick) {
         // The bomb rides along on whatever it is stuck to.
         const key = brain.stick;
         const v = key.startsWith("p:") ? s.players.get(key.slice(2)) : s.enemies.get(key);
@@ -2608,6 +2633,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       e.hitFlash = Math.max(0, e.hitFlash - dt);
       e.big = Math.max(0, e.big - dt);
       e.slow = Math.max(0, e.slow - dt);
+      e.root = Math.max(0, e.root - dt);
       if (def.block) return; // blocks just sit there
       if (Math.abs(brain.kbx) + Math.abs(brain.kby) > 1) {
         const pushed = this.move(e.x, e.y, brain.kbx * dt, brain.kby * dt, def.radius);
@@ -2649,7 +2675,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
         dirX = -dirX;
         dirY = -dirY;
       }
-      const speed = def.speed * MOVE_SCALE * (e.big > 0 ? BIG_SLOW : 1) * (e.slow > 0 ? BURN_SLOW : 1);
+      const speed = e.root > 0 ? 0 : def.speed * MOVE_SCALE * (e.big > 0 ? BIG_SLOW : 1) * (e.slow > 0 ? BURN_SLOW : 1);
       const moved = this.move(e.x, e.y, dirX * speed * dt, dirY * speed * dt, def.radius);
       const walled = this.blockAt(moved.x, moved.y, def.radius);
       if (!walled) {
@@ -3114,6 +3140,8 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
         return dist <= reach;
       case "seventh":
         return dist <= reach * 0.8;
+      case "whip":
+        return dist <= skill.radius * 0.9;
       case "charge":
         return dist <= skill.radius * chargeReach(chargePower(CHARGE_FULL / 2));
       case "grapple":
