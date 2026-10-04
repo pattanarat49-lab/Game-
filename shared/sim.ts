@@ -1384,10 +1384,8 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
         break;
       }
       case "truck": {
-        // TRUCK SMASH: time stops, and a truck falls on the spot he aimed at when it starts again.
+        // TRUCK SMASH: a truck falls on the spot he aimed at (time keeps flowing: it can be dodged).
         const spot = this.move(p.x, p.y, Math.cos(p.aim) * skill.radius, Math.sin(p.aim) * skill.radius, 4);
-        s.timeStop = skill.duration ?? 2;
-        s.timeStopBy = id;
         this.addZone("truck", spot.x, spot.y, TRUCK_RADIUS, Math.max(0.1, (skill.duration ?? 2) - 0.05), { owner: id, every: Infinity, damage: skill.damage });
         break;
       }

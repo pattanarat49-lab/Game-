@@ -715,7 +715,7 @@ export const HEROES: Record<HeroId, HeroDef> = {
   theworld: {
     name: "Time Emperor",
     role: "Time tyrant",
-    blurb: "Punches incredibly fast. TRUCK SMASH stops time for 2s, then drops a truck on the spot he aimed at. He and the Chrono Brawler can move in each other's stopped time. TIME STOP (E): stops time for 4s.",
+    blurb: "Punches incredibly fast. TRUCK SMASH drops a truck on the spot he aimed at 2s later. He and the Chrono Brawler can move in each other's stopped time. TIME STOP (E): stops time for 4s.",
     stars: 4,
     maxHp: 150,
     speed: 110,

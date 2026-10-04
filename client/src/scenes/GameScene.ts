@@ -1169,8 +1169,8 @@ export class GameScene extends Phaser.Scene {
         this.effects.push({ kind: "biglight", x, y, aim, range: skill.radius, arc: skill.width ?? 0.6, age: 0, life: 0.5 });
         break;
       case "truck":
-        // TRUCK SMASH: the world stops (the truck falls in the zone drawing).
-        this.effects.push({ kind: "ripple", x, y, aim, range: 700, arc: 0, age: 0, life: 0.7 });
+        // TRUCK SMASH: the truck falls in the zone drawing.
+        this.effects.push({ kind: "ripple", x, y, aim, range: 40, arc: 0, age: 0, life: 0.4 });
         cam.shake(120, 0.006);
         break;
       case "diamond":

@@ -171,8 +171,7 @@ export class HudScene extends Phaser.Scene {
     }
     if (state.timeStop > 0) {
       const by = state.players.get(state.timeStopBy);
-      const truck = by && heroOf(by.hero).skill.kind === "truck";
-      [special, color] = [`${truck ? "TRUCK SMASH!" : "TIME STOP!"}\n${by?.name ?? ""} ${state.timeStop.toFixed(1)}s`, "#9fd8ff"];
+      [special, color] = [`TIME STOP!\n${by?.name ?? ""} ${state.timeStop.toFixed(1)}s`, "#9fd8ff"];
     }
     this.special.setText(special).setColor(color);
 
