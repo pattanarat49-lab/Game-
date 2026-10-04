@@ -1016,10 +1016,12 @@ const PVP_RANKING: HeroId[] = [
   "agamemnon", "swordgod", "starplatinum", "taekwondo", "simo", "omni", "howl", "isekai", "steve", "deku",
   "healer", "sakamoto", "saitama", "superman",
 ];
+/** Heroes taken out of the game (user request 2026-10-04): not on any hero select; their code is kept. */
+const REMOVED_HEROES: HeroId[] = ["swordgod", "yaotsu", "badigadi"];
 export const HERO_IDS = [
   ...PVP_RANKING,
   ...(Object.keys(HEROES) as HeroId[]).filter((id) => !PVP_RANKING.includes(id)),
-].filter((id) => !HEROES[id].summon && !HEROES[id].formOf);
+].filter((id) => !HEROES[id].summon && !HEROES[id].formOf && !REMOVED_HEROES.includes(id));
 
 /**
  * Balance pass (user request 2026-10-03): everything a hero (and its summons) hits for is multiplied by this.

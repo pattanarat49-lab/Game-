@@ -15,6 +15,7 @@ import {
   ENEMY_SHOT_SPEED,
   EnemyKind,
   HEROES,
+  HERO_IDS,
   HeroDef,
   SkillDef,
   INTERMISSION_TIME,
@@ -400,7 +401,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
     const def = heroOf(hero);
     const player = this.make.player();
     player.name = name.slice(0, 16) || "Riftborn";
-    player.hero = hero in HEROES && !HEROES[hero as keyof typeof HEROES].summon && !HEROES[hero as keyof typeof HEROES].formOf ? hero : "superman";
+    player.hero = (HERO_IDS as string[]).includes(hero) ? hero : "superman";
     player.color = this.realPlayerCount() % 4;
     this.placeAtSpawn(player);
     player.maxHp = def.maxHp;
@@ -468,7 +469,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
   pickHero(id: string, hero: string) {
     const p = this.state.players.get(id);
     const def = HEROES[hero as keyof typeof HEROES];
-    if (!p || p.owner || p.ready || this.state.phase !== "select" || !def || def.summon || def.formOf) return;
+    if (!p || p.owner || p.ready || this.state.phase !== "select" || !def || !(HERO_IDS as string[]).includes(hero)) return;
     p.hero = hero;
     p.maxHp = def.maxHp;
     p.hp = def.maxHp;
