@@ -307,7 +307,7 @@ export const HEROES: Record<HeroId, HeroDef> = {
     // JAB: a long, narrow straight punch (radius = reach, width = thickness) that stuns for `duration`.
     skill: { kind: "jab", name: "JAB", cooldown: 1, damage: 30, radius: 62, width: 18, duration: 0.5 },
     // DEATH CROSS: `duration` here is how many times further than a normal knockback it throws targets.
-    skill2: { kind: "cross", name: "DEATH CROSS", cooldown: 6, damage: 150, radius: 80, width: 26, duration: 4 },
+    skill2: { kind: "cross", name: "DEATH CROSS", cooldown: 6, damage: 225, radius: 80, width: 26, duration: 4 },
   },
   saitama: {
     name: "Plain Hero",
