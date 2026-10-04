@@ -75,7 +75,8 @@ export type HeroId =
   | "blaze"
   | "quad"
   | "echo"
-  | "raptor";
+  | "raptor"
+  | "zenitsu";
 export type AttackStyle = "punch" | "sword" | "rifle" | "lightning" | "magic" | "flame";
 export type SkillKind =
   | "smash"
@@ -141,7 +142,9 @@ export type SkillKind =
   | "eyebeam" // a laser from the eyes that keeps firing and follows the aim
   | "omnitrix" // turn into a random alien for a while (no skills, except the alien's own)
   | "mitosis" // every copy of you splits in two, sharing its HP half and half
-  | "eat"; // eat a snack: heal a share of max HP
+  | "eat" // eat a snack: heal a share of max HP
+  | "thunderdash" // a lightning dash that cuts the lane; if it hits, it can be used once more within 2s
+  | "seventh"; // a lightning dash cutting a wide lane, which keeps crackling with lightning for a while
 
 export interface SkillDef {
   kind: SkillKind;
@@ -712,6 +715,26 @@ export const HEROES: Record<HeroId, HeroDef> = {
     skill: { kind: "dashkick", name: "FLASH KICK", cooldown: 5, damage: 45, radius: 170, duration: 1 },
     skill2: { kind: "spinkick", name: "SPINNING KICK", cooldown: 6, damage: 55, radius: 62, duration: 0.45 },
   },
+  zenitsu: {
+    name: "Thunder Sleeper",
+    role: "Lightning swordsman",
+    blurb: "A jumpy swordsman who only shines when it counts. THUNDER DASH: a lightning-fast dash that cuts the whole lane; if it hits, dash once more within 2s before the cooldown. SEVENTH FORM (E): a huge lightning dash cutting a wide lane, which keeps crackling with lightning for 3s.",
+    stars: 4,
+    maxHp: 115,
+    speed: 135,
+    attack: "sword",
+    attackCooldown: 0.45,
+    damage: 18,
+    range: 40,
+    arc: 1.4,
+    aoe: 0,
+    shotSpeed: 0,
+    pierce: 0,
+    // THUNDER DASH: dashes `radius`, cutting a lane `width` wide; a hit opens a second dash for `duration` seconds.
+    skill: { kind: "thunderdash", name: "THUNDER DASH", cooldown: 6, damage: 40, radius: 150, width: 26, duration: 2 },
+    // SEVENTH FORM: dashes `radius` cutting a lane `width` wide; the lane crackles for `duration` seconds.
+    skill2: { kind: "seventh", name: "SEVENTH FORM", cooldown: 12, damage: 60, radius: 230, width: 70, duration: 3 },
+  },
   theworld: {
     name: "Time Emperor",
     role: "Time tyrant",
@@ -1012,7 +1035,7 @@ for (const def of Object.values(HEROES)) def.maxHp *= HP_SCALE;
  */
 const PVP_RANKING: HeroId[] = [
   "vampire", "badigadi", "rudeus", "rick", "gojo", "killua", "ricardo", "rider", "loki", "thorfinn",
-  "doraemon", "titan", "hanuman", "okita", "joyboy", "lawliet", "trainer", "theworld", "yaotsu", "kid",
+  "doraemon", "titan", "hanuman", "okita", "joyboy", "lawliet", "trainer", "theworld", "zenitsu", "yaotsu", "kid",
   "agamemnon", "swordgod", "starplatinum", "taekwondo", "simo", "omni", "howl", "isekai", "steve", "deku",
   "healer", "sakamoto", "saitama", "superman",
 ];
@@ -1062,6 +1085,7 @@ export const DAMAGE_BALANCE: Partial<Record<HeroId, number>> = {
   sakamoto: 1.46,
   saitama: 0.05,
   superman: 0.68,
+  zenitsu: 1,
 };
 
 export function heroOf(id: string): HeroDef {

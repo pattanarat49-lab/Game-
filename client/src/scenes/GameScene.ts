@@ -74,7 +74,7 @@ interface PlayerView {
 
 /** A short-lived swing, slash or shockwave drawn on top of the world. */
 interface Effect {
-  kind: "punch" | "sword" | "smash" | "muzzle" | "bolt" | "storm" | "blast" | "impact" | "heal" | "line" | "slashes" | "ripple" | "jab" | "gatling" | "rewind" | "kick" | "tkick" | "biglight" | "spinkick" | "purple" | "flame";
+  kind: "punch" | "sword" | "smash" | "muzzle" | "bolt" | "storm" | "blast" | "impact" | "heal" | "line" | "slashes" | "ripple" | "jab" | "gatling" | "rewind" | "kick" | "tkick" | "biglight" | "spinkick" | "purple" | "flame" | "thunder";
   x: number;
   y: number;
   aim: number;
@@ -86,7 +86,7 @@ interface Effect {
   follow?: PlayerView;
 }
 
-const WEAPON_TEXTURE: Record<string, string | undefined> = { isekai: "sword", simo: "rifle", okita: "sword", sakamoto: "knife", hanuman: "trident", rick: "raygun", kid: "pistol", doraemon: "aircannon", agamemnon: "bronzesword", gladiator: "gladius", steve: "diamondsword" };
+const WEAPON_TEXTURE: Record<string, string | undefined> = { isekai: "sword", simo: "rifle", okita: "sword", sakamoto: "knife", hanuman: "trident", rick: "raygun", kid: "pistol", doraemon: "aircannon", agamemnon: "bronzesword", gladiator: "gladius", steve: "diamondsword", zenitsu: "sword" };
 const BULLET_TEXTURE: Record<string, string> = {
   snipe: "snipe",
   wave: "wave",
@@ -1102,6 +1102,12 @@ export class GameScene extends Phaser.Scene {
       case "dashkick":
         this.effects.push({ kind: "ripple", x, y, aim, range: 26, arc: 0, age: 0, life: 0.25 });
         break;
+      case "thunderdash":
+      case "seventh":
+        // We are already at the end of the dash: lightning back along the path.
+        this.effects.push({ kind: "thunder", x: x - Math.cos(aim) * skill.radius, y: y - Math.sin(aim) * skill.radius, aim, range: skill.radius, arc: skill.width ?? 26, age: 0, life: skill.kind === "seventh" ? 0.5 : 0.3 });
+        cam.shake(skill.kind === "seventh" ? 200 : 100, skill.kind === "seventh" ? 0.012 : 0.006);
+        break;
       case "godrush":
         // LIGHTNING DASH: a silver streak back along the lunge, then the spin cut where he landed.
         this.effects.push({ kind: "line", x: x - Math.cos(aim) * skill.radius, y: y - Math.sin(aim) * skill.radius, aim, range: skill.radius, arc: 10, age: 0, life: 0.3 });
@@ -1311,6 +1317,30 @@ export class GameScene extends Phaser.Scene {
         g.fillStyle(0xffd400, 0.35 * (1 - t)).fillPoints(pts, true);
         g.lineStyle(1, 0xffffff, 0.8 * (1 - t)).strokePoints(pts, true);
         g.fillStyle(0xffffff, 0.9 * (1 - t)).fillCircle(e.x + cos * len, e.y + sin * len, 5 * (1 - t) + 2);
+      } else if (e.kind === "thunder") {
+        // THUNDER DASH / SEVENTH FORM: a golden band with jagged lightning down the lane.
+        const cos = Math.cos(e.aim);
+        const sin = Math.sin(e.aim);
+        const w = e.arc / 2;
+        const pts = [
+          { x: e.x - sin * w, y: e.y + cos * w },
+          { x: e.x + cos * e.range - sin * w, y: e.y + sin * e.range + cos * w },
+          { x: e.x + cos * e.range + sin * w, y: e.y + sin * e.range - cos * w },
+          { x: e.x + sin * w, y: e.y - cos * w },
+        ];
+        g.fillStyle(0xffd400, 0.3 * (1 - t)).fillPoints(pts, true);
+        for (const [lw, color] of [[3, 0xffc400], [1, 0xffffff]] as const) {
+          for (let k = 0; k < 2; k++) {
+            g.lineStyle(lw, color, 1 - t).beginPath();
+            g.moveTo(e.x, e.y);
+            for (let d = 14; d < e.range; d += 14) {
+              const off = (Math.random() - 0.5) * e.arc * 0.8;
+              g.lineTo(e.x + cos * d - sin * off, e.y + sin * d + cos * off);
+            }
+            g.lineTo(e.x + cos * e.range, e.y + sin * e.range);
+            g.strokePath();
+          }
+        }
       } else if (e.kind === "line") {
         // 100% SMASH: a wide blast of green lightning straight ahead.
         const cos = Math.cos(e.aim);
@@ -1435,8 +1465,8 @@ export class GameScene extends Phaser.Scene {
   }
 
   /** A jagged lightning bolt falling from the sky onto (x, y). */
-  private drawBolt(g: Phaser.GameObjects.Graphics, x: number, y: number, alpha: number) {
-    for (const [width, color] of [[4, 0x4aa8ff], [2, 0xffffff]] as const) {
+  private drawBolt(g: Phaser.GameObjects.Graphics, x: number, y: number, alpha: number, glow = 0x4aa8ff) {
+    for (const [width, color] of [[4, glow], [2, 0xffffff]] as const) {
       g.lineStyle(width, color, alpha);
       g.beginPath();
       let px = x + (Math.random() - 0.5) * 8;
@@ -1561,6 +1591,10 @@ export class GameScene extends Phaser.Scene {
       case "frost":
         lane(110, 4);
         area(x + cos * 110, y + sin * 110, skill.radius);
+        break;
+      case "thunderdash":
+      case "seventh":
+        lane(skill.radius, skill.width ?? 26);
         break;
       case "godrush":
         lane(skill.radius, skill.width ?? 26);
@@ -2064,6 +2098,21 @@ export class GameScene extends Phaser.Scene {
           sky.lineBetween(z.x + Math.cos(a) * (r - 4), z.y - 8 + Math.sin(a) * (r - 4), z.x + Math.cos(a) * (r + 6), z.y - 8 + Math.sin(a) * (r + 6));
         }
         sky.fillStyle(0xff2a3a, 1 - t).fillCircle(z.x, z.y - 8, 2);
+      } else if (z.kind === "bolt") {
+        // SEVENTH FORM: the lane keeps crackling with golden lightning.
+        const fade = Math.min(1, z.life / 0.4);
+        floor.fillStyle(0xffd400, 0.06 * fade).fillCircle(z.x, z.y, z.radius);
+        if (Math.random() < 0.18) this.drawBolt(sky, z.x + (Math.random() - 0.5) * z.radius, z.y + (Math.random() - 0.5) * z.radius, fade, 0xffc400);
+        sky.lineStyle(1, 0xfff07a, 0.7 * fade).beginPath();
+        let bx = z.x - z.radius * 0.6;
+        let by = z.y + (Math.random() - 0.5) * z.radius;
+        sky.moveTo(bx, by);
+        for (let i = 0; i < 4; i++) {
+          bx += z.radius * 0.3;
+          by = z.y + (Math.random() - 0.5) * z.radius;
+          sky.lineTo(bx, by);
+        }
+        sky.strokePath();
       } else if (z.kind === "dashkick") {
         // FLASH KICK: the kick lands with a starburst.
         const t = 1 - z.life / z.maxLife;

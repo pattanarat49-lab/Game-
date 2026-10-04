@@ -78,6 +78,9 @@ const SNIPER_BURST_GAP = 0.15;
 const OKITA_SLASHES = 8;
 /** PvP / Bot Duel: the pause after a knockout before the next round starts. */
 const ROUND_RESET_PAUSE = 2;
+/** SEVENTH FORM: the lane strikes again every this many seconds, for this share of the dash's damage. */
+const SEVENTH_TICK = 0.5;
+const SEVENTH_TICK_SHARE = 0.2;
 /** PvE Squad: the bot gets (players ^ this) shares of HP, since a team also splits its attention. */
 const PVE_BOT_HP_EXP = 1.6;
 /** MOVING CASTLE walking speed (pixels/s). */
@@ -301,6 +304,8 @@ interface PlayerBrain {
   zip?: { x: number; y: number };
   /** When each target was last hit by a lasting skill (motorcycle rams, light swords), on the sim clock. */
   hitAt?: Map<string, number>;
+  /** THUNDER DASH hit: seconds left to dash a second time before the cooldown starts. */
+  thunderWindow?: number;
   /** STAR SHOT: shots of the volley still to fire. */
   volleyLeft?: number;
   volleyTimer?: number;
@@ -348,6 +353,8 @@ interface ZoneBrain {
   hit?: Set<string>;
   /** STICKY BOMB: what the bomb is stuck to (an enemy id, or "p:" + a player id). */
   stick?: string;
+  /** SEVENTH FORM: the crackling lane (start, direction, length, width). */
+  lane?: { x: number; y: number; angle: number; len: number; width: number };
 }
 
 interface BulletBrain {
@@ -566,6 +573,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
         brain.zip = undefined;
         brain.dashTimer = 0;
         brain.kbx = brain.kby = 0;
+        if (brain.thunderWindow) [brain.thunderWindow, p.mode] = [0, 0];
       }
       p.kbx = p.kby = 0;
     });
@@ -1161,6 +1169,15 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       p.dashCooldown = Math.max(0, p.dashCooldown - dt);
       p.skillCooldown = Math.max(0, p.skillCooldown - dt);
       p.skill2Cooldown = Math.max(0, p.skill2Cooldown - dt);
+      if (brain.thunderWindow) {
+        // THUNDER DASH: the second dash was not used in time, so the cooldown starts now.
+        brain.thunderWindow = Math.max(0, brain.thunderWindow - dt);
+        if (brain.thunderWindow <= 0 || p.dead) {
+          brain.thunderWindow = 0;
+          p.mode = 0;
+          p.skillCooldown = Math.max(p.skillCooldown, hero.skill.cooldown);
+        }
+      }
 
       if (p.owner) {
         this.updateClone(id, p, brain, hero, dt);
@@ -1533,6 +1550,57 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
         p.warp = (p.warp + 1) % 256; // the client jumps with us
         brain.target = undefined;
         brain.hurtTimer = Math.max(brain.hurtTimer, 0.3);
+        break;
+      }
+      case "thunderdash": {
+        // THUNDER DASH: a lightning dash cutting the lane. A hit opens a second dash for a moment.
+        const second = (brain.thunderWindow ?? 0) > 0;
+        const end = this.move(p.x, p.y, Math.cos(p.aim) * skill.radius, Math.sin(p.aim) * skill.radius, PLAYER_RADIUS);
+        const len = Math.hypot(end.x - p.x, end.y - p.y);
+        const hits = this.lineHit(id, p.x, p.y, p.aim, len, skill.width ?? 26, skill.damage);
+        p.x = end.x;
+        p.y = end.y;
+        p.warp = (p.warp + 1) % 256;
+        brain.target = undefined;
+        brain.hurtTimer = Math.max(brain.hurtTimer, 0.25);
+        if (!second && hits > 0) {
+          brain.thunderWindow = skill.duration ?? 2;
+          p.mode = 1; // shown on the HUD: one more dash ready
+          p.skillCooldown = 0.25;
+        } else {
+          brain.thunderWindow = 0;
+          p.mode = 0;
+        }
+        break;
+      }
+      case "seventh": {
+        // SEVENTH FORM: a huge lightning dash cutting a wide lane, which keeps crackling for a while.
+        const sx = p.x;
+        const sy = p.y;
+        const end = this.move(p.x, p.y, Math.cos(p.aim) * skill.radius, Math.sin(p.aim) * skill.radius, PLAYER_RADIUS);
+        const len = Math.hypot(end.x - p.x, end.y - p.y);
+        const width = skill.width ?? 70;
+        this.lineHit(id, sx, sy, p.aim, len, width, skill.damage);
+        p.x = end.x;
+        p.y = end.y;
+        p.warp = (p.warp + 1) % 256;
+        brain.target = undefined;
+        brain.hurtTimer = Math.max(brain.hurtTimer, 0.3);
+        const life = skill.duration ?? 3;
+        const zid = this.addZone("thunderlane", sx + Math.cos(p.aim) * len * 0.5, sy + Math.sin(p.aim) * len * 0.5, len / 2, life, {
+          owner: id,
+          every: SEVENTH_TICK,
+          damage: skill.damage * SEVENTH_TICK_SHARE,
+        });
+        const zb = this.zoneBrains.get(zid)!;
+        zb.tick = SEVENTH_TICK;
+        zb.lane = { x: sx, y: sy, angle: p.aim, len, width };
+        // Bolts along the lane, for the eye only.
+        const n = Math.max(1, Math.round(len / 34));
+        for (let i = 0; i <= n; i++) {
+          const d = (len * i) / n;
+          this.addZone("bolt", sx + Math.cos(p.aim) * d, sy + Math.sin(p.aim) * d, width / 2, life, { owner: id, every: Infinity, damage: 0 });
+        }
         break;
       }
       case "godrush": {
@@ -1916,7 +1984,8 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
   }
 
   /** Hit everything in a wide straight line (Deku's 100% SMASH). */
-  private lineHit(owner: string, x: number, y: number, angle: number, length: number, width: number, damage: number, stun = 0, knock = 0) {
+  private lineHit(owner: string, x: number, y: number, angle: number, length: number, width: number, damage: number, stun = 0, knock = 0): number {
+    let hits = 0;
     const cos = Math.cos(angle);
     const sin = Math.sin(angle);
     const inLine = (tx: number, ty: number, r: number) => {
@@ -1927,16 +1996,19 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
     this.state.enemies.forEach((e, eid) => {
       const def = ENEMIES[e.kind as EnemyKind];
       if (!inLine(e.x, e.y, this.er(e))) return;
+      hits++;
       this.damageEnemy(eid, damage, owner);
       if (stun > 0 && !def.boss) e.stun = Math.max(e.stun, stun); // bosses shrug it off
       if (knock > 0 && !def.boss) this.knockEnemy(eid, cos, sin, knock); // sent flying along the line
     });
     this.state.players.forEach((v, vid) => {
       if (v.dead || !this.isFoe(owner, vid) || !inLine(v.x, v.y, this.pr(v))) return;
+      hits++;
       this.damagePlayer(vid, damage * PVP_DAMAGE_SCALE, true, owner);
       if (stun > 0 && !v.dead) v.stun = Math.max(v.stun, stun);
       if (knock > 0) this.knockPlayer(vid, cos, sin, knock);
     });
+    return hits;
   }
 
   // -------------------------------------------------------------- clones
@@ -2162,6 +2234,9 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
             if (this.rootOf(qid) !== this.rootOf(brain.owner) && this.isFoe(brain.owner, qid)) return;
             q.hp = Math.min(q.maxHp, q.hp + q.maxHp * brain.damage);
           });
+        } else if (z.kind === "thunderlane" && brain.lane) {
+          const l = brain.lane;
+          this.lineHit(brain.owner, l.x, l.y, l.angle, l.len, l.width, brain.damage);
         } else if (z.kind === "hurricane") {
           this.sweep(brain.owner, z.x, z.y, 0, z.radius, Math.PI * 2, brain.damage);
         } else if (z.kind === "asgard" || z.kind === "city") {
@@ -3025,7 +3100,10 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       case "slashes":
       case "sticky":
       case "spinkick":
+      case "thunderdash":
         return dist <= reach;
+      case "seventh":
+        return dist <= reach * 0.8;
       case "grapple":
         return dist > 130;
       case "trojan":

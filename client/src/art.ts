@@ -288,6 +288,28 @@ export const HERO_SPRITES: Record<string, PixelSprite> = {
     ],
     palette: { k: OUTLINE, G: "#1f4a35", s: "#f2c49a", e: "#1f6b45", f: "#c98a6a", m: "#8a4030", g: "#2f8a5a", l: "#57c48a", n: "#8a8f98", w: "#f4f4f4", r: "#d42020" },
   },
+  zenitsu: {
+    // Golden hair fading to orange tips, a yellow coat with white triangles over a dark uniform.
+    grid: [
+      "..k.kkkkkk.k....",
+      "..kyykyyyykyk...",
+      ".kyyyyyyyyyyyk..",
+      "..kyyssssssyk...",
+      "..kysesssesyk...",
+      "..kyssssssyok...",
+      "...kssmmssk.....",
+      ".kyyynnnnyyyyk..",
+      ".kywynnnnywyyk..",
+      ".kwwwynnnywwwk..",
+      ".ksyyynnnyyysk..",
+      ".kwyywnnnwyywk..",
+      "...knnnk.knnnk..",
+      "...knnnk.knnnk..",
+      "...kwwwk.kwwwk..",
+      "...kkkkk.kkkkk..",
+    ],
+    palette: { k: OUTLINE, y: "#ffd23f", o: "#ff8a1f", s: "#f7d7bd", e: "#3a2a10", m: "#c06a5a", n: "#23202e", w: "#fff6d8" },
+  },
   okita: {
     grid: [
       "...kkkkkkkkk....",
