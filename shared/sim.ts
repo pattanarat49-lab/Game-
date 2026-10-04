@@ -53,6 +53,7 @@ import {
   WORLD_W,
   heroOf,
   heroSpeed,
+  BURN_SLOW,
   MOVE_SCALE,
   SHOT_SPEED_SCALE,
   DAMAGE_BALANCE,
@@ -156,6 +157,8 @@ export interface SimPlayer {
   stun: number;
   /** Seconds left enlarged by BIG LIGHT: bigger hitbox, half speed. */
   big: number;
+  /** Seconds left burned by the Blaze Alien's flamethrower: slower. */
+  slow: number;
   /** 1 while a hero with a gun mode (SWAP MODE) has the gun out. */
   mode: number;
   /** Seconds left in which falling brings the hero straight back up (REVIVE). */
@@ -192,6 +195,8 @@ export interface SimEnemy {
   stun: number;
   /** Seconds left enlarged by BIG LIGHT: bigger hitbox, half speed. */
   big: number;
+  /** Seconds left burned by the Blaze Alien's flamethrower: slower. */
+  slow: number;
 }
 
 export type BulletKind =
@@ -390,7 +395,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
     const def = heroOf(hero);
     const player = this.make.player();
     player.name = name.slice(0, 16) || "Riftborn";
-    player.hero = hero in HEROES && !HEROES[hero as keyof typeof HEROES].summon ? hero : "superman";
+    player.hero = hero in HEROES && !HEROES[hero as keyof typeof HEROES].summon && !HEROES[hero as keyof typeof HEROES].formOf ? hero : "superman";
     player.color = this.realPlayerCount() % 4;
     this.placeAtSpawn(player);
     player.maxHp = def.maxHp;
@@ -458,7 +463,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
   pickHero(id: string, hero: string) {
     const p = this.state.players.get(id);
     const def = HEROES[hero as keyof typeof HEROES];
-    if (!p || p.owner || p.ready || this.state.phase !== "select" || !def || def.summon) return;
+    if (!p || p.owner || p.ready || this.state.phase !== "select" || !def || def.summon || def.formOf) return;
     p.hero = hero;
     p.maxHp = def.maxHp;
     p.hp = def.maxHp;
@@ -519,10 +524,11 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
     const helpers: string[] = [];
     s.players.forEach((p, id) => {
       if (p.owner) return helpers.push(id);
+      if (heroOf(p.hero).formOf) this.endForm(p);
       p.dead = false;
       p.respawnIn = 0;
       p.hp = p.maxHp;
-      p.titan = p.barrier = p.revive = p.latch = p.beam = p.stun = p.big = p.buff = p.active2 = 0;
+      p.titan = p.barrier = p.revive = p.latch = p.beam = p.stun = p.big = p.buff = p.active2 = p.slow = 0;
       p.dashing = false;
       this.placeAtSpawn(p);
       const brain = this.brains.get(id);
@@ -568,7 +574,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
   private dmgMul(attacker: string | undefined): number {
     const p = this.state.players.get(this.rootOf(attacker));
     if (!p) return 1;
-    return (p.power || 1) * (DAMAGE_BALANCE[p.hero as HeroId] ?? 1);
+    return (p.power || 1) * (DAMAGE_BALANCE[(heroOf(p.hero).formOf ?? p.hero) as HeroId] ?? 1); // an alien form hits like its hero
   }
 
   /** How far from its centre an enemy can be hit (BIG LIGHT makes it bigger). */
@@ -1082,6 +1088,8 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       const brain = this.brains.get(id);
       if (!brain) return;
       if (brain.bot) this.botThink(id, p, brain, dt);
+      // ALIEN TRANSFORM: back to human when the time is up (or on falling).
+      if (!p.owner && heroOf(p.hero).formOf && (p.dead || p.buff <= 0)) this.endForm(p);
       const input = brain.input;
       const hero = heroOf(p.hero);
       brain.hurtTimer = Math.max(0, brain.hurtTimer - dt);
@@ -1140,6 +1148,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       p.buff = Math.max(0, p.buff - dt);
       p.active2 = Math.max(0, p.active2 - dt);
       p.big = Math.max(0, p.big - dt);
+      p.slow = Math.max(0, p.slow - dt);
       if (p.barrier > 0) {
         // IMMORTAL: untouchable, and healing fast. (THE MAGICIAN's doves are just untouchable.)
         p.barrier = Math.max(0, p.barrier - dt);
@@ -1234,13 +1243,17 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
           this.spawnBullet((hero.shot ?? "magic") as BulletKind, p.x, p.y, input.aim, hero.shotSpeed, { owner: id, damage: hero.damage, pierce: 0, life: hero.range / hero.shotSpeed, blast: hero.aoe });
         } else if (hero.skill2?.kind === "yoyo" && p.mode === 1) {
           this.throwYoyo(id, p, hero.skill2);
+        } else if (hero.attack === "flame") {
+          // Flamethrower: a short cone of fire that burns (slows) whatever it touches.
+          this.sweep(id, p.x, p.y, input.aim, hero.range, hero.arc, hero.damage);
+          this.burn(id, p.x, p.y, input.aim, hero.range, hero.arc / 2, hero.slowHit ?? 1);
         } else if (hero.attack === "lightning") {
           // Lightning strikes the ground a short way ahead and hits everything nearby.
           const tx = p.x + Math.cos(input.aim) * hero.range;
           const ty = p.y + Math.sin(input.aim) * hero.range;
           this.sweep(id, tx, ty, 0, hero.aoe, Math.PI * 2, hero.damage);
         } else {
-          this.sweep(id, p.x, p.y, input.aim, hero.range, hero.arc, hero.damage, true);
+          this.sweep(id, p.x, p.y, input.aim, hero.range, hero.arc, hero.damage, hero.knock ?? true);
         }
       }
 
@@ -1355,6 +1368,26 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
         this.addZone("truck", spot.x, spot.y, TRUCK_RADIUS, Math.max(0.1, (skill.duration ?? 2) - 0.05), { owner: id, every: Infinity, damage: skill.damage });
         break;
       }
+      case "omnitrix": {
+        // ALIEN TRANSFORM: a random alien form, keeping the same share of HP.
+        const forms = (Object.keys(HEROES) as HeroId[]).filter((h) => HEROES[h].formOf === p.hero);
+        if (!forms.length) break;
+        const form = forms[Math.floor(Math.random() * forms.length)];
+        const share = p.hp / p.maxHp;
+        p.hero = form;
+        p.maxHp = heroOf(form).maxHp;
+        p.hp = Math.max(1, Math.round(p.maxHp * share));
+        p.buff = skill.duration ?? 10;
+        p.skillCooldown = 0.5; // the alien's own skill (if any) is ready almost at once
+        brain.attackTimer = 0;
+        break;
+      }
+      case "mitosis":
+        this.mitosis(id, p, skill);
+        break;
+      case "eat":
+        p.hp = Math.min(p.maxHp, p.hp + p.maxHp * skill.damage);
+        break;
       case "diamond":
         p.buff = skill.duration ?? 10;
         brain.attackTimer = 0;
@@ -1853,6 +1886,68 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
 
   // -------------------------------------------------------------- clones
 
+  /** ALIEN TRANSFORM is over: back to the human hero, keeping the same share of HP. */
+  private endForm(p: P) {
+    const base = heroOf(p.hero).formOf;
+    if (!base) return;
+    const share = p.hp / p.maxHp;
+    p.hero = base;
+    p.maxHp = heroOf(base).maxHp;
+    p.hp = p.dead ? 0 : Math.max(1, Math.round(p.maxHp * share));
+    p.buff = 0;
+    p.skillCooldown = heroOf(base).skill.cooldown;
+  }
+
+  /** MITOSIS: every copy of the Echo Mite (the real one too) splits in two, each half keeping half its HP. */
+  private mitosis(id: string, p: P, skill: SkillDef) {
+    const copies: P[] = [p];
+    this.state.players.forEach((q) => {
+      if (q.owner === id && q.hero === p.hero && !q.dead) copies.push(q);
+    });
+    let total = copies.length;
+    for (const c of copies) {
+      if (total >= (skill.count ?? 16)) break;
+      if (c.hp < 2) continue;
+      c.hp = c.hp / 2;
+      const n = this.make.player();
+      n.name = p.name; // nobody can tell which one is real
+      n.hero = p.hero;
+      n.owner = id;
+      n.color = p.color;
+      const a = Math.random() * Math.PI * 2;
+      const spot = this.move(c.x + Math.cos(a) * 16, c.y + Math.sin(a) * 16, 0, 0, PLAYER_RADIUS);
+      n.x = spot.x;
+      n.y = spot.y;
+      n.aim = c.aim;
+      n.maxHp = p.maxHp;
+      n.hp = c.hp;
+      const nid = `c${this.nextId++}`;
+      this.state.players.set(nid, n);
+      const brain = this.newBrain();
+      brain.cloneLife = Math.max(0.1, p.buff);
+      brain.attackTimer = Math.random() * heroOf(p.hero).attackCooldown;
+      this.brains.set(nid, brain);
+      total++;
+    }
+  }
+
+  /** The Blaze Alien's flames: whatever hostile is in the cone is burned (slowed) for `t` seconds. */
+  private burn(id: string, x: number, y: number, aim: number, range: number, half: number, t: number) {
+    const inCone = (tx: number, ty: number, r: number) => {
+      const d = Math.hypot(tx - x, ty - y);
+      if (d > range + r) return false;
+      let diff = Math.atan2(ty - y, tx - x) - aim;
+      diff = Math.atan2(Math.sin(diff), Math.cos(diff));
+      return Math.abs(diff) <= half || d <= r + 8;
+    };
+    this.state.enemies.forEach((e) => {
+      if (!ENEMIES[e.kind as EnemyKind].block && inCone(e.x, e.y, this.er(e))) e.slow = Math.max(e.slow, t);
+    });
+    this.state.players.forEach((v, vid) => {
+      if (!v.dead && this.isFoe(id, vid) && inCone(v.x, v.y, this.pr(v))) v.slow = Math.max(v.slow, t);
+    });
+  }
+
   /**
    * Helpers that fight on their own: Loki's clone (a copy of him), Gadget Cat's gunner bots and
    * the Monster Tamer's pets. Each has `hpShare` of the summoner's max HP. Calling more than
@@ -1892,7 +1987,9 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
     const owner = this.state.players.get(c.owner);
     brain.cloneLife -= dt;
     // Helpers leave with their summoner: when time runs out, or when the summoner falls.
-    if (!owner || owner.dead || brain.cloneLife <= 0 || c.dead) {
+    // MITOSIS copies also vanish as soon as the real one turns back into a human.
+    const formGone = !!hero.formOf && owner?.hero !== c.hero;
+    if (!owner || owner.dead || brain.cloneLife <= 0 || c.dead || formGone) {
       this.removePlayer(id);
       return;
     }
@@ -2310,6 +2407,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       const brain = this.enemyBrains.get(id)!;
       e.hitFlash = Math.max(0, e.hitFlash - dt);
       e.big = Math.max(0, e.big - dt);
+      e.slow = Math.max(0, e.slow - dt);
       if (def.block) return; // blocks just sit there
       if (Math.abs(brain.kbx) + Math.abs(brain.kby) > 1) {
         const pushed = this.move(e.x, e.y, brain.kbx * dt, brain.kby * dt, def.radius);
@@ -2351,7 +2449,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
         dirX = -dirX;
         dirY = -dirY;
       }
-      const speed = def.speed * MOVE_SCALE * (e.big > 0 ? BIG_SLOW : 1);
+      const speed = def.speed * MOVE_SCALE * (e.big > 0 ? BIG_SLOW : 1) * (e.slow > 0 ? BURN_SLOW : 1);
       const moved = this.move(e.x, e.y, dirX * speed * dt, dirY * speed * dt, def.radius);
       const walled = this.blockAt(moved.x, moved.y, def.radius);
       if (!walled) {
@@ -2849,6 +2947,12 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
         return dist < 160;
       case "build":
         return dist < 200;
+      case "omnitrix":
+        return dist < 220;
+      case "mitosis":
+        return dist < 280 && hpLeft > 0.4; // split while there is HP to share
+      case "eat":
+        return hpLeft < 0.8;
       case "hurricane":
         return dist > 60 && dist < 220;
       default:

@@ -863,6 +863,94 @@ export const HERO_SPRITES: Record<string, PixelSprite> = {
     ],
     palette: { k: OUTLINE, o: "#f08a2a", e: OUTLINE, c: "#f6e2a0", g: "#2a8a8a", y: "#ffd400", r: "#e03a2a" },
   },
+  omni: {
+    grid: [
+      "....kkkkkkkk....",
+      "...khhhhhhhhk...",
+      "..khhhhhhhhhhk..",
+      "..khhsssssshhk..",
+      "..khseesseeshk..",
+      "..kssssssssssk..",
+      "...ksssmmsssk...",
+      "....kksssskk....",
+      "..kwwwwbbwwwwk..",
+      ".kswwwwbbwwwwsk.",
+      ".kswwwwbbwwwwsk.",
+      ".kgkwwwbbwwwksk.",
+      "..kkpppppppkk...",
+      "...kpppkpppk....",
+      "...kpppkpppk....",
+      "...kBBBkBBBk....",
+      "...kkkkkkkkk....",
+    ],
+    palette: { k: OUTLINE, h: "#6a3a1a", s: "#f0c8a0", e: "#2a8a3a", m: "#b06a50", w: "#f6f6f6", b: "#1a1a1a", g: "#3ad13a", p: "#7a8a5a", B: "#3a3a3a" },
+  },
+  blaze: {
+    grid: [
+      "...y..y...y.....",
+      "...yo.yo.yo.....",
+      "..kooyooyyok....",
+      "..koooooooook...",
+      "..kRyyRRRyyRk...",
+      "..kRRRRRRRRRk...",
+      "...kRRbbbRRk....",
+      "....kkRRRkk.....",
+      "..kRRRRooRRRRk..",
+      ".kRRbRRooRRbRRk.",
+      ".kRRkRRRRRRkRRk.",
+      ".koykRRbRRRkyok.",
+      "..kkkRRRbRRkkk..",
+      "...kRRRkRRRk....",
+      "...kRbRkRbRk....",
+      "...kRRRkRRRk....",
+      "...kkkkkkkkk....",
+    ],
+    palette: { k: OUTLINE, R: "#c0281a", b: "#4a1010", o: "#ff8a1a", y: "#ffe14a" },
+  },
+  quad: {
+    grid: [
+      "....kkkkkkkk....",
+      "...kRRRRRRRRk...",
+      "..kRyRyRRyRyRk..",
+      "..kRRRRRRRRRRk..",
+      "..kRRkbbbbkRRk..",
+      "...kRRRRRRRRk...",
+      "kkkkRRRRRRRRkkkk",
+      "kRRkbbbbbbbbkRRk",
+      "kRRkbbbbbbbbkRRk",
+      "kRkkbbbbbbbbkkRk",
+      "kRRkbbbbbbbbkRRk",
+      "kRRkyyyyyyyykRRk",
+      "kkkkRRRRRRRRkkkk",
+      "....kRRRkRRRk...",
+      "....kRRRkRRRk...",
+      "....kbbbkbbbk...",
+      "....kkkkkkkkk...",
+    ],
+    palette: { k: OUTLINE, R: "#d0302a", y: "#ffd400", b: "#1a1a1a" },
+  },
+  echo: {
+    grid: [
+      "................",
+      "................",
+      "................",
+      "....kkkkkkkk....",
+      "...kwwwwwwwwk...",
+      "...kwbbbbbbwk...",
+      "...kwbgbbgbwk...",
+      "...kwbbbbbbwk...",
+      "....kwwwwwwk....",
+      "...kwwkkkkwwk...",
+      "..kwwkwGGwkwwk..",
+      "..kwkkwGGwkkwk..",
+      "....kwwwwwwk....",
+      "....kwwkkwwk....",
+      "....kwwkkwwk....",
+      "....kkkkkkkk....",
+      "................",
+    ],
+    palette: { k: OUTLINE, w: "#f2f4f8", b: "#1a1a2a", g: "#3aff7a", G: "#8a8a9a" },
+  },
 };
 
 // Titan form: a 50m Attack Titan (drawn bigger and scaled up in game).
@@ -1660,6 +1748,20 @@ export const FIST_SHOT: PixelSprite = {
 };
 
 /** STAR SHOT: a small glowing star. */
+/** The Echo Mite's sonic blast: rings of sound. */
+export const SONIC_SHOT: PixelSprite = {
+  grid: [
+    ".ww....",
+    "..ww.c.",
+    "...w..c",
+    "...w..c",
+    "...w..c",
+    "..ww.c.",
+    ".ww....",
+  ],
+  palette: { w: "#f2f4f8", c: "#3aff7a" },
+};
+
 export const STAR_SHOT: PixelSprite = {
   grid: [
     "..y..",

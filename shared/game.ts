@@ -70,8 +70,12 @@ export type HeroId =
   | "taekwondo"
   | "theworld"
   | "steve"
-  | "swordgod";
-export type AttackStyle = "punch" | "sword" | "rifle" | "lightning" | "magic";
+  | "swordgod"
+  | "omni"
+  | "blaze"
+  | "quad"
+  | "echo";
+export type AttackStyle = "punch" | "sword" | "rifle" | "lightning" | "magic" | "flame";
 export type SkillKind =
   | "smash"
   | "wave"
@@ -133,7 +137,10 @@ export type SkillKind =
   | "biglight" // a flashlight beam: everything caught in it grows bigger (easier to hit) and slower
   | "diamond" // a diamond sword for a while: basic attacks become strong, fast, long sword swings
   | "build" // place a random block: dirt (a shield), TNT (explodes when hit) or a craft table (break it for 2x damage)
-  | "eyebeam"; // a laser from the eyes that keeps firing and follows the aim
+  | "eyebeam" // a laser from the eyes that keeps firing and follows the aim
+  | "omnitrix" // turn into a random alien for a while (no skills, except the alien's own)
+  | "mitosis" // every copy of you splits in two, sharing its HP half and half
+  | "eat"; // eat a snack: heal a share of max HP
 
 export interface SkillDef {
   kind: SkillKind;
@@ -174,6 +181,12 @@ export interface HeroDef {
   sword?: { attackCooldown: number; damage: number; range: number; arc: number };
   /** Helpers called out by skills: not shown on the hero select screen. */
   summon?: boolean;
+  /** An alien form of this hero (ALIEN TRANSFORM): not on the hero select screen; turns back when the time runs out. */
+  formOf?: HeroId;
+  /** Melee knockback, times a normal one. */
+  knock?: number;
+  /** Basic attacks slow whatever they hit for this many seconds. */
+  slowHit?: number;
 }
 
 export const HEROES: Record<HeroId, HeroDef> = {
@@ -181,7 +194,7 @@ export const HEROES: Record<HeroId, HeroDef> = {
     name: "Captain Steel",
     role: "Melee bruiser",
     blurb: "Hits hardest up close and has three times the HP.",
-    stars: 3,
+    stars: 5,
     maxHp: 300,
     speed: 100,
     attack: "punch",
@@ -220,7 +233,7 @@ export const HEROES: Record<HeroId, HeroDef> = {
     name: "Frost Sniper",
     role: "Sniper",
     blurb: "Very long range and huge damage, but slow to reload. Shots pierce. VANISH (E): invisible for 2s; monsters and rivals lose track of him.",
-    stars: 3,
+    stars: 4,
     maxHp: 90,
     speed: 105,
     attack: "rifle",
@@ -239,7 +252,7 @@ export const HEROES: Record<HeroId, HeroDef> = {
     name: "Volt Kid",
     role: "Lightning assassin",
     blurb: "Moves three times faster than anyone. Strikes call down lightning that hits an area. YOYO MODE (E): basic attacks become a yoyo that locks on and never misses (weaker, no blast); use it again to switch back.",
-    stars: 4,
+    stars: 3,
     maxHp: 100,
     speed: 320,
     attack: "lightning",
@@ -258,7 +271,7 @@ export const HEROES: Record<HeroId, HeroDef> = {
     name: "Sky Wizard",
     role: "Wizard",
     blurb: "Long-range magic orbs that explode in a wide blast. MOVING CASTLE (E) sends a giant walking castle striding the way he aims until it leaves the map: everything it walks into is hit and stunned for 1s.",
-    stars: 3,
+    stars: 4,
     maxHp: 100,
     speed: 105,
     attack: "magic",
@@ -297,7 +310,7 @@ export const HEROES: Record<HeroId, HeroDef> = {
     name: "Plain Hero",
     role: "Hobby hero",
     blurb: "FINAL BLOW ends any fight, but takes 15s to come back.",
-    stars: 4,
+    stars: 5,
     maxHp: 115,
     speed: 105,
     attack: "punch",
@@ -314,7 +327,7 @@ export const HEROES: Record<HeroId, HeroDef> = {
     name: "Holy Healer",
     role: "Support",
     blurb: "Holy bolts from afar. HEAL restores 50% HP to every ally nearby. HEAL TOTEM (E): a totem on the ground heals allies near it 5% HP every 0.5s for 5s.",
-    stars: 3,
+    stars: 4,
     maxHp: 110,
     speed: 105,
     attack: "magic",
@@ -351,7 +364,7 @@ export const HEROES: Record<HeroId, HeroDef> = {
     name: "Sakura Blade",
     role: "Swordswoman",
     blurb: "Lightning-fast sword. PHANTOM SLASH cuts everything around her again and again. SACRIFICE (E): she stabs herself for 50% of her max HP and the nearest enemy loses 50% of theirs; if both fall, the round is a draw.",
-    stars: 4,
+    stars: 3,
     maxHp: 110,
     speed: 125,
     attack: "sword",
@@ -370,7 +383,7 @@ export const HEROES: Record<HeroId, HeroDef> = {
     name: "Void Sorcerer",
     role: "Sorcerer",
     blurb: "Fights up close. VOID REALM hits every enemy on the whole map. PURPLE BEAM (E): one huge purple beam that hits everything in a long line for heavy damage.",
-    stars: 4,
+    stars: 3,
     maxHp: 140,
     speed: 115,
     attack: "punch",
@@ -407,7 +420,7 @@ export const HEROES: Record<HeroId, HeroDef> = {
     name: "Storm Mage",
     role: "Mage",
     blurb: "Casts magic bolts. HURRICANE summons a huge storm cloud that rains lightning on an area. FROST SIGIL (E) draws a magic circle on the ground: any enemy that steps on it is frozen solid for 3s.",
-    stars: 4,
+    stars: 3,
     maxHp: 100,
     speed: 105,
     attack: "magic",
@@ -446,7 +459,7 @@ export const HEROES: Record<HeroId, HeroDef> = {
     name: "Viking Kid",
     role: "Dagger warrior",
     blurb: "Quick twin-dagger slashes. DAGGER RUSH dashes forward, cutting every enemy on the way. KNIFE STORM (E): throws 12 knives out in every direction.",
-    stars: 4,
+    stars: 3,
     maxHp: 120,
     speed: 130,
     attack: "sword",
@@ -485,7 +498,7 @@ export const HEROES: Record<HeroId, HeroDef> = {
     name: "Glitch God",
     role: "Indignia God",
     blurb: "2x HP, moves 2x faster. CREATOR builds a whole city: enemies inside lose 2% HP/s, he heals 2%/s. REALITY CHANGE turns every enemy into an ordinary human for 3s.",
-    stars: 3,
+    stars: 4,
     maxHp: 200,
     speed: 210,
     attack: "magic",
@@ -524,7 +537,7 @@ export const HEROES: Record<HeroId, HeroDef> = {
     name: "Retired Hitman",
     role: "Hitman",
     blurb: "Runs 1.2x faster. Quick knife slashes. SWAP MODE pulls out a machine gun that fires very fast; use it again to go back to the knife. STICKY BOMB (E): darts up to the nearest target and sticks a bomb on it that blows them far away.",
-    stars: 3,
+    stars: 4,
     maxHp: 130,
     speed: 130,
     attack: "sword",
@@ -564,7 +577,7 @@ export const HEROES: Record<HeroId, HeroDef> = {
     name: "Mad Scientist",
     role: "Inventor",
     blurb: "Laser gun. PORTAL GUN: shoot one portal, then another; walk into one to come out of the other. MISSILES: 10 homing missiles that chase targets until they hit.",
-    stars: 4,
+    stars: 3,
     maxHp: 110,
     speed: 110,
     attack: "magic",
@@ -700,7 +713,7 @@ export const HEROES: Record<HeroId, HeroDef> = {
     name: "Time Emperor",
     role: "Time tyrant",
     blurb: "Punches incredibly fast. TRUCK SMASH stops time for 2s, then drops a truck on the spot he aimed at. He and the Chrono Brawler can move in each other's stopped time. TIME STOP (E): stops time for 4s.",
-    stars: 3,
+    stars: 4,
     maxHp: 150,
     speed: 110,
     attack: "punch",
@@ -719,7 +732,7 @@ export const HEROES: Record<HeroId, HeroDef> = {
     name: "Sword God",
     role: "Sword saint",
     blurb: "The Sword Dojo's master, now on your side. Quick forward cuts like his flurry. LIGHTNING DASH lunges ahead cutting everything on the way and ends in a full spin cut. SLASH FAN (E) throws a fan of 5 flying sword slashes.",
-    stars: 3,
+    stars: 4,
     maxHp: 130,
     speed: 120,
     attack: "sword",
@@ -739,7 +752,7 @@ export const HEROES: Record<HeroId, HeroDef> = {
     name: "Block Crafter",
     role: "Builder",
     blurb: "Weak punches. DIAMOND SWORD: 10s of strong, long, fast sword swings. BUILD (E): place a random block where you aim: dirt (blocks a hit), TNT (explodes with a huge knockback when hit) or a craft table (break it yourself for 2x damage for good).",
-    stars: 3,
+    stars: 4,
     maxHp: 120,
     speed: 112,
     attack: "punch",
@@ -758,7 +771,7 @@ export const HEROES: Record<HeroId, HeroDef> = {
     name: "Agamemnon",
     role: "King of kings",
     blurb: "2x HP, bronze sword sweeps. SUMMON GLADIATORS calls 20 gladiators (10% of his HP each) to fight for 20 seconds. TROJAN HORSE (E): a wooden horse counts down 10s, then bursts open in a huge blast.",
-    stars: 3,
+    stars: 4,
     maxHp: 220,
     speed: 105,
     attack: "sword",
@@ -777,7 +790,7 @@ export const HEROES: Record<HeroId, HeroDef> = {
     name: "Vampire",
     role: "Night hunter",
     blurb: "Quick claw swipes. BLOOD LATCH leaps onto the nearest target in front, clings to it for 3s and drains its blood to heal. BAT FORM (E): 6s as a bat: attacks come about 3x as fast and heal 25% of the damage dealt.",
-    stars: 3,
+    stars: 2,
     maxHp: 120,
     speed: 130,
     attack: "sword",
@@ -797,7 +810,7 @@ export const HEROES: Record<HeroId, HeroDef> = {
     name: "Hopper Rider",
     role: "Masked hero",
     blurb: "1.5x HP, runs 1.5x faster, very fast punches. RIDER KICK leaps into a flying kick that stuns everything it hits for 2s. MOTORCYCLE (E): rides for 4s, 2.2x faster; whoever he rams is stunned 1s and knocked back.",
-    stars: 4,
+    stars: 3,
     maxHp: 165,
     speed: 165,
     attack: "punch",
@@ -887,6 +900,84 @@ export const HEROES: Record<HeroId, HeroDef> = {
     shot: "dragonfire",
     skill: { kind: "passive", name: "", cooldown: 1, damage: 0, radius: 0 },
   },
+  omni: {
+    name: "Omni Kid",
+    role: "Alien shifter",
+    blurb: "A kid with an alien watch. ALIEN TRANSFORM: turn into a random alien for 10s (no skills while an alien, except Echo Mite's MITOSIS): Blaze Alien (flamethrower that burns and slows), Quad Brute (fast, huge HP, crushing punches that knock far) or Echo Mite (long-range sonic blasts; MITOSIS splits every copy in two, sharing HP). SNACK (E): eat to heal 10% HP.",
+    stars: 4,
+    maxHp: 110,
+    speed: 112,
+    attack: "punch",
+    attackCooldown: 0.4,
+    damage: 20,
+    range: 22,
+    arc: 1.4,
+    aoe: 0,
+    shotSpeed: 0,
+    pierce: 0,
+    // ALIEN TRANSFORM: `duration` seconds as a random alien; `cooldown` counts from turning back.
+    skill: { kind: "omnitrix", name: "ALIEN TRANSFORM", cooldown: 8, damage: 0, radius: 0, duration: 10 },
+    // SNACK: heal `damage` of max HP.
+    skill2: { kind: "eat", name: "SNACK", cooldown: 10, damage: 0.1, radius: 0 },
+  },
+  blaze: {
+    name: "Blaze Alien",
+    role: "Alien form",
+    blurb: "",
+    stars: 3,
+    formOf: "omni",
+    maxHp: 110,
+    speed: 112,
+    attack: "flame",
+    attackCooldown: 0.12,
+    damage: 6,
+    range: 80,
+    arc: 0.7,
+    aoe: 0,
+    shotSpeed: 0,
+    pierce: 0,
+    slowHit: 1.2,
+    skill: { kind: "passive", name: "ALIEN", cooldown: 1, damage: 0, radius: 0 },
+  },
+  quad: {
+    name: "Quad Brute",
+    role: "Alien form",
+    blurb: "",
+    stars: 3,
+    formOf: "omni",
+    maxHp: 275,
+    speed: 150,
+    attack: "punch",
+    attackCooldown: 0.28,
+    damage: 34,
+    range: 28,
+    arc: 1.8,
+    aoe: 0,
+    shotSpeed: 0,
+    pierce: 0,
+    knock: 3,
+    skill: { kind: "passive", name: "ALIEN", cooldown: 1, damage: 0, radius: 0 },
+  },
+  echo: {
+    name: "Echo Mite",
+    role: "Alien form",
+    blurb: "",
+    stars: 3,
+    formOf: "omni",
+    maxHp: 90,
+    speed: 118,
+    attack: "magic",
+    attackCooldown: 0.45,
+    damage: 12,
+    range: 260,
+    arc: 0,
+    aoe: 30,
+    shotSpeed: 320,
+    pierce: 0,
+    shot: "sonic",
+    // MITOSIS: every copy splits in two (each keeps half its HP), up to `count` copies in all.
+    skill: { kind: "mitosis", name: "MITOSIS", cooldown: 2, damage: 0, radius: 0, count: 16 },
+  },
 };
 
 /** Every hero has this many times the HP written above (user request 2026-10-03: triple HP, nothing else changed). */
@@ -898,54 +989,55 @@ for (const def of Object.values(HEROES)) def.maxHp *= HP_SCALE;
  * The character select shows them in this order. Heroes missing here go at the end.
  */
 const PVP_RANKING: HeroId[] = [
-  "steve", "ricardo", "loki", "superman", "hanuman", "sakamoto", "simo", "vampire", "theworld", "healer",
-  "badigadi", "agamemnon", "swordgod", "doraemon", "yaotsu", "howl", "titan", "rider", "thorfinn", "okita",
-  "rudeus", "joyboy", "isekai", "trainer", "deku", "taekwondo", "rick", "gojo", "starplatinum", "killua",
-  "kid", "saitama", "lawliet",
+  "vampire", "badigadi", "rudeus", "rick", "gojo", "killua", "ricardo", "rider", "loki", "thorfinn",
+  "doraemon", "titan", "hanuman", "okita", "joyboy", "lawliet", "trainer", "theworld", "yaotsu", "kid",
+  "agamemnon", "swordgod", "starplatinum", "taekwondo", "simo", "omni", "howl", "isekai", "steve", "deku",
+  "healer", "sakamoto", "saitama", "superman",
 ];
 export const HERO_IDS = [
   ...PVP_RANKING,
   ...(Object.keys(HEROES) as HeroId[]).filter((id) => !PVP_RANKING.includes(id)),
-].filter((id) => !HEROES[id].summon);
+].filter((id) => !HEROES[id].summon && !HEROES[id].formOf);
 
 /**
  * Balance pass (user request 2026-10-03): everything a hero (and its summons) hits for is multiplied by this.
  * Tuned from bot duels so no hero wins far more or far less than half its PvP fights.
  */
 export const DAMAGE_BALANCE: Partial<Record<HeroId, number>> = {
-  steve: 2.62,
-  ricardo: 0.68,
-  loki: 1.09,
-  superman: 0.67,
-  hanuman: 1.06,
-  sakamoto: 1.47,
-  simo: 0.38,
-  vampire: 1.35,
-  theworld: 1.5,
-  healer: 2.71,
-  badigadi: 0.33,
-  agamemnon: 0.95,
-  swordgod: 1.17,
-  doraemon: 0.8,
-  yaotsu: 0.52,
-  howl: 3.07,
-  titan: 1.2,
-  rider: 0.86,
-  thorfinn: 2.3,
-  okita: 1.24,
-  rudeus: 1.77,
-  joyboy: 1.43,
-  isekai: 1.82,
-  trainer: 8.28,
-  deku: 1.68,
-  taekwondo: 1.36,
-  rick: 1.69,
-  gojo: 1.53,
+  vampire: 1.28,
+  badigadi: 0.32,
+  rudeus: 1.76,
+  rick: 1.65,
+  gojo: 1.5,
+  killua: 2.06,
+  ricardo: 0.67,
+  rider: 0.85,
+  loki: 1.07,
+  thorfinn: 2.28,
+  doraemon: 0.78,
+  titan: 1.19,
+  hanuman: 1.03,
+  okita: 1.21,
+  joyboy: 1.41,
+  lawliet: 4.83,
+  trainer: 8.18,
+  theworld: 1.44,
+  yaotsu: 0.5,
+  kid: 1.63,
+  agamemnon: 0.93,
+  swordgod: 1.15,
   starplatinum: 1.56,
-  killua: 2.1,
-  kid: 1.69,
+  taekwondo: 1.33,
+  simo: 0.38,
+  omni: 3.81,
+  howl: 3.06,
+  isekai: 1.8,
+  steve: 2.71,
+  deku: 1.67,
+  healer: 2.64,
+  sakamoto: 1.46,
   saitama: 0.05,
-  lawliet: 4.9,
+  superman: 0.68,
 };
 
 export function heroOf(id: string): HeroDef {
@@ -1121,10 +1213,13 @@ export function movesInStoppedTime(hero: string): boolean {
 }
 
 /** How fast a hero runs right now (BIG LIGHT slows, the Hopper Rider's motorcycle speeds up). */
-export function heroSpeed(p: { hero: string; big: number; active2?: number }): number {
+/** Burned by the Blaze Alien's flamethrower: moves this much slower. */
+export const BURN_SLOW = 0.55;
+
+export function heroSpeed(p: { hero: string; big: number; active2?: number; slow?: number }): number {
   const hero = heroOf(p.hero);
   const bike = (p.active2 ?? 0) > 0 && hero.skill2?.kind === "bike" ? hero.skill2.width ?? 2 : 1;
-  return hero.speed * MOVE_SCALE * (p.big > 0 ? BIG_SLOW : 1) * bike;
+  return hero.speed * MOVE_SCALE * (p.big > 0 ? BIG_SLOW : 1) * ((p.slow ?? 0) > 0 ? BURN_SLOW : 1) * bike;
 }
 
 /** The boxing ring the PvP Arena and Bot Duel are fought in: a small square with no cover. */

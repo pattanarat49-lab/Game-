@@ -68,7 +68,7 @@ interface PlayerView {
 
 /** A short-lived swing, slash or shockwave drawn on top of the world. */
 interface Effect {
-  kind: "punch" | "sword" | "smash" | "muzzle" | "bolt" | "storm" | "blast" | "impact" | "heal" | "line" | "slashes" | "ripple" | "jab" | "gatling" | "rewind" | "kick" | "tkick" | "biglight" | "spinkick" | "purple";
+  kind: "punch" | "sword" | "smash" | "muzzle" | "bolt" | "storm" | "blast" | "impact" | "heal" | "line" | "slashes" | "ripple" | "jab" | "gatling" | "rewind" | "kick" | "tkick" | "biglight" | "spinkick" | "purple" | "flame";
   x: number;
   y: number;
   aim: number;
@@ -103,9 +103,10 @@ const BULLET_TEXTURE: Record<string, string> = {
   knife: "knife",
   fist: "fist",
   star: "starshot",
+  sonic: "sonic",
 };
 /** Summons drawn bigger than their pixel art. */
-const SUMMON_SCALE: Record<string, number> = { flamedragon: 1.4 };
+const SUMMON_SCALE: Record<string, number> = { flamedragon: 1.4, quad: 1.25, echo: 0.85 };
 const PLAYER_MARKERS = [0x3b7dd8, 0xd84b3b, 0x3bd87a, 0xc93bd8];
 
 interface EnemyView {
@@ -554,6 +555,11 @@ export class GameScene extends Phaser.Scene {
     state.players.forEach((p: any, id: string) => {
       seen.add(id);
       let view = this.players.get(id);
+      // ALIEN TRANSFORM (in or out): a green flash where the hero stands.
+      if (view && view.heroId !== p.hero && (heroOf(p.hero).formOf || heroOf(view.heroId).formOf)) {
+        this.effects.push({ kind: "smash", x: view.body.x, y: view.body.y, aim: 0, range: 34, arc: Math.PI * 2, age: 0, life: 0.35 });
+        this.sparks.explode(30, view.body.x, view.body.y - 8);
+      }
       if (view && view.heroId !== p.hero) {
         this.destroyView(view);
         this.players.delete(id);
@@ -1108,6 +1114,15 @@ export class GameScene extends Phaser.Scene {
       case "totem":
         this.effects.push({ kind: "heal", x, y: y + 5, aim, range: 30, arc: 0, age: 0, life: 0.5 });
         break;
+      case "eat":
+        // SNACK: a quick bite and some HP back.
+        this.effects.push({ kind: "heal", x, y: y + 5, aim, range: 22, arc: 0, age: 0, life: 0.4 });
+        break;
+      case "mitosis":
+        this.effects.push({ kind: "ripple", x, y, aim, range: 26, arc: 0, age: 0, life: 0.25 });
+        break;
+      case "omnitrix":
+        break; // the green flash plays when the view swaps to the alien
       case "palm":
         break; // the palm falls in the zone drawing
       case "doves":
@@ -1166,7 +1181,16 @@ export class GameScene extends Phaser.Scene {
         e.x = e.follow.body.x;
         e.y = e.follow.body.y - 5;
       }
-      if (e.kind === "punch") {
+      if (e.kind === "flame") {
+        // Flamethrower: a flickering cone of fire.
+        for (let i = 0; i < 12; i++) {
+          const d = e.range * (0.12 + 0.88 * Math.random());
+          const a = e.aim + (Math.random() - 0.5) * e.arc;
+          const color = [0xffe14a, 0xff8a1a, 0xe0401a][Math.floor(Math.random() * 3)];
+          g.fillStyle(color, 0.85 * (1 - t));
+          g.fillCircle(e.x + Math.cos(a) * d, e.y + Math.sin(a) * d, (2 + (d / e.range) * 5) * (1 - t * 0.5));
+        }
+      } else if (e.kind === "punch") {
         const r = e.range * (0.6 + 0.4 * t);
         g.fillStyle(0xffffff, 0.8 * (1 - t));
         g.fillCircle(e.x + Math.cos(e.aim) * r, e.y + Math.sin(e.aim) * r, 6 * (1 - t) + 2);
@@ -2051,6 +2075,7 @@ export class GameScene extends Phaser.Scene {
         if (b.kind === "godslash") sprite.setScale(1.1); // his own slashes look like the heroes' sword waves, not the boss's red ones
         if (b.kind === "fireball") sprite.setScale(1.6);
         if (b.kind === "stone") sprite.setScale(1.2);
+        if (b.kind === "sonic") sprite.setScale(1.3).setRotation(Math.atan2(b.vy, b.vx));
         if (b.kind === "boulder") sprite.setScale(1.6);
         this.bullets.set(id, sprite);
       }

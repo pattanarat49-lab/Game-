@@ -78,17 +78,24 @@ export class HudScene extends Phaser.Scene {
       const dash = me.dashCooldown > 0 ? `${me.dashCooldown.toFixed(1)}s` : "READY";
       const hero = heroOf(me.hero);
       // Lasting effects count for the skill that made them (a latch can be the Giant Shifter's wire, a barrier the doves).
-      const active1 = Math.max(me.titan, hero.skill.kind === "immortal" ? me.barrier : 0, me.revive, hero.skill.kind === "latch" ? me.latch : 0, me.buff ?? 0);
+      const active1 = Math.max(me.titan, hero.skill.kind === "immortal" ? me.barrier : 0, me.revive, hero.skill.kind === "latch" ? me.latch : 0, hero.formOf ? 0 : me.buff ?? 0);
       const active2 = Math.max(me.beam, hero.skill2?.kind === "doves" ? me.barrier : 0, me.active2 ?? 0);
       const skill = hero.skill.kind === "swap" ? `NOW ${me.mode === 1 ? "GUN" : "KNIFE"}` : hero.skill.kind === "passive" ? "PASSIVE" : active1 > 0 ? `ACTIVE ${active1.toFixed(1)}s` : me.skillCooldown > 0 ? `${me.skillCooldown.toFixed(1)}s` : "READY";
       const lines = [`DASH   ${dash}`, `${hero.skill.name.padEnd(6)} ${skill}`];
+      // ALIEN TRANSFORM: how long until the alien turns back into the kid.
+      const formLeft = hero.formOf ? `ALIEN  BACK IN ${(me.buff ?? 0).toFixed(1)}s` : "";
+      if (hero.formOf && hero.skill.kind === "passive") lines[1] = formLeft;
+      else if (hero.formOf) lines.push(formLeft);
       const skill2Ready = hero.skill2 ? 1 - me.skill2Cooldown / hero.skill2.cooldown : 1;
       if (hero.skill2) lines.push(`${hero.skill2.name.padEnd(6)} ${hero.skill2.kind === "yoyo" ? `NOW ${me.mode === 1 ? "YOYO" : "BOLT"}` : active2 > 0 ? `ACTIVE ${active2.toFixed(1)}s` : me.skill2Cooldown > 0 ? `${me.skill2Cooldown.toFixed(1)}s` : "READY"}`);
       if ((me.power ?? 1) > 1) lines.push(`DMG x${me.power}  (CRAFTED)`);
       this.skills.setText(lines.join("\n"));
       const barX = Math.max(220, 20 + this.skills.width + 12);
       this.drawCooldown(barX, 68, 1 - me.dashCooldown / DASH_COOLDOWN);
-      this.drawCooldown(barX, 84, 1 - me.skillCooldown / hero.skill.cooldown);
+      const formTime = hero.formOf ? heroOf(hero.formOf).skill.duration ?? 10 : 10;
+      if (hero.formOf && hero.skill.kind === "passive") this.drawCooldown(barX, 84, (me.buff ?? 0) / formTime);
+      else this.drawCooldown(barX, 84, 1 - me.skillCooldown / hero.skill.cooldown);
+      if (hero.formOf && hero.skill.kind !== "passive") this.drawCooldown(barX, 100, (me.buff ?? 0) / formTime);
       if (hero.skill2) this.drawCooldown(barX, 100, skill2Ready);
       this.touch?.draw(1 - me.skillCooldown / hero.skill.cooldown, 1 - me.dashCooldown / DASH_COOLDOWN, skill2Ready);
     }

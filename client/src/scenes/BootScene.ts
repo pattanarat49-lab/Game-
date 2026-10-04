@@ -20,6 +20,7 @@ import {
   KNIFE_SHOT,
   FIST_SHOT,
   STAR_SHOT,
+  SONIC_SHOT,
   TROJAN_HORSE,
   HEAL_TOTEM,
   GIANT_PALM,
@@ -159,6 +160,7 @@ export class BootScene extends Phaser.Scene {
     this.addCanvas("knife", renderPixelSprite(KNIFE_SHOT));
     this.addCanvas("fist", renderPixelSprite(FIST_SHOT));
     this.addCanvas("starshot", renderPixelSprite(STAR_SHOT));
+    this.addCanvas("sonic", renderPixelSprite(SONIC_SHOT));
     this.addCanvas("gladius", renderPixelSprite(GLADIUS));
     this.addCanvas("raygun", renderPixelSprite(RAYGUN));
     this.addCanvas("pistol", renderPixelSprite(PISTOL));
