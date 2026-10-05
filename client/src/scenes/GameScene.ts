@@ -206,6 +206,9 @@ export function serverUrl(): string {
   return location.port === "5173" ? `${proto}://${location.hostname}:${SERVER_PORT}` : `${proto}://${location.host}`;
 }
 
+/** Frames in each PORTAL GUN animation (art/props/portalblue_N.png, portalpink_N.png). */
+const PORTAL_FRAMES = 9;
+
 export class GameScene extends Phaser.Scene {
   room?: Room<any> | LocalRoom;
   private players = new Map<string, PlayerView>();
@@ -2111,16 +2114,15 @@ export class GameScene extends Phaser.Scene {
         }
         img.setAlpha(0.92 * fade);
       } else if (z.kind === "portalA" || z.kind === "portalB") {
-        // PORTAL GUN: a swirling green-edged portal (blue in, orange out).
-        const inner = z.kind === "portalA" ? 0x3aa8ff : 0xff9a2a;
-        const spin = now / 150;
-        floor.fillStyle(0x0a1a10, 0.8 * fade).fillEllipse(z.x, z.y, z.radius * 2, z.radius * 1.3);
-        floor.fillStyle(inner, 0.6 * fade).fillEllipse(z.x, z.y, z.radius * 1.5, z.radius);
-        floor.lineStyle(3, 0x4aff7a, fade).strokeEllipse(z.x, z.y, z.radius * 2, z.radius * 1.3);
-        for (let i = 0; i < 4; i++) {
-          const a = spin + (i * Math.PI) / 2;
-          floor.fillStyle(0xe8ffe8, fade).fillRect(z.x + Math.cos(a) * z.radius * 0.55 - 1, z.y + Math.sin(a) * z.radius * 0.35 - 1, 2, 2);
+        // PORTAL GUN: the user's swirling portal animations (blue in, pink out), standing on a glow on the ground.
+        const color = z.kind === "portalA" ? "portalblue" : "portalpink";
+        floor.fillStyle(z.kind === "portalA" ? 0x3aa8ff : 0xff3ad8, 0.3 * fade).fillEllipse(z.x, z.y, z.radius * 2, z.radius * 0.8);
+        let img = this.zoneImages.get(id);
+        if (!img) {
+          img = this.add.image(z.x, z.y, `${color}_0`).setOrigin(0.5, 0.85).setDepth(z.y);
+          this.zoneImages.set(id, img);
         }
+        img.setTexture(`${color}_${Math.floor(now / 100) % PORTAL_FRAMES}`).setAlpha(fade);
       } else if (z.kind === "rewind") {
         floor.fillStyle(0x2a4aa0, 0.25 * fade).fillRect(0, 0, WORLD_W, WORLD_H);
       } else if (z.kind === "revive") {

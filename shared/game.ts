@@ -591,7 +591,7 @@ export const HEROES: Record<HeroId, HeroDef> = {
   rick: {
     name: "Mad Scientist",
     role: "Inventor",
-    blurb: "Laser gun. PORTAL GUN: shoot one portal, then another; walk into one to come out of the other. MISSILES: 10 homing missiles that chase targets until they hit.",
+    blurb: "Laser gun. PORTAL GUN: shoot one portal, then another; walk into one to come out of the other (only he can use them). MISSILES: 10 homing missiles that chase targets until they hit.",
     stars: 4,
     maxHp: 110,
     speed: 110,

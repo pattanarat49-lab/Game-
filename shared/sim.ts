@@ -1998,13 +1998,13 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
     p.skillCooldown = 0.4;
   }
 
-  /** Anyone who walks into a linked portal comes out of its partner. */
-  private usePortal(zid: string, z: Z, link: string) {
+  /** The portals' owner (only he can use them) walks into a linked portal and comes out of its partner. */
+  private usePortal(zid: string, z: Z, link: string, owner: string) {
     const out = this.state.zones.get(link);
     if (!out) return;
     this.state.players.forEach((p, pid) => {
       const brain = this.brains.get(pid);
-      if (!brain || p.dead) return;
+      if (!brain || p.dead || pid !== owner) return;
       const d = Math.hypot(p.x - z.x, p.y - z.y);
       if (brain.portalLock === zid) {
         if (d > PORTAL_REACH + 10) brain.portalLock = undefined; // stepped off: it works again
@@ -2253,7 +2253,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       if (!brain || (onlyOwner && !onlyOwner.has(brain.owner))) return;
       z.life -= dt;
       brain.tick -= dt;
-      if (brain.link) this.usePortal(id, z, brain.link);
+      if (brain.link) this.usePortal(id, z, brain.link, brain.owner);
       if (z.kind === "castle") this.walkCastle(z, brain, dt);
       if (z.kind === "frost") this.frostSigil(z, brain);
       if ((z.kind === "sticky" || z.kind === "whip") && brain.stick) {
