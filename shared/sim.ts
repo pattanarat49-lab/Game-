@@ -1012,7 +1012,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
     };
   }
 
-  private fxLaneZone(owner: string, look: string, color: string, x: number, y: number, angle: number, len: number, width: number, life = 0.35) {
+  private fxLaneZone(owner: string, look: string, color: string, x: number, y: number, angle: number, len: number, width: number, life = 0.45) {
     this.addZone(`fxl:${look}:${color}:${angle.toFixed(3)}:${Math.round(len)}:${Math.round(width)}`, x, y, len, life, { owner, every: Infinity, damage: 0 });
   }
 
@@ -1053,12 +1053,12 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       }
       case "lane":
         this.fxArea(id, this.laneTest(p.x, p.y, aim, st.len, st.width), st, { x: p.x, y: p.y }, aim);
-        this.fxLaneZone(id, st.look ?? "beam", st.color, p.x, p.y, aim, st.len, st.width, 0.4);
+        this.fxLaneZone(id, st.look ?? "beam", st.color, p.x, p.y, aim, st.len, st.width, 0.55);
         if (st.knock || st.dmg) this.cutBulletsInLane(id, p.x, p.y, aim, st.len, st.width);
         break;
       case "ring":
         this.fxArea(id, (x, y, r) => Math.hypot(x - p.x, y - p.y) <= st.radius + r, st, { x: p.x, y: p.y });
-        this.addZone(`fx:${st.look ?? "burst"}:${st.color}`, p.x, p.y, st.radius, 0.45, { owner: id, every: Infinity, damage: 0 });
+        this.addZone(`fx:${st.look ?? "burst"}:${st.color}`, p.x, p.y, st.radius, 0.55, { owner: id, every: Infinity, damage: 0 });
         break;
       case "cone": {
         const inCone = (x: number, y: number, r: number) => {
