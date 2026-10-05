@@ -113,8 +113,9 @@ const ORBIT_REHIT = 0.4;
 const STAR_SPEED = 520;
 const STAR_GAP = 0.06;
 /** RUBBER PUNCH: how fast the fist flies out and snaps back. */
-const FIST_SPEED = 340;
-const FIST_RETURN = 560;
+const FIST_SPEED = 1600; // fast stretch (user request 2026-10-05)
+const FIST_REACH = 230;
+const FIST_RETURN = 900;
 const ONE_PUNCH_DAMAGE = 1e9; // "infinity", but still a number the network can send
 const MAX_CLONES = 2;
 export const TITAN_ATTACK_COOLDOWN = 0.6;
@@ -385,7 +386,7 @@ interface BulletBrain {
   homing?: boolean; // missiles steer toward the nearest target
   age?: number;
   pct?: number; // DRAW CARD: takes this share of the target's max HP instead of `damage`
-  /** RUBBER PUNCH: bounces off walls until `back` seconds old, then flies home to its owner. */
+  /** RUBBER PUNCH: flies out until `back` seconds old (or a wall), then flies home to its owner. */
   bounce?: boolean;
   back?: number;
   /** POWER SHOT: stuns whatever it hits for this many seconds. */
@@ -1954,10 +1955,10 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
         break;
       }
       case "rubberpunch": {
-        // RUBBER PUNCH: the arm stretches out, the fist ricochets around, then it all snaps back.
-        const t = skill.duration ?? 3;
-        const bid = this.spawnBullet("fist", p.x, p.y, p.aim, FIST_SPEED, { owner: id, damage: skill.damage, pierce: 999, life: t + 3 });
-        Object.assign(this.bulletBrains.get(bid)!, { bounce: true, back: t, age: 0 });
+        // RUBBER PUNCH: the arm shoots out fast to FIST_REACH and snaps back; anyone it hits is stunned for 1s.
+        const out = FIST_REACH / (FIST_SPEED * SHOT_SPEED_SCALE * HERO_SHOT_SCALE);
+        const bid = this.spawnBullet("fist", p.x, p.y, p.aim, FIST_SPEED, { owner: id, damage: skill.damage, pierce: 999, life: out + 3 });
+        Object.assign(this.bulletBrains.get(bid)!, { bounce: true, back: out, age: 0, stun: 1 });
         break;
       }
       case "purple":
@@ -3284,14 +3285,13 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       b.vy = (dy / d) * FIST_RETURN;
       return false;
     }
-    const out = (x: number, y: number) => x < 4 || y < 4 || x > WORLD_W - 4 || y > WORLD_H - 4 || this.blocked(x, y);
-    if (out(b.x + b.vx * dt, b.y)) {
-      b.vx = -b.vx;
-      brain.hit.clear();
-    }
-    if (out(b.x, b.y + b.vy * dt)) {
-      b.vy = -b.vy;
-      brain.hit.clear();
+    // A wall stops the fist (no more bouncing): it snaps straight back.
+    const nx = b.x + b.vx * dt;
+    const ny = b.y + b.vy * dt;
+    if (nx < 4 || ny < 4 || nx > WORLD_W - 4 || ny > WORLD_H - 4 || this.blocked(nx, ny)) {
+      brain.age = brain.back ?? 0;
+      b.vx = 0;
+      b.vy = 0;
     }
     return false;
   }

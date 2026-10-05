@@ -604,7 +604,7 @@ export const HEROES: Record<HeroId, HeroDef> = {
   joyboy: {
     name: "Rubber Pirate",
     role: "Rubber brawler",
-    blurb: "1.5x HP. Stretchy punches reach further. GATLING PUNCH fires a storm of fists down a medium-range lane. RUBBER PUNCH (E): a stretching fist bounces off walls and through everything for 3s, then snaps back.",
+    blurb: "1.5x HP. Stretchy punches reach further. GATLING PUNCH fires a storm of fists down a medium-range lane. RUBBER PUNCH (E): the arm shoots out fast; anyone the fist hits is stunned for 1s, then it snaps back.",
     stars: 4,
     maxHp: 180,
     speed: 110,
@@ -618,7 +618,7 @@ export const HEROES: Record<HeroId, HeroDef> = {
     pierce: 0,
     // GATLING PUNCH: `damage` per hit, every 0.1s for `duration`, in a lane `radius` long and `width` wide.
     skill: { kind: "gatling", name: "GATLING PUNCH", cooldown: 6, damage: 14, radius: 110, width: 40, duration: 1 },
-    // RUBBER PUNCH: the fist bounces around for `duration` seconds, then snaps back.
+    // RUBBER PUNCH: a fast stretching punch that stuns for 1s, then snaps back.
     skill2: { kind: "rubberpunch", name: "RUBBER PUNCH", cooldown: 10, damage: 40, radius: 0, duration: 3 },
   },
   rick: {
