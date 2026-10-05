@@ -64,6 +64,7 @@ import {
   formFromAim,
   MOVE_SCALE,
   SHOT_SPEED_SCALE,
+  HERO_SHOT_SCALE,
   DAMAGE_BALANCE,
   HeroId,
   hitsRock,
@@ -116,6 +117,7 @@ const FIST_RETURN = 560;
 const ONE_PUNCH_DAMAGE = 1e9; // "infinity", but still a number the network can send
 const MAX_CLONES = 2;
 export const TITAN_ATTACK_COOLDOWN = 0.6;
+const SHOT_HIT_SLACK = 3;
 const BULLET_CUT_SLACK = 8; // shots are small and fast, so melee reaches them a little further out
 const ENEMY = "#enemy"; // attacker id for damage dealt by monsters
 const CLONE_SIGHT = 300;
@@ -2360,7 +2362,12 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       }
       cut.push(id);
     });
-    for (const id of cut) this.removeBullet(id);
+    for (const id of cut) {
+      // A spark where the shot was knocked away, so the parry can be seen.
+      const b = this.state.bullets.get(id)!;
+      this.addZone("parry", b.x, b.y, 10, 0.3, { owner, every: Infinity, damage: 0 });
+      this.removeBullet(id);
+    }
   }
 
   /** Push an enemy away along (dx, dy). */
@@ -2885,15 +2892,17 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
     opts: { owner?: string; damage: number; pierce: number; life: number; blast?: number },
   ) {
     // Slower shots, same reach (homing missiles and the rubber fist keep their own timers).
-    speed *= SHOT_SPEED_SCALE;
-    const life = kind === "missile" || kind === "fist" ? opts.life : opts.life / SHOT_SPEED_SCALE;
+    const hostileShot = kind === "enemy" || kind === "banana" || kind === "boulder" || kind === "slash";
+    const scale = SHOT_SPEED_SCALE * (hostileShot ? 1 : HERO_SHOT_SCALE); // heroes' shots are slower still
+    speed *= scale;
+    const life = kind === "missile" || kind === "fist" ? opts.life : opts.life / scale;
     const b = this.make.bullet();
     b.kind = kind;
     b.x = x;
     b.y = y;
     b.vx = Math.cos(angle) * speed;
     b.vy = Math.sin(angle) * speed;
-    b.hostile = kind === "enemy" || kind === "banana" || kind === "boulder" || kind === "slash";
+    b.hostile = hostileShot;
     const id = `b${this.nextId++}`;
     this.state.bullets.set(id, b);
     this.bulletBrains.set(id, { owner: opts.owner, damage: opts.damage, pierceLeft: opts.pierce, life, hit: new Set(), blast: opts.blast ?? 0 });
@@ -2940,7 +2949,8 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
         return;
       }
 
-      const hitRadius = b.kind === "fist" ? 7 : b.kind === "wave" ? 14 : b.kind === "godslash" ? 8 : b.kind === "fireball" ? 8 : b.kind === "missile" || b.kind.startsWith("card") ? 5 : 2;
+      // Heroes' shots hit a little generously, so fights between heroes connect more often.
+      const hitRadius = SHOT_HIT_SLACK + (b.kind === "fist" ? 7 : b.kind === "wave" ? 14 : b.kind === "godslash" ? 8 : b.kind === "fireball" ? 8 : b.kind === "missile" || b.kind.startsWith("card") ? 5 : 2);
       if (this.pvpLive()) {
         s.players.forEach((v, vid) => {
           if (!s.bullets.has(id) || !this.isFoe(brain.owner, vid) || v.dead || brain.hit.has(vid)) return;

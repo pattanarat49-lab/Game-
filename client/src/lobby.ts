@@ -4,7 +4,7 @@
 // PvE Squad uses the same screen with four player slots (1P-4P), a small bot slot at the top centre
 // (tap it, then a hero, to choose who the bot plays) and the bot's difficulty under it.
 
-import { BOT_LEVELS, HEROES, HERO_IDS, HeroId, heroOf } from "../../shared/game";
+import { BOT_LEVELS, HEROES, HERO_IDS, HeroId, heroOf, heroRatings } from "../../shared/game";
 import { HERO_SPRITES, renderPixelSprite } from "./art";
 import { heroPortrait } from "./heroArt";
 
@@ -24,6 +24,11 @@ const CSS = `
 #lobby .side .who { font-size: clamp(7px, 1.6vh, 11px); color: #c9b8c0; text-align: center; overflow-wrap: anywhere; }
 #lobby .side canvas { width: min(18vh, 16vw); height: auto; image-rendering: pixelated; }
 #lobby .side .hname { font-size: clamp(9px, 2.4vh, 16px); color: #ffd23f; text-align: center; }
+#lobby .side .rates { display: grid; grid-template-columns: auto 1fr auto; gap: 2px 4px; align-items: center; width: 92%;
+  font-size: clamp(5px, 1.2vh, 8px); color: #c9b8c0; }
+#lobby .side .rates b { height: 5px; background: #ffd23f; border-radius: 2px; }
+#lobby .side .rates i { font-style: normal; color: #fff; }
+#lobby .col .side .rates { width: 80%; gap: 1px 3px; }
 #lobby .side .status { font-size: clamp(7px, 1.8vh, 12px); padding: 0.6vh 0.8vw; border-radius: 4px; background: #2a2440; }
 #lobby .side .status:empty { display: none; }
 #lobby .side .status.ready { background: #2fae6a; color: #fff; }
@@ -84,6 +89,7 @@ interface Side {
   art: HTMLCanvasElement;
   hero: HTMLElement;
   status: HTMLElement;
+  rates: HTMLElement;
   shown?: string;
 }
 
@@ -204,13 +210,14 @@ export class Lobby {
   private side(cls: string, tag: string): Side {
     const root = document.createElement("div");
     root.className = `side ${cls}`;
-    root.innerHTML = `<div class="tag">${tag}</div><div class="who"></div><canvas></canvas><div class="hname"></div><div class="status"></div>`;
+    root.innerHTML = `<div class="tag">${tag}</div><div class="who"></div><canvas></canvas><div class="hname"></div><div class="rates"></div><div class="status"></div>`;
     return {
       root,
       who: root.querySelector(".who")!,
       art: root.querySelector("canvas")!,
       hero: root.querySelector(".hname")!,
       status: root.querySelector(".status")!,
+      rates: root.querySelector(".rates")!,
     };
   }
 
@@ -315,6 +322,12 @@ export class Lobby {
         side.art.height = 18;
       }
       side.hero.textContent = hero ? heroOf(hero).name : "";
+      const r = hero ? heroRatings(hero) : undefined;
+      side.rates.innerHTML = r
+        ? [["HP", r.hp], ["DMG", r.damage], ["ATK SPD", r.speed], ["RANGE", r.range]]
+            .map(([k, v]) => `<span>${k}</span><b style="width:${(v as number) * 10}%"></b><i>${v}</i>`)
+            .join("")
+        : "";
     }
     side.status.textContent = !p ? "" : p.ready ? "READY!" : "PICKING...";
     side.status.classList.toggle("ready", !!p?.ready);

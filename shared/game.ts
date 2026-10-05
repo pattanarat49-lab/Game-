@@ -25,6 +25,10 @@ export const BIG_SLOW = 0.5;
 export const MOVE_SCALE = 0.8;
 /** Flying speed of every shot (heroes' and monsters'), times its listed speed; shots live longer to keep their reach. */
 export const SHOT_SPEED_SCALE = 0.55;
+/** Heroes' own shots fly slower still (user request 2026-10-05), with the same reach. */
+export const HERO_SHOT_SCALE = 0.75;
+/** Every hero walks at the same pace (user request 2026-10-05); only the Speed Raptor and the motorcycle go faster. */
+export const HERO_WALK = 90;
 export const DASH_SPEED = 340;
 export const DASH_TIME = 0.15;
 // Melee basic attacks (punch and sword heroes) knock enemies and rival players back. Bosses don't budge.
@@ -202,7 +206,7 @@ export const HEROES: Record<HeroId, HeroDef> = {
     name: "Captain Steel",
     role: "Melee bruiser",
     blurb: "Hits hardest up close and has three times the HP.",
-    stars: 5,
+    stars: 3,
     maxHp: 300,
     speed: 100,
     attack: "punch",
@@ -222,7 +226,7 @@ export const HEROES: Record<HeroId, HeroDef> = {
     name: "Reborn Knight",
     role: "Sword fighter",
     blurb: "Mid-range sword sweeps that hit every enemy in the arc. EXCALIBUR (E): four light swords circle him for 6s and cut whatever they touch.",
-    stars: 4,
+    stars: 3,
     maxHp: 120,
     speed: 110,
     attack: "sword",
@@ -259,8 +263,8 @@ export const HEROES: Record<HeroId, HeroDef> = {
   killua: {
     name: "Volt Kid",
     role: "Lightning assassin",
-    blurb: "Moves three times faster than anyone. Strikes call down lightning that hits an area. YOYO MODE (E): basic attacks become a yoyo that locks on and never misses (weaker, no blast); use it again to switch back.",
-    stars: 3,
+    blurb: "Strikes call down lightning that hits an area. YOYO MODE (E): basic attacks become a yoyo that locks on and never misses (weaker, no blast); use it again to switch back.",
+    stars: 4,
     maxHp: 100,
     speed: 320,
     attack: "lightning",
@@ -279,7 +283,7 @@ export const HEROES: Record<HeroId, HeroDef> = {
     name: "Sky Wizard",
     role: "Wizard",
     blurb: "Long-range magic orbs that explode in a wide blast. MOVING CASTLE (E) sends a giant walking castle striding the way he aims until it leaves the map: everything it walks into is hit and stunned for 1s.",
-    stars: 4,
+    stars: 3,
     maxHp: 100,
     speed: 105,
     attack: "magic",
@@ -297,7 +301,7 @@ export const HEROES: Record<HeroId, HeroDef> = {
   ricardo: {
     name: "Champ Rico",
     role: "Boxer",
-    blurb: "Fast boxer (1.5x speed) with very short reach. JAB fires a long straight jab that stuns enemies for 0.5s. DEATH CROSS: a crushing straight right that sends targets flying.",
+    blurb: "Fast boxer with very short reach. JAB fires a long straight jab that stuns enemies for 0.5s. DEATH CROSS: a crushing straight right that sends targets flying.",
     stars: 3,
     maxHp: 170,
     speed: 173, // 1.5x his old pace
@@ -318,8 +322,8 @@ export const HEROES: Record<HeroId, HeroDef> = {
     name: "Plain Hero",
     role: "Hobby hero",
     blurb: "FINAL BLOW ends any fight, but takes 15s to come back.",
-    stars: 5,
-    maxHp: 115,
+    stars: 3,
+    maxHp: 135,
     speed: 105,
     attack: "punch",
     attackCooldown: 0.5,
@@ -335,7 +339,7 @@ export const HEROES: Record<HeroId, HeroDef> = {
     name: "Holy Healer",
     role: "Support",
     blurb: "Holy bolts from afar. HEAL restores 50% HP to every ally nearby. HEAL TOTEM (E): a totem on the ground heals allies near it 5% HP every 0.5s for 5s.",
-    stars: 4,
+    stars: 3,
     maxHp: 110,
     speed: 105,
     attack: "magic",
@@ -354,7 +358,7 @@ export const HEROES: Record<HeroId, HeroDef> = {
   deku: {
     name: "Green Rookie",
     role: "Brawler",
-    blurb: "Runs 1.5x faster. SHADOW WHIP: a black whip shoots out to the nearest target and ties its legs, so it cannot walk for 2s. MAX SMASH (E): hold to charge (walking 60% slower) and let go to smash; the gauge shows how hard it will hit, up to 4x.",
+    blurb: "SHADOW WHIP: a black whip shoots out to the nearest target and ties its legs, so it cannot walk for 2s. MAX SMASH (E): hold to charge (walking 60% slower) and let go to smash; the gauge shows how hard it will hit, up to 4x.",
     stars: 4,
     maxHp: 130,
     speed: 160,
@@ -375,7 +379,7 @@ export const HEROES: Record<HeroId, HeroDef> = {
     name: "Sakura Blade",
     role: "Swordswoman",
     blurb: "Lightning-fast sword. PHANTOM SLASH cuts everything around her again and again. SACRIFICE (E): she stabs herself for 50% of her max HP and the nearest enemy loses 50% of theirs; if both fall, the round is a draw.",
-    stars: 3,
+    stars: 4,
     maxHp: 110,
     speed: 125,
     attack: "sword",
@@ -394,7 +398,7 @@ export const HEROES: Record<HeroId, HeroDef> = {
     name: "Void Sorcerer",
     role: "Sorcerer",
     blurb: "Fights up close. VOID REALM hits every enemy on the whole map. PURPLE BEAM (E): one huge purple beam that hits everything in a long line for heavy damage.",
-    stars: 3,
+    stars: 4,
     maxHp: 140,
     speed: 115,
     attack: "punch",
@@ -412,7 +416,7 @@ export const HEROES: Record<HeroId, HeroDef> = {
     name: "Chrono Brawler",
     role: "Time brawler",
     blurb: "Punches incredibly fast. TIME STOP freezes the whole map for 4s; only he can move. STAR SHOT (E): fires 5 shots in a straight line.",
-    stars: 4,
+    stars: 5,
     maxHp: 150,
     speed: 110,
     attack: "punch",
@@ -450,8 +454,8 @@ export const HEROES: Record<HeroId, HeroDef> = {
   lawliet: {
     name: "The Detective",
     role: "Detective",
-    blurb: "Weak hits, runs 1.1x faster. PASSIVE: sees where every monster and boss will be 0.5s ahead (ghost images). SOLVE IT (E) locks on to the nearest enemy in range and stuns it for 5s.",
-    stars: 4,
+    blurb: "Weak hits. PASSIVE: sees where every monster and boss will be 0.5s ahead (ghost images). SOLVE IT (E) locks on to the nearest enemy in range and stuns it for 5s.",
+    stars: 3,
     maxHp: 100,
     speed: 116,
     attack: "punch",
@@ -489,7 +493,7 @@ export const HEROES: Record<HeroId, HeroDef> = {
     name: "Giant Shifter",
     role: "Shifter",
     blurb: "Very weak hits as a human. GIANT FORM turns him into a 50m giant for 10s: every hit smashes everything around him. ODM GEAR (E, 0.5s): fire a wire into the wall ahead and zip along it.",
-    stars: 3,
+    stars: 5,
     maxHp: 165,
     speed: 105,
     attack: "punch",
@@ -508,7 +512,7 @@ export const HEROES: Record<HeroId, HeroDef> = {
   yaotsu: {
     name: "Glitch God",
     role: "Indignia God",
-    blurb: "2x HP, moves 2x faster. CREATOR builds a whole city: enemies inside lose 2% HP/s, he heals 2%/s. REALITY CHANGE turns every enemy into an ordinary human for 3s.",
+    blurb: "2x HP. CREATOR builds a whole city: enemies inside lose 2% HP/s, he heals 2%/s. REALITY CHANGE turns every enemy into an ordinary human for 3s.",
     stars: 4,
     maxHp: 200,
     speed: 210,
@@ -528,7 +532,7 @@ export const HEROES: Record<HeroId, HeroDef> = {
     name: "Trickster",
     role: "Trickster god",
     blurb: "Magic shots. ILLUSION raises a golden city for 10s (enemies inside lose 7% HP/s). CLONE makes a copy that fights, and nobody can tell which one is real.",
-    stars: 3,
+    stars: 5,
     maxHp: 120,
     speed: 110,
     attack: "magic",
@@ -547,7 +551,7 @@ export const HEROES: Record<HeroId, HeroDef> = {
   sakamoto: {
     name: "Retired Hitman",
     role: "Hitman",
-    blurb: "Runs 1.2x faster. Quick knife slashes. SWAP MODE pulls out a machine gun that fires very fast; use it again to go back to the knife. STICKY BOMB (E): darts up to the nearest target and sticks a bomb on it that blows them far away.",
+    blurb: "Quick knife slashes. SWAP MODE pulls out a machine gun that fires very fast; use it again to go back to the knife. STICKY BOMB (E): darts up to the nearest target and sticks a bomb on it that blows them far away.",
     stars: 4,
     maxHp: 130,
     speed: 130,
@@ -588,7 +592,7 @@ export const HEROES: Record<HeroId, HeroDef> = {
     name: "Mad Scientist",
     role: "Inventor",
     blurb: "Laser gun. PORTAL GUN: shoot one portal, then another; walk into one to come out of the other. MISSILES: 10 homing missiles that chase targets until they hit.",
-    stars: 3,
+    stars: 4,
     maxHp: 110,
     speed: 110,
     attack: "magic",
@@ -628,7 +632,7 @@ export const HEROES: Record<HeroId, HeroDef> = {
     name: "Monster Tamer",
     role: "Tamer",
     blurb: "Weak, slow punches. SPARK MOUSE: a fast electric mouse (60% HP) zaps enemies. FLAME DRAGON: a big fire dragon (200% HP). Pets stay until they fall or the Tamer does.",
-    stars: 4,
+    stars: 3,
     maxHp: 110,
     speed: 110,
     attack: "punch",
@@ -645,8 +649,8 @@ export const HEROES: Record<HeroId, HeroDef> = {
   kid: {
     name: "Phantom Thief",
     role: "Magician",
-    blurb: "Runs 1.3x faster, card-gun shots. DRAW CARD throws a random card 1-9: it takes 10-90% of the target's max HP (1-9% on bosses). THE MAGICIAN (E): vanishes into a flock of doves for 2s and takes no damage.",
-    stars: 4,
+    blurb: "Card-gun shots. DRAW CARD throws a random card 1-9: it takes 10-90% of the target's max HP (1-9% on bosses). THE MAGICIAN (E): vanishes into a flock of doves for 2s and takes no damage.",
+    stars: 5,
     maxHp: 115,
     speed: 143,
     attack: "magic",
@@ -665,7 +669,7 @@ export const HEROES: Record<HeroId, HeroDef> = {
   hanuman: {
     name: "Hanuman",
     role: "Monkey god",
-    blurb: "Runs 1.5x faster, quick trident thrusts. REVIVE: for 5s after pressing it, falling brings him straight back up. GIANT PALM (E): a giant palm comes down from the sky, crushing the spot and stunning for 2s.",
+    blurb: "Quick trident thrusts. REVIVE: for 5s after pressing it, falling brings him straight back up. GIANT PALM (E): a giant palm comes down from the sky, crushing the spot and stunning for 2s.",
     stars: 3,
     maxHp: 130,
     speed: 165,
@@ -685,7 +689,7 @@ export const HEROES: Record<HeroId, HeroDef> = {
   badigadi: {
     name: "Demon Lord",
     role: "Four-armed demon",
-    blurb: "3x HP, runs 1.2x faster. Slow, crushing four-armed blows hit a wide area. IMMORTAL: a barrier blocks all damage for 3s and heals 10% HP/s. GRAB SLAM (E): darts in, grabs the nearest target in front, leaps and slams it down, stunning for 2s.",
+    blurb: "3x HP. Slow, crushing four-armed blows hit a wide area. IMMORTAL: a barrier blocks all damage for 3s and heals 10% HP/s. GRAB SLAM (E): darts in, grabs the nearest target in front, leaps and slams it down, stunning for 2s.",
     stars: 3,
     maxHp: 360,
     speed: 132,
@@ -802,7 +806,7 @@ export const HEROES: Record<HeroId, HeroDef> = {
     name: "Agamemnon",
     role: "King of kings",
     blurb: "2x HP, bronze sword sweeps. SUMMON GLADIATORS calls 20 gladiators (10% of his HP each) to fight for 20 seconds. TROJAN HORSE (E): a wooden horse counts down 10s, then bursts open in a huge blast.",
-    stars: 4,
+    stars: 3,
     maxHp: 220,
     speed: 105,
     attack: "sword",
@@ -821,7 +825,7 @@ export const HEROES: Record<HeroId, HeroDef> = {
     name: "Vampire",
     role: "Night hunter",
     blurb: "Quick claw swipes. BLOOD LATCH leaps onto the nearest target in front, clings to it for 3s and drains its blood to heal. BAT FORM (E): 6s as a bat: attacks come about 3x as fast and heal 25% of the damage dealt.",
-    stars: 2,
+    stars: 4,
     maxHp: 120,
     speed: 130,
     attack: "sword",
@@ -840,8 +844,8 @@ export const HEROES: Record<HeroId, HeroDef> = {
   rider: {
     name: "Hopper Rider",
     role: "Masked hero",
-    blurb: "1.5x HP, runs 1.5x faster, very fast punches. RIDER KICK leaps into a flying kick that stuns everything it hits for 2s. MOTORCYCLE (E): rides for 4s, 2.2x faster; whoever he rams is stunned 1s and knocked back.",
-    stars: 3,
+    blurb: "1.5x HP, very fast punches. RIDER KICK leaps into a flying kick that stuns everything it hits for 2s. MOTORCYCLE (E): rides for 4s, 2.2x faster; whoever he rams is stunned 1s and knocked back.",
+    stars: 4,
     maxHp: 165,
     speed: 165,
     attack: "punch",
@@ -1035,14 +1039,28 @@ export const HP_SCALE = 3;
 for (const def of Object.values(HEROES)) def.maxHp *= HP_SCALE;
 
 /**
+ * Melee feel (user request 2026-10-05): punches and swords swing faster (so they can cut shots down),
+ * reach a little further, and cover a wider arc (a sword cuts with its whole blade, not just the tip).
+ * The numbers written in HEROES are before this.
+ */
+export const MELEE_SPEED = 0.7; // attack cooldown multiplier
+export const MELEE_REACH = 10; // extra reach in pixels
+for (const def of Object.values(HEROES)) {
+  if (def.attack !== "punch" && def.attack !== "sword") continue;
+  def.attackCooldown = Math.round(def.attackCooldown * MELEE_SPEED * 100) / 100;
+  def.range += MELEE_REACH;
+  if (!def.lineAttack) def.arc = Math.max(def.arc, def.attack === "sword" ? 2.4 : 1.7);
+}
+
+/**
  * Pickable heroes, ranked by how strong they are in the PvP Arena: weakest first, strongest last.
  * The character select shows them in this order. Heroes missing here go at the end.
  */
 const PVP_RANKING: HeroId[] = [
-  "vampire", "badigadi", "rudeus", "rick", "gojo", "killua", "ricardo", "rider", "loki", "thorfinn",
-  "doraemon", "titan", "hanuman", "okita", "joyboy", "lawliet", "trainer", "theworld", "zenitsu", "yaotsu", "kid",
-  "agamemnon", "swordgod", "starplatinum", "taekwondo", "simo", "omni", "howl", "isekai", "steve", "deku",
-  "healer", "sakamoto", "saitama", "superman",
+  "trainer", "howl", "healer", "superman", "agamemnon", "rudeus", "lawliet", "isekai", "ricardo", "saitama",
+  "thorfinn", "hanuman", "doraemon", "joyboy", "zenitsu", "steve", "taekwondo", "vampire", "gojo", "rider",
+  "simo", "rick", "okita", "deku", "killua", "omni", "theworld", "sakamoto", "starplatinum", "loki",
+  "titan", "kid", "swordgod", "yaotsu", "badigadi",
 ];
 /** Heroes taken out of the game (user request 2026-10-04): not on any hero select; their code is kept. */
 const REMOVED_HEROES: HeroId[] = ["swordgod", "yaotsu", "badigadi"];
@@ -1056,42 +1074,76 @@ export const HERO_IDS = [
  * Tuned from bot duels so no hero wins far more or far less than half its PvP fights.
  */
 export const DAMAGE_BALANCE: Partial<Record<HeroId, number>> = {
-  vampire: 1.28,
+  trainer: 8.6,
+  howl: 3.25,
+  healer: 3.27,
+  superman: 0.62,
+  agamemnon: 0.59,
+  rudeus: 1.9,
+  lawliet: 3.93,
+  isekai: 1.46,
+  ricardo: 0.83,
+  saitama: 0.3,
+  thorfinn: 2.38,
+  hanuman: 0.93,
+  doraemon: 0.97,
+  joyboy: 1.25,
+  zenitsu: 1.36,
+  steve: 2.49,
+  taekwondo: 1.14,
+  vampire: 1.09,
+  gojo: 1.52,
+  rider: 1.02,
+  simo: 0.46,
+  rick: 1.91,
+  okita: 1.1,
+  deku: 2.11,
+  killua: 3.29,
+  omni: 4.1,
+  theworld: 1.22,
+  sakamoto: 1.42,
+  starplatinum: 1.13,
+  loki: 1.59,
+  titan: 1.29,
+  kid: 2.62,
   badigadi: 0.32,
-  rudeus: 1.76,
-  rick: 1.65,
-  gojo: 1.5,
-  killua: 2.06,
-  ricardo: 0.67,
-  rider: 0.85,
-  loki: 1.07,
-  thorfinn: 2.28,
-  doraemon: 0.78,
-  titan: 1.19,
-  hanuman: 1.03,
-  okita: 1.21,
-  joyboy: 1.41,
-  lawliet: 4.83,
-  trainer: 8.18,
-  theworld: 1.44,
   yaotsu: 0.5,
-  kid: 1.63,
-  agamemnon: 0.93,
   swordgod: 1.15,
-  starplatinum: 1.56,
-  taekwondo: 1.33,
-  simo: 0.38,
-  omni: 3.81,
-  howl: 3.06,
-  isekai: 1.8,
-  steve: 2.71,
-  deku: 1.67,
-  healer: 2.64,
-  sakamoto: 1.46,
-  saitama: 0.05,
-  superman: 0.68,
-  zenitsu: 1,
 };
+
+/** A hero's estimated stats on a 1-10 scale, ranked against every pickable hero (shown on the hero select). */
+export interface HeroRatings {
+  hp: number;
+  damage: number;
+  speed: number;
+  range: number;
+}
+
+let ratingCache: Record<string, HeroRatings> | undefined;
+export function heroRatings(id: string): HeroRatings {
+  if (!ratingCache) {
+    const raw = (h: HeroId) => {
+      const def = HEROES[h];
+      return {
+        hp: def.invincible ? 1e9 : def.maxHp,
+        damage: def.damage * (DAMAGE_BALANCE[h] ?? 1) * (def.attack === "lightning" || def.aoe > 0 ? 1.3 : 1),
+        speed: 1 / def.attackCooldown,
+        range: def.range + def.aoe,
+      };
+    };
+    const all = HERO_IDS.map((h) => [h, raw(h)] as const);
+    // Each stat becomes 1-10 by its place in the line-up (ties share a score).
+    const score = (key: keyof HeroRatings, v: number) => {
+      const below = all.filter(([, r]) => r[key] < v).length;
+      return 1 + Math.round((below / Math.max(1, all.length - 1)) * 9);
+    };
+    ratingCache = {};
+    for (const [h, r] of all) {
+      ratingCache[h] = { hp: score("hp", r.hp), damage: score("damage", r.damage), speed: score("speed", r.speed), range: score("range", r.range) };
+    }
+  }
+  return ratingCache[id] ?? { hp: 5, damage: 5, speed: 5, range: 5 };
+}
 
 export function heroOf(id: string): HeroDef {
   return HEROES[id as HeroId] ?? HEROES.superman;
@@ -1312,7 +1364,8 @@ export function heroSpeed(p: { hero: string; big: number; active2?: number; slow
   if ((p.root ?? 0) > 0) return 0; // SHADOW WHIP: legs tied
   const hero = heroOf(p.hero);
   const bike = (p.active2 ?? 0) > 0 && hero.skill2?.kind === "bike" ? hero.skill2.width ?? 2 : 1;
-  return hero.speed * MOVE_SCALE * (p.big > 0 ? BIG_SLOW : 1) * ((p.slow ?? 0) > 0 ? BURN_SLOW : 1) * bike;
+  const base = hero.ram ? hero.speed * MOVE_SCALE : HERO_WALK; // the Speed Raptor keeps its own speed
+  return base * (p.big > 0 ? BIG_SLOW : 1) * ((p.slow ?? 0) > 0 ? BURN_SLOW : 1) * bike;
 }
 
 /** The boxing ring the PvP Arena and Bot Duel are fought in: a small square with no cover. */
@@ -1400,7 +1453,9 @@ export const STAGES: Record<StageId, StageDef> = {
   pve: { name: "PvE Squad", blurb: "1 to 4 players team up against one bot. Pick its hero and difficulty. First to 3 KOs. Solo or online." },
 };
 
-export const STAGE_IDS = Object.keys(STAGES) as StageId[];
+/** Stages taken out of the game (user request 2026-10-05: the Boss Room); their code is kept. */
+const REMOVED_STAGES: StageId[] = ["boss"];
+export const STAGE_IDS = (Object.keys(STAGES) as StageId[]).filter((id) => !REMOVED_STAGES.includes(id));
 
 /** Wave stages: which enemies come in each wave. */
 export function wavesOf(stage: string): Partial<Record<EnemyKind, number>>[] {
@@ -1408,7 +1463,7 @@ export function wavesOf(stage: string): Partial<Record<EnemyKind, number>>[] {
 }
 
 export function stageOf(id: string): StageId {
-  return id in STAGES ? (id as StageId) : "lava";
+  return (STAGE_IDS as string[]).includes(id) ? (id as StageId) : "lava";
 }
 
 // Godzilla's atomic beam: a warning line, then a long beam that slowly turns toward its target.

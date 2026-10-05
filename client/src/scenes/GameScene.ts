@@ -355,6 +355,7 @@ export class GameScene extends Phaser.Scene {
     if (room instanceof LocalRoom) room.step(dt);
 
     this.lobby?.update(state, room.sessionId);
+    this.tickPopups(dt);
     const selecting = state.phase === "select";
     const me = state.players.get(room.sessionId);
     // (An ALIEN TRANSFORM is still the same hero: the HUD stays, so held sticks and buttons carry on.)
@@ -746,7 +747,12 @@ export class GameScene extends Phaser.Scene {
       if (heroOf(p.hero).ram) this.drawTrail(view, p.dead);
       view.label.setDepth(1000);
 
-      if (p.hp < view.lastHp - 0.5) view.hurtFlash = 0.15;
+      if (p.hp < view.lastHp - 0.5) {
+        view.hurtFlash = 0.15;
+        const mine = id === this.room?.sessionId;
+        if (!p.owner || p.hp > 0) this.popDamage(body.x, body.y - 20, view.lastHp - p.hp, mine ? "#ff5a5a" : "#ffffff");
+        if (mine) this.cameras.main.shake(80, 0.004);
+      } else if (p.hp > view.lastHp + 1 && p.hp - view.lastHp < p.maxHp * 0.5 && view.lastHp > 0 && !p.dead) this.popDamage(body.x, body.y - 20, p.hp - view.lastHp, "#5aff7a", "+");
       view.lastHp = p.hp;
       view.hurtFlash = Math.max(0, view.hurtFlash - dt);
       const stoppedHere = state.timeStop > 0 && state.timeStopBy !== id && !movesInStoppedTime(p.hero);
@@ -1274,24 +1280,50 @@ export class GameScene extends Phaser.Scene {
           g.fillCircle(e.x + Math.cos(a) * d, e.y + Math.sin(a) * d, (2 + (d / e.range) * 5) * (1 - t * 0.5));
         }
       } else if (e.kind === "punch") {
+        // A punch pushes a gust of wind: streaks rushing forward and a shock ring where the fist lands.
         const r = e.range * (0.6 + 0.4 * t);
-        g.fillStyle(0xffffff, 0.8 * (1 - t));
-        g.fillCircle(e.x + Math.cos(e.aim) * r, e.y + Math.sin(e.aim) * r, 6 * (1 - t) + 2);
-        g.lineStyle(2, 0xffd400, 1 - t);
-        g.beginPath();
-        g.arc(e.x, e.y, r, e.aim - e.arc / 2, e.aim + e.arc / 2);
-        g.strokePath();
+        const cos = Math.cos(e.aim);
+        const sin = Math.sin(e.aim);
+        g.fillStyle(0xffffff, 0.18 * (1 - t));
+        g.slice(e.x, e.y, r + 6, e.aim - e.arc / 2, e.aim + e.arc / 2);
+        g.fillPath();
+        for (let i = -2; i <= 2; i++) {
+          const side = (i / 2) * Math.min(e.arc, 1.2) * 0.5;
+          const a = e.aim + side;
+          const from = e.range * (0.25 + 0.5 * t) - Math.abs(i) * 3;
+          const to = from + 10 + 8 * (1 - t);
+          g.lineStyle(i === 0 ? 2 : 1, 0xe8f4ff, 0.9 * (1 - t));
+          g.lineBetween(e.x + Math.cos(a) * from, e.y + Math.sin(a) * from, e.x + Math.cos(a) * to, e.y + Math.sin(a) * to);
+        }
+        g.lineStyle(2, 0xffffff, 0.9 * (1 - t));
+        g.strokeEllipse(e.x + cos * r, e.y + sin * r, 6 + 14 * t, 10 + 18 * t);
+        g.fillStyle(0xffd400, 0.8 * (1 - t));
+        g.fillCircle(e.x + cos * r, e.y + sin * r, 4 * (1 - t) + 2);
       } else if (e.kind === "sword") {
-        // A crescent that sweeps across the swing.
-        const sweep = e.aim - e.arc / 2 + e.arc * Math.min(1, t * 1.6);
-        g.lineStyle(5, 0xbcd4ff, 0.8 * (1 - t));
-        g.beginPath();
-        g.arc(e.x, e.y, e.range, e.aim - e.arc / 2, sweep);
-        g.strokePath();
+        // A wind slash: a filled crescent sweeps across the whole blade, with gusts flying off its edge.
+        const start = e.aim - e.arc / 2;
+        const sweep = start + e.arc * Math.min(1, t * 1.8);
+        const steps = 10;
+        const outer: { x: number; y: number }[] = [];
+        const inner: { x: number; y: number }[] = [];
+        for (let i = 0; i <= steps; i++) {
+          const a = start + ((sweep - start) * i) / steps;
+          const thick = Math.sin((i / steps) * Math.PI) * 0.45 + 0.1; // thickest in the middle of the swing
+          outer.push({ x: e.x + Math.cos(a) * e.range, y: e.y + Math.sin(a) * e.range });
+          inner.push({ x: e.x + Math.cos(a) * e.range * (1 - thick), y: e.y + Math.sin(a) * e.range * (1 - thick) });
+        }
+        g.fillStyle(0xbcd4ff, 0.45 * (1 - t)).fillPoints([...outer, ...inner.reverse()], true);
         g.lineStyle(2, 0xffffff, 1 - t);
         g.beginPath();
-        g.arc(e.x, e.y, e.range - 4, e.aim - e.arc / 2, sweep);
+        g.arc(e.x, e.y, e.range, start, sweep);
         g.strokePath();
+        for (let i = 0; i < 3; i++) {
+          const a = start + e.arc * (0.25 + i * 0.25);
+          if (a > sweep) break;
+          const from = e.range + 2 + 6 * t;
+          g.lineStyle(1, 0xe8f4ff, 0.8 * (1 - t));
+          g.lineBetween(e.x + Math.cos(a) * from, e.y + Math.sin(a) * from, e.x + Math.cos(a + 0.25) * (from + 10), e.y + Math.sin(a + 0.25) * (from + 10));
+        }
       } else if (e.kind === "smash") {
         g.lineStyle(4, 0xffd400, 1 - t);
         g.strokeCircle(e.x, e.y, e.range * t);
@@ -1597,6 +1629,36 @@ export class GameScene extends Phaser.Scene {
   }
 
   private chargeLabel?: Phaser.GameObjects.Text;
+  private seenParry = new Set<string>();
+  private enemyHp = new Map<string, number>();
+  private popups: { text: Phaser.GameObjects.Text; life: number; vx: number }[] = [];
+
+  /** A number pops up and floats away wherever someone takes damage (or heals). */
+  private popDamage(x: number, y: number, amount: number, color: string, sign = "") {
+    if (amount < 1) return;
+    let pop = this.popups.find((q) => q.life <= 0);
+    if (!pop) {
+      if (this.popups.length >= 40) return;
+      const text = this.add.text(0, 0, "", { fontFamily: "monospace", fontSize: "9px", fontStyle: "bold", stroke: "#1a0f14", strokeThickness: 3 }).setOrigin(0.5).setDepth(10001);
+      pop = { text, life: 0, vx: 0 };
+      this.popups.push(pop);
+    }
+    const big = amount >= 60;
+    pop.text.setText(`${sign}${Math.round(amount)}`).setColor(color).setFontSize(big ? 12 : 9).setPosition(x + (Math.random() - 0.5) * 10, y).setAlpha(1).setVisible(true);
+    pop.life = 0.7;
+    pop.vx = (Math.random() - 0.5) * 30;
+  }
+
+  private tickPopups(dt: number) {
+    for (const pop of this.popups) {
+      if (pop.life <= 0) continue;
+      pop.life -= dt;
+      pop.text.x += pop.vx * dt;
+      pop.text.y -= 28 * dt;
+      pop.text.setAlpha(Math.min(1, pop.life / 0.3));
+      if (pop.life <= 0) pop.text.setVisible(false);
+    }
+  }
 
   private drawSkillGuide(g: Phaser.GameObjects.Graphics, skill: SkillDef, heroRange: number, x: number, y: number) {
     const cos = Math.cos(this.aim);
@@ -1772,6 +1834,10 @@ export class GameScene extends Phaser.Scene {
         this.beams.lineStyle(1, 0xd070ff, 0.35).lineBetween(s.x, s.y - 3, gx, gy - 3);
       } else view.ghost?.setVisible(false);
       s.setDepth(s.y);
+      const was = this.enemyHp.get(id);
+      if (was !== undefined && e.hp < was - 0.5) this.popDamage(s.x, s.y - s.displayHeight * 0.7, was - e.hp, "#ffe27a");
+      if (this.enemyHp.size > 400) this.enemyHp.clear();
+      this.enemyHp.set(id, e.hp);
       if (e.hitFlash > 0) s.setTintFill(0xffffff);
       else if (state.timeStop > 0) s.setTint(0x8a93b8);
       else if (e.beamState === 1 && Math.floor(this.time.now / 80) % 2 === 0) s.setTint(0x9fd8ff);
@@ -2145,6 +2211,21 @@ export class GameScene extends Phaser.Scene {
         // ODM GEAR: the hook bitten into the wall.
         sky.fillStyle(0x8a8a92, 1).fillCircle(z.x, z.y - 6, 2.5);
         sky.lineStyle(1, 0xffffff, 0.8).strokeCircle(z.x, z.y - 6, 4 * fade);
+      } else if (z.kind === "parry") {
+        // A shot knocked away by a swing: a bright star burst and a ring.
+        const t = 1 - z.life / z.maxLife;
+        sky.lineStyle(2, 0xffffff, 1 - t).strokeCircle(z.x, z.y, 3 + 12 * t);
+        for (let i = 0; i < 6; i++) {
+          const a = (i / 6) * Math.PI * 2 + 0.3;
+          const r0 = 2 + 8 * t;
+          sky.lineStyle(2, i % 2 ? 0xffd400 : 0xffffff, 1 - t);
+          sky.lineBetween(z.x + Math.cos(a) * r0, z.y + Math.sin(a) * r0, z.x + Math.cos(a) * (r0 + 6), z.y + Math.sin(a) * (r0 + 6));
+        }
+        if (!this.seenParry.has(id)) {
+          this.seenParry.add(id);
+          this.sparks.explode(6, z.x, z.y);
+          if (this.seenParry.size > 200) this.seenParry.clear();
+        }
       } else if (z.kind === "whip") {
         // SHADOW WHIP: a black whip lashes out from the Green Rookie, then coils around the target's legs.
         const age = z.maxLife - z.life;

@@ -3,7 +3,7 @@ import { BootScene } from "./scenes/BootScene";
 import { GameScene } from "./scenes/GameScene";
 import { HudScene } from "./scenes/HudScene";
 import { isTouchDevice } from "./touch";
-import { HEROES, HERO_IDS, HP_SCALE, HeroId, STAGES, STAGE_IDS, StageId } from "../../shared/game";
+import { HEROES, HERO_IDS, HeroId, STAGES, STAGE_IDS, StageId, heroRatings } from "../../shared/game";
 import { GODZILLA, KINGKONG, SWORD_GOD, HERO_SPRITES, WARDEN, renderPixelSprite } from "./art";
 import { heroPortrait } from "./heroArt";
 
@@ -112,7 +112,7 @@ function buildHeroPicker() {
     card.className = "hero";
     card.id = `hero-${id}`;
     card.setAttribute("aria-pressed", String(id === selectedHero));
-    const reach = Math.min(1, (hero.range + hero.aoe) / 600 + 0.15);
+    const rate = heroRatings(id);
     card.innerHTML = `
       <span class="name">${hero.name}</span>
       ${
@@ -123,11 +123,10 @@ function buildHeroPicker() {
       <span class="role">${hero.role}</span>
       <span class="role">Skill: ${hero.skill.name}${hero.skill2 ? ` + ${hero.skill2.name}` : ""}</span>
       <div class="stats">
-        <span>HP</span>${bars(hero.invincible ? 1 : hero.maxHp / 300 / HP_SCALE)}
-        <span>DAMAGE</span>${bars(hero.damage / 90)}
-        <span>RANGE</span>${bars(reach)}
-        <span>ATK SPEED</span>${bars(1 / hero.attackCooldown / 2.5)}
-        <span>MOVE</span>${bars(hero.speed / 320)}
+        <span>HP ${rate.hp}</span>${bars(rate.hp / 10)}
+        <span>DAMAGE ${rate.damage}</span>${bars(rate.damage / 10)}
+        <span>ATK SPEED ${rate.speed}</span>${bars(rate.speed / 10)}
+        <span>RANGE ${rate.range}</span>${bars(rate.range / 10)}
       </div>
       <span class="blurb">${hero.blurb}</span>`;
     card.prepend(heroPortrait(id));
