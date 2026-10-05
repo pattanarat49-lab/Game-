@@ -604,7 +604,7 @@ export const HEROES: Record<HeroId, HeroDef> = {
   joyboy: {
     name: "Rubber Pirate",
     role: "Rubber brawler",
-    blurb: "1.5x HP. Stretchy punches reach further. GATLING PUNCH fires a storm of fists down a medium-range lane. RUBBER PUNCH (E): the arm shoots out fast; anyone the fist hits is stunned for 1s, then it snaps back.",
+    blurb: "1.5x HP. Stretchy punches reach further. GATLING PUNCH fires a storm of fists down a medium-range lane, smashing shots in it. RUBBER PUNCH (E): the arm shoots out fast; anyone the fist hits is stunned for 1s, then it snaps back.",
     stars: 4,
     maxHp: 180,
     speed: 110,

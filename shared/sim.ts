@@ -1428,6 +1428,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
           brain.gatlingTimer += GATLING_GAP;
           const g = hero.skill;
           this.lineHit(id, p.x, p.y, brain.gatlingAim, g.radius, g.width ?? 40, g.damage);
+          this.cutBulletsInLane(id, p.x, p.y, brain.gatlingAim, g.radius, g.width ?? 40); // the fists smash shots too
         }
       }
 
@@ -2605,6 +2606,26 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       if (stun > 0 && !v.dead) v.stun = Math.max(v.stun, stun);
       if (kb) this.knockPlayer(vid, dx, dy, kb);
     });
+  }
+
+  /** GATLING PUNCH: knock out hostile shots (and a rival's) anywhere in the punching lane. */
+  private cutBulletsInLane(owner: string, x: number, y: number, aim: number, length: number, width: number) {
+    const cos = Math.cos(aim);
+    const sin = Math.sin(aim);
+    const cut: string[] = [];
+    this.state.bullets.forEach((b, id) => {
+      const brain = this.bulletBrains.get(id);
+      if (!brain || !(b.hostile || this.isFoe(brain.owner, owner))) return;
+      const along = (b.x - x) * cos + (b.y - y) * sin;
+      const side = Math.abs(-(b.x - x) * sin + (b.y - y) * cos);
+      if (along < -BULLET_CUT_SLACK || along > length + BULLET_CUT_SLACK || side > width / 2 + BULLET_CUT_SLACK) return;
+      cut.push(id);
+    });
+    for (const id of cut) {
+      const b = this.state.bullets.get(id)!;
+      this.addZone("parry", b.x, b.y, 10, 0.3, { owner, every: Infinity, damage: 0 });
+      this.removeBullet(id);
+    }
   }
 
   /** A melee swing also cuts down hostile shots (and, in PvP, a rival's shots) inside its arc. */
