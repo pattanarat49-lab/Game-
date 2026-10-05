@@ -1,7 +1,8 @@
 // Embeds hand-made hero art (PNG files exported from PixelLab) into src/heroArt.data.ts as data
 // URIs, so the online build and the single-file solo build both carry it.
 //
-//   art/heroes/<heroId>/south.png, east.png, north.png, west.png   (one picture per facing)
+//   art/heroes/<heroId>/south.png   (the front view; mirrored in game when the hero aims left)
+//   plus, optionally, east.png, north.png, west.png (all three) for 4 facings
 //   plus, optionally, south-east.png, north-east.png, north-west.png, south-west.png for 8 facings
 //   art/props/<name>.png   (other pictures, such as Loki's Asgard; texture key <name>)
 //   plus, optionally, attack/<facing>-0.png, -1.png ... : the frames of a basic-attack swing
@@ -16,11 +17,11 @@ const out = {};
 const attacks = {};
 for (const hero of readdirSync(root).sort()) {
   const frames = {};
-  for (const dir of DIRS) {
-    const file = `${root}/${hero}/${dir}.png`;
-    if (!existsSync(file)) throw new Error(`${file} is missing (need ${DIRS.join(", ")})`);
-    frames[dir] = `data:image/png;base64,${readFileSync(file).toString("base64")}`;
-  }
+  if (!existsSync(`${root}/${hero}/south.png`)) throw new Error(`${root}/${hero}/south.png is missing`);
+  // Side and back views come all together or not at all.
+  const sides = DIRS.filter((dir) => existsSync(`${root}/${hero}/${dir}.png`));
+  if (sides.length > 1 && sides.length < 4) throw new Error(`${hero}: has only some facings (${sides.join(", ")})`);
+  for (const dir of sides) frames[dir] = `data:image/png;base64,${readFileSync(`${root}/${hero}/${dir}.png`).toString("base64")}`;
   // Diagonals come all together or not at all.
   const diag = DIAGONALS.filter((dir) => existsSync(`${root}/${hero}/${dir}.png`));
   if (diag.length && diag.length < 4) throw new Error(`${hero}: has only some diagonal facings (${diag.join(", ")})`);

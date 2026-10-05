@@ -5,8 +5,7 @@
 // (tap it, then a hero, to choose who the bot plays) and the bot's difficulty under it.
 
 import { BOT_LEVELS, HEROES, HERO_CLASSES, HERO_IDS, HeroId, heroClass, heroOf, heroRatings } from "../../shared/game";
-import { HERO_SPRITES, renderPixelSprite } from "./art";
-import { heroPortrait } from "./heroArt";
+import { heroPortrait, paintPortrait } from "./heroArt";
 
 const CSS = `
 #lobby { position: fixed; inset: 0; z-index: 20; display: flex; flex-direction: column; align-items: center;
@@ -295,11 +294,7 @@ export class Lobby {
     const slot = this.botSlot!;
     if (slot.shown !== botHero) {
       slot.shown = botHero;
-      const sprite = renderPixelSprite(HERO_SPRITES[botHero as HeroId]);
-      slot.art.width = sprite.width;
-      slot.art.height = sprite.height;
-      const ctx = slot.art.getContext("2d")!;
-      ctx.drawImage(sprite, 0, 0);
+      paintPortrait(slot.art, botHero);
       slot.art.style.transform = "scaleX(-1)";
       slot.name.textContent = heroOf(botHero).name;
     }
@@ -333,14 +328,11 @@ export class Lobby {
     const hero = p?.hero ?? "";
     if (side.shown !== hero) {
       side.shown = hero;
-      const ctx = side.art.getContext("2d")!;
       if (hero) {
-        const sprite = renderPixelSprite(HERO_SPRITES[hero]);
-        side.art.width = sprite.width;
-        side.art.height = sprite.height;
-        ctx.drawImage(sprite, 0, 0);
+        paintPortrait(side.art, hero);
         if (side.root.classList.contains("p2") || side.root.classList.contains("p4")) side.art.style.transform = "scaleX(-1)"; // 2P faces 1P
       } else {
+        side.art.dataset.hero = "";
         side.art.width = 16;
         side.art.height = 18;
       }

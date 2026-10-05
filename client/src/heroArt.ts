@@ -1,5 +1,6 @@
 // Heroes drawn from hand-made pictures (see scripts/embed-hero-art.mjs) instead of pixel grids.
-// Each one has a picture per facing (4, or 8 with diagonals): the game shows the one closest to where the hero aims.
+// Each one has a front view, mirrored when the hero aims left; heroes with side and back views (4, or 8 with
+// diagonals) show the one closest to where they aim instead.
 
 import { HERO_SPRITES, renderPixelSprite } from "./art";
 import { HERO_ART_DATA, HERO_ATTACK_DATA, PROP_ART_DATA } from "./heroArt.data";
@@ -14,19 +15,9 @@ interface ArtLayout {
   scale: number;
   originY: number;
 }
-const LAYOUT: Record<string, ArtLayout> = {
-  // 48x48 PixelLab frames; the figure stands about 46px tall with its feet on the bottom row.
-  superman: { scale: 0.45, originY: 0.97 },
-  // 32x32 frames; about 30px tall.
-  hanuman: { scale: 0.7, originY: 0.95 },
-  loki: { scale: 0.7, originY: 0.95 },
-  taekwondo: { scale: 0.7, originY: 0.95 },
-};
+const LAYOUT: Record<string, ArtLayout> = {};
 /** Same for the basic-attack swing frames, which can be a bigger canvas than the standing pictures. */
-const ATTACK_LAYOUT: Record<string, ArtLayout> = {
-  // 44x44 swing frames at the same pixel size as the 32x32 standing ones; feet on row 36.
-  hanuman: { scale: 0.7, originY: 0.84 },
-};
+const ATTACK_LAYOUT: Record<string, ArtLayout> = {};
 /** How long a basic-attack swing animation plays, in seconds. */
 export const SWING_TIME = 0.25;
 
@@ -35,11 +26,18 @@ export function hasHeroArt(hero: string): boolean {
 }
 
 export function heroArtLayout(hero: string): ArtLayout {
-  return LAYOUT[hero] ?? { scale: 1, originY: 0.95 };
+  // Front views are cut from one character sheet, about 48px tall with the feet on the bottom row.
+  return LAYOUT[hero] ?? { scale: 0.45, originY: 0.98 };
+}
+
+/** Whether the hero has only a front view (mirrored to face left instead of turning). */
+export function frontOnly(hero: string): boolean {
+  return !!HERO_ART_DATA[hero] && !HERO_ART_DATA[hero]!.east;
 }
 
 /** The facing for an aim angle: the nearest of 8 if the hero has diagonal pictures, else of 4. */
 export function facingOf(aim: number, hero: string): Facing {
+  if (frontOnly(hero)) return "south";
   const eight = !!HERO_ART_DATA[hero]?.["south-east"];
   const step = eight ? Math.PI / 4 : Math.PI / 2;
   const n = Math.round(aim / step);
@@ -92,19 +90,32 @@ export function loadHeroArt(load: Phaser.Loader.LoaderPlugin) {
 
 /** The picture for the hero select cards: the hand-made front view, or the pixel-grid sprite. */
 export function heroPortrait(hero: string): HTMLCanvasElement {
-  const front = HERO_ART_DATA[hero]?.south;
-  if (!front) return renderPixelSprite(HERO_SPRITES[hero as keyof typeof HERO_SPRITES]);
-  // Same 8:9 shape as the pixel-grid portraits, so the cards keep their layout.
   const canvas = document.createElement("canvas");
+  // Same 8:9 shape as the pixel-grid portraits, so the cards keep their layout while the picture loads.
   canvas.width = 48;
   canvas.height = 54;
+  paintPortrait(canvas, hero);
+  return canvas;
+}
+
+/** Resize `canvas` to the hero's portrait and draw it there (a moment later for hand-made art, which loads first). */
+export function paintPortrait(canvas: HTMLCanvasElement, hero: string) {
+  const front = HERO_ART_DATA[hero]?.south;
+  if (!front) {
+    const sprite = renderPixelSprite(HERO_SPRITES[hero as keyof typeof HERO_SPRITES]);
+    canvas.width = sprite.width;
+    canvas.height = sprite.height;
+    canvas.getContext("2d")!.drawImage(sprite, 0, 0);
+    return;
+  }
+  canvas.dataset.hero = hero;
   const img = new Image();
   img.onload = () => {
-    // Pictures come in different sizes (48x48, 32x32...): draw them square with a gap on top.
-    canvas.width = img.width;
-    canvas.height = Math.round((img.width * 9) / 8);
-    canvas.getContext("2d")!.drawImage(img, 0, canvas.height - img.height);
+    if (canvas.dataset.hero !== hero) return; // another hero was painted here since
+    // Pictures come in different sizes: fit them in the 8:9 frame, centred, feet on the bottom edge.
+    canvas.width = Math.max(img.width, Math.ceil((img.height * 8) / 9));
+    canvas.height = Math.round((canvas.width * 9) / 8);
+    canvas.getContext("2d")!.drawImage(img, Math.floor((canvas.width - img.width) / 2), canvas.height - img.height);
   };
   img.src = front;
-  return canvas;
 }

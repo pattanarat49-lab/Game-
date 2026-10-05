@@ -52,7 +52,7 @@ import type { HudScene } from "./HudScene";
 import { LocalRoom } from "../localRoom";
 import { Lobby } from "../lobby";
 import { RiftSim, TITAN_ATTACK_COOLDOWN } from "../../../shared/sim";
-import { attackArtLayout, attackFrame, facingOf, hasHeroArt, heroArtLayout, SWING_TIME } from "../heroArt";
+import { attackArtLayout, attackFrame, facingOf, frontOnly, hasHeroArt, heroArtLayout, SWING_TIME } from "../heroArt";
 
 interface PlayerView {
   body: Phaser.GameObjects.Image;
@@ -677,14 +677,14 @@ export class GameScene extends Phaser.Scene {
       const skill2 = heroOf(p.hero).skill2;
       const batNow = !p.dead && p.active2 > 0 && skill2?.kind === "bat";
       const look = humanized ? "human" : titanNow ? "titanform" : batNow ? "batform" : `hero_${p.hero}`;
-      // Heroes with hand-made art turn to face where they aim (4 or 8 facings) instead of mirroring.
+      // Heroes with hand-made art: a front view mirrored to the aim side, or turning to face it (4 or 8 facings).
       const art = look === `hero_${p.hero}` && hasHeroArt(p.hero);
       // A basic attack plays the hero's hand-made swing frames, if he has them.
       if (view.swing) view.swing = Math.max(0, view.swing - dt);
       const swing = art && view.swing && !p.dead ? attackFrame(p.hero, aim, 1 - view.swing / SWING_TIME) : undefined;
       const layout = swing ? attackArtLayout(p.hero) : art ? heroArtLayout(p.hero) : undefined;
       const texture = swing ? swing.texture : art ? `${look}_${facingOf(aim, p.hero)}` : look;
-      if (art) body.setFlipX(!!swing?.flip);
+      if (art) body.setFlipX(swing ? swing.flip : frontOnly(p.hero) && Math.cos(aim) < 0);
       const artScale = layout ? layout.scale : 1;
       body.setScale(k * artScale * (titanNow && !humanized ? 2.6 : humanized ? 1 : SUMMON_SCALE[p.hero] ?? 1));
       if (body.texture.key !== texture) {
