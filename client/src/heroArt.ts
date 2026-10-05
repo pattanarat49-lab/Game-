@@ -26,8 +26,9 @@ export function hasHeroArt(hero: string): boolean {
 }
 
 export function heroArtLayout(hero: string): ArtLayout {
-  // Front views are cut from one character sheet, about 48px tall with the feet on the bottom row.
-  return LAYOUT[hero] ?? { scale: 0.45, originY: 0.98 };
+  // Front views are clean pixel sprites about 33px tall, feet on the bottom row. At 2/3 scale each sprite
+  // pixel lands on exactly 2 screen pixels (x1.5 hero scale, x2 camera zoom), which keeps them crisp.
+  return LAYOUT[hero] ?? { scale: 2 / 3, originY: 0.97 };
 }
 
 /** Whether the hero has only a front view (mirrored to face left instead of turning). */
