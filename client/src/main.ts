@@ -6,6 +6,7 @@ import { isTouchDevice } from "./touch";
 import { HEROES, HERO_CLASSES, HERO_IDS, HeroId, STAGES, STAGE_IDS, StageId, heroClass, heroRatings } from "../../shared/game";
 import { GODZILLA, KINGKONG, SWORD_GOD, HERO_SPRITES, WARDEN, renderPixelSprite } from "./art";
 import { heroPortrait } from "./heroArt";
+import { showHeroInfo } from "./heroInfo";
 
 const menu = document.getElementById("menu")!;
 const form = document.getElementById("join-form") as HTMLFormElement;
@@ -155,6 +156,7 @@ function buildHeroPicker() {
       selectedHero = id;
       localStorageSet("riftborn-hero", id);
       container.querySelectorAll(".hero").forEach((c) => c.setAttribute("aria-pressed", String(c === card)));
+      showHeroInfo(id);
     });
     container.append(card);
   }

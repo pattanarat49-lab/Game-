@@ -6,6 +6,7 @@
 
 import { BOT_LEVELS, HEROES, HERO_CLASSES, HERO_IDS, HeroId, heroClass, heroOf, heroRatings } from "../../shared/game";
 import { heroPortrait, paintPortrait } from "./heroArt";
+import { showHeroInfo } from "./heroInfo";
 
 const CSS = `
 #lobby { position: fixed; inset: 0; z-index: 20; display: flex; flex-direction: column; align-items: center;
@@ -173,6 +174,7 @@ export class Lobby {
           this.actions.botHero?.(id);
           this.botMode = false;
         } else this.pick(id);
+        showHeroInfo(id);
       });
       grid.append(tile);
       this.tiles.set(id, tile);

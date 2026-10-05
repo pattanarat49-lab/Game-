@@ -227,6 +227,8 @@ export interface SkillDef {
   pet?: HeroId; // for "summon": which helper comes out (damage = its share of the summoner's max HP)
   max?: number; // for "summon": most of these helpers out at once (the oldest leaves); default `count`
   chargeTime?: number; // for charged skills: seconds to a full charge (default CHARGE_FULL)
+  /** What the skill does, in words (shown on the hero details). */
+  desc?: string;
   /** "combo" skills: what happens, in order (each step can wait a moment after the cast). */
   steps?: FxStep[];
   /** "combo" skills: bots use it when a foe is within `radius`, or (when set) only below this share of HP. */
@@ -336,9 +338,9 @@ const BASE_HEROES: Record<BaseHeroId, HeroDef> = {
     shotSpeed: 0,
     pierce: 0,
     // SMASH also stuns everything it hits for `duration` seconds (bosses shrug it off).
-    skill: { kind: "smash", name: "SMASH", cooldown: 5, damage: 60, radius: 70, duration: 1 },
+    skill: { kind: "smash", name: "SMASH", cooldown: 5, damage: 60, radius: 70, duration: 1, desc: "slams the ground: hurts and stuns everything around him for 1s." },
     // HEAT VISION: a beam `radius` long that follows his aim for `duration` seconds, `damage` per second.
-    skill2: { kind: "eyebeam", name: "HEAT VISION", cooldown: 8, damage: 70, radius: 220, width: 10, duration: 2.5 },
+    skill2: { kind: "eyebeam", name: "HEAT VISION", cooldown: 8, damage: 70, radius: 220, width: 10, duration: 2.5, desc: "red laser beams from his eyes for 2.5s that follow his aim." },
   },
   isekai: {
     name: "Reborn Knight",
@@ -355,7 +357,7 @@ const BASE_HEROES: Record<BaseHeroId, HeroDef> = {
     aoe: 0,
     shotSpeed: 0,
     pierce: 0,
-    skill: { kind: "wave", name: "SKY SLASH", cooldown: 4, damage: 40, radius: 230 },
+    skill: { kind: "wave", name: "SKY SLASH", cooldown: 4, damage: 40, radius: 230, desc: "a flying sword wave down the lane." },
     // EXCALIBUR: `count` light swords circle `radius` away for `duration` seconds.
     skill2: { kind: "excalibur", name: "EXCALIBUR", cooldown: 14, damage: 18, radius: 40, duration: 6, count: 4 },
   },
@@ -374,7 +376,7 @@ const BASE_HEROES: Record<BaseHeroId, HeroDef> = {
     aoe: 0,
     shotSpeed: 720,
     pierce: 3,
-    skill: { kind: "burst", name: "FROST VOLLEY", cooldown: 6, damage: 255, radius: 0 },
+    skill: { kind: "burst", name: "FROST VOLLEY", cooldown: 6, damage: 255, radius: 0, desc: "a rapid volley of piercing sniper shots." },
     // VANISH: invisible for `duration` seconds (monsters and rivals lose track of him).
     skill2: { kind: "invis", name: "VANISH", cooldown: 12, damage: 0, radius: 0, duration: 2 },
   },
@@ -393,7 +395,7 @@ const BASE_HEROES: Record<BaseHeroId, HeroDef> = {
     aoe: 26,
     shotSpeed: 0,
     pierce: 0,
-    skill: { kind: "storm", name: "THUNDERBOLT", cooldown: 5, damage: 50, radius: 95 },
+    skill: { kind: "storm", name: "THUNDERBOLT", cooldown: 5, damage: 50, radius: 95, desc: "a storm of lightning strikes all around him." },
     // YOYO MODE: basic attacks lock on to the nearest target within `radius` for `damage` (no blast); use again to switch back.
     skill2: { kind: "yoyo", name: "YOYO MODE", cooldown: 0.8, damage: 15, radius: 140 },
   },
@@ -412,7 +414,7 @@ const BASE_HEROES: Record<BaseHeroId, HeroDef> = {
     aoe: 42,
     shotSpeed: 240,
     pierce: 0,
-    skill: { kind: "fireball", name: "FIRE SPIRIT", cooldown: 6, damage: 70, radius: 90 },
+    skill: { kind: "fireball", name: "FIRE SPIRIT", cooldown: 6, damage: 70, radius: 90, desc: "a big fire spirit fireball that explodes in a wide blast." },
     // MOVING CASTLE: the castle is `radius` wide (each side), walks at CASTLE_SPEED and hits each target once.
     skill2: { kind: "castle", name: "MOVING CASTLE", cooldown: 16, damage: 60, radius: 40, duration: 1 },
   },

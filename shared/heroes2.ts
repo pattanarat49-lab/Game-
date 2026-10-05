@@ -44,7 +44,7 @@ function reach(steps: FxStep[]): number {
 }
 
 type Skill = [name: string, cooldown: number, text: string, steps: FxStep[], botHp?: number];
-const combo = ([name, cooldown, , steps, botHp]: Skill): SkillDef => ({ kind: "combo", name, cooldown, damage: 0, radius: reach(steps), steps, botHp });
+const combo = ([name, cooldown, desc, steps, botHp]: Skill): SkillDef => ({ kind: "combo", name, cooldown, damage: 0, radius: reach(steps), steps, botHp, desc });
 
 interface Entry {
   cls: HeroClass;
