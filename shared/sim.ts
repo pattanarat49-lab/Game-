@@ -124,7 +124,17 @@ const BULLET_CUT_SLACK = 8; // shots are small and fast, so melee reaches them a
 const ENEMY = "#enemy"; // attacker id for damage dealt by monsters
 const CLONE_SIGHT = 300;
 const GATLING_GAP = 0.1; // seconds between GATLING PUNCH hits
-const BARRAGE_GAP = 0.12; // seconds between ROCK BARRAGE punches
+const BARRAGE_GAP = 0.12;
+/** KANABO CYCLONE: seconds between spins. */
+const CYCLONE_GAP = 0.35;
+/** BLOOD RAGE: damage taken while raging, times normal. */
+const RAGE_TAKEN = 1.15;
+/** ANVIL / METEOR / confetti: seconds until they land. */
+const ANVIL_FALL = 0.7;
+const METEOR_FALL = 0.9;
+const CONFETTI_FUSE = 0.6;
+/** JACK-IN-THE-BOX: seconds a box waits for a victim. */
+const JACKBOX_LIFE = 20; // seconds between ROCK BARRAGE punches
 const PORTAL_REACH = 14; // how close to a portal's centre you must walk to go through
 const PORTAL_WAIT = 10; // seconds a lone portal waits for its partner
 const MISSILE_SPEED = 210;
@@ -227,6 +237,7 @@ export type BulletKind =
   | "snipe" | "wave" | "godslash" | "magic" | "fireball" | "enemy" | "banana" | "boulder" | "holy" | "stone" | "loki" | "glitch" | "bullet" | "slash"
   | "laser" | "missile" | "air" | "dragonfire" | "knife" | "fist" | "star"
   | "arrow" | "bigarrow" | "shuriken" | "leaf" | "leafstorm" | "bluebolt"
+  | "ball" | "pebble" | "iceshard" | "axe" | "ember"
   | `card${number}`; // DRAW CARD: the number on the card (1-9)
 
 /** A lasting area on the map: a storm cloud, an illusion kingdom, a domain. */
@@ -325,6 +336,15 @@ interface PlayerBrain {
   barrageLeft?: number;
   barrageTimer?: number;
   barrageAim?: number;
+  /** ERROR: seconds to the next glitch jump. */
+  errorTimer?: number;
+  /** DRAGOON DIVE: where he will come down. */
+  diveTo?: { x: number; y: number };
+  /** KANABO CYCLONE: spins still to come and the time to the next. */
+  cycloneLeft?: number;
+  cycloneTimer?: number;
+  /** STONE WALL: the rocks standing and seconds until they crumble. */
+  walls?: { ids: string[]; left: number };
   /** STAR SHOT: shots of the volley still to fire. */
   volleyLeft?: number;
   volleyTimer?: number;
@@ -372,6 +392,14 @@ interface ZoneBrain {
   hit?: Set<string>;
   /** STICKY BOMB: what the bomb is stuck to (an enemy id, or "p:" + a player id). */
   stick?: string;
+  /** Lands when the zone runs out (ANVIL, METEOR, confetti, DRAGOON DIVE): hit `damage` within the radius, throw back, stun. */
+  blast?: { knock: number; stun: number };
+  /** METEOR: burning ground left behind (radius, seconds, damage per tick). */
+  embers?: { radius: number; life: number; damage: number };
+  /** DRAGOON DIVE: the owner comes down here when the zone runs out. */
+  moveOwner?: boolean;
+  /** Ticking ground zones (EARTHQUAKE, BLIZZARD): seconds of slow each tick puts on foes inside. */
+  slow?: number;
   /** SEVENTH FORM: the crackling lane (start, direction, length, width). */
   lane?: { x: number; y: number; angle: number; len: number; width: number };
 }
@@ -386,6 +414,10 @@ interface BulletBrain {
   homing?: boolean; // missiles steer toward the nearest target
   age?: number;
   pct?: number; // DRAW CARD: takes this share of the target's max HP instead of `damage`
+  /** Seconds of slow it puts on whatever it hits (Cryomancer's shards). */
+  slow?: number;
+  /** AXE BOOMERANG: may hit everyone again on the way back. */
+  rehit?: boolean;
   /** RUBBER PUNCH: flies out until `back` seconds old (or a wall), then flies home to its owner. */
   bounce?: boolean;
   back?: number;
@@ -597,6 +629,10 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
         if (brain.thunderWindow) [brain.thunderWindow, p.mode] = [0, 0];
         brain.shadow = undefined;
         brain.barrageLeft = 0;
+        brain.cycloneLeft = 0;
+        brain.errorTimer = 0;
+        brain.diveTo = undefined;
+        brain.walls = undefined;
       }
       // Stacks and charged-up hits start over each round.
       const h = heroOf(p.hero);
@@ -643,7 +679,8 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
     const p = this.state.players.get(this.rootOf(attacker));
     if (!p) return 1;
     const bot = this.brains.get(this.rootOf(attacker))?.bot;
-    return (bot ? BOT_LEVELS[bot.level].damage : 1) * (p.power || 1) * (DAMAGE_BALANCE[(heroOf(p.hero).formOf ?? p.hero) as HeroId] ?? 1); // an alien form hits like its hero
+    const rage = p.buff > 0 && heroOf(p.hero).skill.kind === "rage" ? heroOf(p.hero).skill.damage : 1; // BLOOD RAGE
+    return rage * (bot ? BOT_LEVELS[bot.level].damage : 1) * (p.power || 1) * (DAMAGE_BALANCE[(heroOf(p.hero).formOf ?? p.hero) as HeroId] ?? 1); // an alien form hits like its hero
   }
 
   /** How far from its centre an enemy can be hit (BIG LIGHT makes it bigger). */
@@ -872,6 +909,111 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
     p.warp = (p.warp + 1) % 256;
     brain.target = undefined;
     brain.hurtTimer = Math.max(brain.hurtTimer, 0.4);
+  }
+
+  /** Hit one target by key (a monster id, or "p:" + a player id), stunning it (bosses shrug stuns off). */
+  private strike(owner: string, key: string, damage: number, stun = 0) {
+    const s = this.state;
+    if (key.startsWith("p:")) {
+      const vid = key.slice(2);
+      this.damagePlayer(vid, damage * PVP_DAMAGE_SCALE, true, owner);
+      const v = s.players.get(vid);
+      if (stun > 0 && v && !v.dead) v.stun = Math.max(v.stun, stun);
+    } else {
+      const e = s.enemies.get(key);
+      if (damage > 0) this.damageEnemy(key, damage, owner);
+      if (stun > 0 && e && s.enemies.has(key) && !ENEMIES[e.kind as EnemyKind].boss) e.stun = Math.max(e.stun, stun);
+    }
+  }
+
+  /** How many foes (monsters and, in PvP, rivals) stand within `radius`. */
+  private foesAround(owner: string, x: number, y: number, radius: number): number {
+    let n = 0;
+    this.state.enemies.forEach((e) => {
+      if (!ENEMIES[e.kind as EnemyKind].block && Math.hypot(e.x - x, e.y - y) <= radius + this.er(e)) n++;
+    });
+    if (this.pvpLive()) {
+      this.state.players.forEach((v, vid) => {
+        if (!v.dead && this.isFoe(owner, vid) && Math.hypot(v.x - x, v.y - y) <= radius + this.pr(v)) n++;
+      });
+    }
+    return n;
+  }
+
+  /** Tie the legs of every foe within `radius` (ROOT SNARE). */
+  private rootAround(owner: string, x: number, y: number, radius: number, seconds: number) {
+    this.state.enemies.forEach((e) => {
+      const def = ENEMIES[e.kind as EnemyKind];
+      if (!def.block && !def.boss && Math.hypot(e.x - x, e.y - y) <= radius + this.er(e)) e.root = Math.max(e.root, seconds);
+    });
+    this.state.players.forEach((v, vid) => {
+      if (!v.dead && this.isFoe(owner, vid) && Math.hypot(v.x - x, v.y - y) <= radius + this.pr(v)) v.root = Math.max(v.root, seconds);
+    });
+  }
+
+  /** Slow every foe within `radius` (EARTHQUAKE, BLIZZARD). */
+  private slowAround(owner: string, x: number, y: number, radius: number, seconds: number) {
+    this.state.enemies.forEach((e) => {
+      if (!ENEMIES[e.kind as EnemyKind].block && Math.hypot(e.x - x, e.y - y) <= radius + this.er(e)) e.slow = Math.max(e.slow, seconds);
+    });
+    this.state.players.forEach((v, vid) => {
+      if (!v.dead && this.isFoe(owner, vid) && Math.hypot(v.x - x, v.y - y) <= radius + this.pr(v)) v.slow = Math.max(v.slow, seconds);
+    });
+  }
+
+  /** JACK-IN-THE-BOX: the first foe to come close sets it off. */
+  private jackInTheBox(zid: string, z: Z, brain: ZoneBrain) {
+    if (z.life <= 0 || this.foesAround(brain.owner, z.x, z.y, z.radius) === 0) return;
+    const r = z.radius + 10;
+    this.sweep(brain.owner, z.x, z.y, 0, r, Math.PI * 2, brain.damage, 2);
+    this.stunAround(brain.owner, z.x, z.y, r, brain.stun ?? 1);
+    this.addZone("jackpop", z.x, z.y, r, 0.6, { owner: brain.owner, every: Infinity, damage: 0 });
+    z.life = 0; // gone once sprung
+    void zid;
+  }
+
+  /** ANVIL, METEOR, the confetti bomb, DRAGOON DIVE: it comes down now. */
+  private landBlast(z: Z, brain: ZoneBrain) {
+    const blast = brain.blast!;
+    if (brain.moveOwner) {
+      const p = this.state.players.get(brain.owner);
+      if (!p || p.dead) return;
+      const at = this.move(z.x, z.y, 0, 0, PLAYER_RADIUS);
+      [p.x, p.y] = [at.x, at.y];
+      p.warp = (p.warp + 1) % 256;
+      p.active2 = 0;
+      const b = this.brains.get(brain.owner);
+      if (b) b.target = undefined;
+    }
+    this.sweep(brain.owner, z.x, z.y, 0, z.radius, Math.PI * 2, brain.damage, blast.knock || false);
+    if (blast.stun > 0) this.stunAround(brain.owner, z.x, z.y, z.radius, blast.stun);
+    this.addZone(z.kind === "confetti" ? "confettiboom" : z.kind === "meteor" ? "boom" : "landing", z.x, z.y, z.radius, 0.5, { owner: brain.owner, every: Infinity, damage: 0 });
+    if (brain.embers) {
+      const e = brain.embers;
+      this.addZone("embers", z.x, z.y, e.radius, e.life, { owner: brain.owner, every: 0.5, damage: e.damage });
+    }
+  }
+
+  /** ERROR and DRAGOON DIVE move him by themselves (no walking, attacks or skills). Returns true while they do. */
+  private autoMove(id: string, p: P, brain: PlayerBrain, hero: HeroDef, dt: number): boolean {
+    const s2 = hero.skill2;
+    if (!(p.active2 > 0) || !s2) return false;
+    if (s2.kind === "dive") return true;
+    if (s2.kind !== "error") return false;
+    brain.errorTimer = (brain.errorTimer ?? 0) - dt;
+    if (brain.errorTimer > 0) return true;
+    brain.errorTimer += s2.width ?? 0.3;
+    // A glitch jump: half the time somewhere at random, half the time through the nearest foe.
+    const t = Math.random() < 0.5 ? this.findTarget(id, p, s2.radius * 1.5, true) : undefined;
+    const a = t ? Math.atan2(t.y - p.y, t.x - p.x) + (Math.random() - 0.5) * 0.5 : Math.random() * Math.PI * 2;
+    const len = t ? Math.min(s2.radius, Math.hypot(t.x - p.x, t.y - p.y) + 40) : s2.radius * (0.5 + Math.random() * 0.5);
+    const end = this.move(p.x, p.y, Math.cos(a) * len, Math.sin(a) * len, PLAYER_RADIUS);
+    const d = Math.hypot(end.x - p.x, end.y - p.y);
+    if (d > 1) this.lineHit(id, p.x, p.y, Math.atan2(end.y - p.y, end.x - p.x), d, 26, s2.damage);
+    [p.x, p.y] = [end.x, end.y];
+    p.warp = (p.warp + 1) % 256;
+    brain.target = undefined;
+    return true;
   }
 
   /** STICKY BOMB goes off: a small blast, and whatever it was stuck to is thrown far along the dash. */
@@ -1227,6 +1369,8 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
         brain.slashLeft = 0;
         brain.gatlingLeft = 0;
         brain.barrageLeft = 0;
+        brain.cycloneLeft = 0;
+        brain.diveTo = undefined;
         if (hero.stacks && hero.skill.kind !== "tree") p.mode = 0; // BOOST and ARMOR stacks are lost on falling
         if (hero.skill.kind === "empower") p.mode = 0;
         p.titan = 0;
@@ -1259,7 +1403,19 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
 
       p.revive = Math.max(0, p.revive - dt);
       p.buff = Math.max(0, p.buff - dt);
+      const auto = this.autoMove(id, p, brain, hero, dt); // ERROR / DRAGOON DIVE move him themselves
       p.active2 = Math.max(0, p.active2 - dt);
+      if (p.active2 > 0 && hero.skill2?.kind === "gaia") p.hp = Math.min(p.maxHp, p.hp + p.maxHp * hero.skill2.damage * dt);
+      if (brain.walls) {
+        brain.walls.left -= dt;
+        if (brain.walls.left <= 0) {
+          for (const eid of brain.walls.ids) {
+            this.state.enemies.delete(eid);
+            this.enemyBrains.delete(eid);
+          }
+          brain.walls = undefined;
+        }
+      }
       p.big = Math.max(0, p.big - dt);
       p.slow = Math.max(0, p.slow - dt);
       p.root = Math.max(0, p.root - dt);
@@ -1268,13 +1424,13 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
         p.barrier = Math.max(0, p.barrier - dt);
         if (hero.skill.kind === "immortal") p.hp = Math.min(p.maxHp, p.hp + p.maxHp * hero.skill.damage * dt);
       }
-      const doves = p.barrier > 0 && hero.skill2?.kind === "doves";
+      const doves = (p.barrier > 0 && hero.skill2?.kind === "doves") || auto;
 
       p.aim = input.aim;
       const dir = inputDirection(input);
 
       // Dash
-      if (input.dash && p.dashCooldown <= 0 && brain.dashTimer <= 0 && !(p.root > 0)) {
+      if (input.dash && p.dashCooldown <= 0 && brain.dashTimer <= 0 && !(p.root > 0) && !auto) {
         const d = dir.x || dir.y ? dir : { x: Math.cos(input.aim), y: Math.sin(input.aim) };
         brain.dashTimer = DASH_TIME;
         brain.dashX = d.x;
@@ -1285,7 +1441,10 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       let moved;
       const dashingNow = brain.dashTimer > 0;
       if (dashingNow) brain.dashTimer -= dt;
-      if (brain.zip) {
+      if (auto) {
+        moved = { x: p.x, y: p.y };
+        brain.target = undefined;
+      } else if (brain.zip) {
         // ODM GEAR: the wire reels him in; the server moves him (the client follows, as with a latch).
         const dx = brain.zip.x - p.x;
         const dy = brain.zip.y - p.y;
@@ -1334,7 +1493,8 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       p.titan = Math.max(0, p.titan - dt);
       if (input.shoot && brain.attackTimer <= 0 && !doves) {
         const bat = p.active2 > 0 && hero.skill2?.kind === "bat";
-        brain.attackTimer = hero.attackCooldown * (bat ? hero.skill2!.width ?? 0.35 : 1);
+        const rage = p.buff > 0 && hero.skill.kind === "rage";
+        brain.attackTimer = hero.attackCooldown * (bat ? hero.skill2!.width ?? 0.35 : 1) * (rage ? hero.skill.width ?? 0.6 : 1);
         p.attackSeq++;
         if (p.titan > 0) {
           // A 50m Titan's blows crush everything around it.
@@ -1365,7 +1525,8 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
             this.spawnBullet((hero.shot ?? "magic") as BulletKind, bx, by, input.aim, hero.shotSpeed, { owner: id, damage: hero.damage, pierce: 0, life: hero.range / hero.shotSpeed });
           }
         } else if (hero.attack === "magic") {
-          this.spawnBullet((hero.shot ?? "magic") as BulletKind, p.x, p.y, input.aim, hero.shotSpeed, { owner: id, damage: hero.damage, pierce: 0, life: hero.range / hero.shotSpeed, blast: hero.aoe });
+          const bid = this.spawnBullet((hero.shot ?? "magic") as BulletKind, p.x, p.y, input.aim, hero.shotSpeed, { owner: id, damage: hero.damage, pierce: 0, life: hero.range / hero.shotSpeed, blast: hero.aoe });
+          if (hero.slowHit) this.bulletBrains.get(bid)!.slow = hero.slowHit; // ice shards slow
         } else if (hero.skill2?.kind === "yoyo" && p.mode === 1) {
           this.throwYoyo(id, p, hero.skill2);
         } else if (hero.attack === "flame") {
@@ -1387,7 +1548,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       }
 
       // Skills (ordinary humans under a reality change cannot use any)
-      const powerless = s.reality > 0 && this.isFoe(s.realityBy, id);
+      const powerless = (s.reality > 0 && this.isFoe(s.realityBy, id)) || auto;
       if (input.skill && p.skillCooldown <= 0 && hero.skill.kind !== "passive" && !powerless && this.chargedEnough(hero.skill, brain)) {
         p.skillCooldown = hero.skill.cooldown;
         p.skillSeq++;
@@ -1429,6 +1590,17 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
           const g = hero.skill;
           this.lineHit(id, p.x, p.y, brain.gatlingAim, g.radius, g.width ?? 40, g.damage);
           this.cutBulletsInLane(id, p.x, p.y, brain.gatlingAim, g.radius, g.width ?? 40); // the fists smash shots too
+        }
+      }
+
+      // KANABO CYCLONE keeps spinning.
+      if ((brain.cycloneLeft ?? 0) > 0 && hero.skill2) {
+        brain.cycloneTimer = (brain.cycloneTimer ?? 0) - dt;
+        if (brain.cycloneTimer <= 0) {
+          brain.cycloneLeft!--;
+          brain.cycloneTimer += CYCLONE_GAP;
+          p.attackSeq++;
+          this.sweep(id, p.x, p.y, 0, hero.skill2.radius, Math.PI * 2, hero.skill2.damage, 1);
         }
       }
 
@@ -1786,6 +1958,222 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
         break;
       case "harden":
         p.mode = Math.min(skill.count ?? 10, p.mode + 1);
+        break;
+      case "petrify": {
+        // REALITY: the code of the nearest foe is rewritten; it is now a plain rock.
+        const t = this.findTarget(id, p, skill.radius, true);
+        if (!t) break;
+        this.strike(id, t.key, skill.damage, skill.duration ?? 3);
+        const zid = this.addZone("petrify", t.x, t.y, 12, skill.duration ?? 3, { owner: id, every: Infinity, damage: 0 });
+        this.zoneBrains.get(zid)!.stick = t.key;
+        break;
+      }
+      case "error":
+        p.active2 = skill.duration ?? 5;
+        brain.errorTimer = 0;
+        break;
+      case "reap": {
+        // SOUL REAP: a full spin of the scythe. Every foe it cuts gives a soul and heals him.
+        const n = this.foesAround(id, p.x, p.y, skill.radius);
+        this.sweep(id, p.x, p.y, 0, skill.radius, Math.PI * 2, skill.damage, true);
+        p.mode = Math.min(skill.count ?? 5, p.mode + n);
+        p.hp = Math.min(p.maxHp, p.hp + p.maxHp * (skill.width ?? 0.06) * n);
+        this.addZone("reap", p.x, p.y, skill.radius, 0.35, { owner: id, every: Infinity, damage: 0 });
+        break;
+      }
+      case "deathdoor": {
+        // DEATH'S DOOR: blink behind the nearest foe and cut, harder for every soul (and twice as hard on the nearly dead).
+        const t = this.findTarget(id, p, skill.radius, true);
+        if (!t) break;
+        const v = t.key.startsWith("p:") ? s.players.get(t.key.slice(2)) : s.enemies.get(t.key);
+        const low = v ? v.hp / v.maxHp < 0.35 : false;
+        const d = Math.hypot(t.x - p.x, t.y - p.y) || 1;
+        const end = this.move(t.x, t.y, ((t.x - p.x) / d) * 18, ((t.y - p.y) / d) * 18, PLAYER_RADIUS);
+        this.addZone("smoke", p.x, p.y, 16, 0.4, { owner: id, every: Infinity, damage: 0 });
+        p.x = end.x;
+        p.y = end.y;
+        p.warp = (p.warp + 1) % 256;
+        brain.target = undefined;
+        p.aim = Math.atan2(t.y - p.y, t.x - p.x);
+        this.strike(id, t.key, skill.damage * (1 + (skill.width ?? 0.4) * p.mode) * (low ? 2 : 1));
+        this.addZone("scythecut", t.x, t.y, 20, 0.4, { owner: id, every: Infinity, damage: 0 });
+        p.mode = 0;
+        break;
+      }
+      case "roots":
+        // ROOT SNARE: roots burst out of the ground and tie every foe nearby.
+        this.sweep(id, p.x, p.y, 0, skill.radius, Math.PI * 2, skill.damage);
+        this.rootAround(id, p.x, p.y, skill.radius, skill.duration ?? 2);
+        this.addZone("roots", p.x, p.y, skill.radius, 0.7, { owner: id, every: Infinity, damage: 0 });
+        break;
+      case "gaia":
+        p.active2 = skill.duration ?? 5;
+        break;
+      case "rage":
+        p.buff = skill.duration ?? 6;
+        brain.attackTimer = 0;
+        break;
+      case "axethrow": {
+        // AXE BOOMERANG: out to `radius`, then home again, cutting both ways.
+        const speed = 520;
+        const out = skill.radius / (speed * SHOT_SPEED_SCALE * HERO_SHOT_SCALE);
+        const bid = this.spawnBullet("axe", p.x, p.y, p.aim, speed, { owner: id, damage: skill.damage, pierce: 999, life: out + 3 });
+        Object.assign(this.bulletBrains.get(bid)!, { bounce: true, back: out, age: 0, rehit: true });
+        break;
+      }
+      case "jackbox": {
+        // JACK-IN-THE-BOX: a box at his feet that waits for a victim; only so many at once.
+        const mine: string[] = [];
+        s.zones.forEach((z, zid) => {
+          if (z.kind === "jackbox" && this.zoneBrains.get(zid)?.owner === id) mine.push(zid);
+        });
+        while (mine.length >= (skill.max ?? 3)) this.removeZone(mine.shift()!);
+        const zid = this.addZone("jackbox", p.x, p.y, skill.radius, JACKBOX_LIFE, { owner: id, every: Infinity, damage: skill.damage });
+        this.zoneBrains.get(zid)!.stun = skill.duration ?? 1;
+        break;
+      }
+      case "switch": {
+        // SWITCHEROO: trade places with the nearest foe; a confetti bomb goes off where he stood.
+        const t = this.findTarget(id, p, skill.radius, true);
+        if (!t) break;
+        const [ox, oy] = [p.x, p.y];
+        if (t.key.startsWith("p:")) {
+          const v = s.players.get(t.key.slice(2))!;
+          [v.x, v.y] = [ox, oy];
+          v.warp = (v.warp + 1) % 256;
+          const vb = this.brains.get(t.key.slice(2));
+          if (vb) [vb.target, vb.dashTimer] = [undefined, 0];
+        } else {
+          const e = s.enemies.get(t.key)!;
+          if (!ENEMIES[e.kind as EnemyKind].boss) [e.x, e.y] = [ox, oy];
+        }
+        [p.x, p.y] = [t.x, t.y];
+        p.warp = (p.warp + 1) % 256;
+        brain.target = undefined;
+        this.addZone("smoke", ox, oy, 16, 0.4, { owner: id, every: Infinity, damage: 0 });
+        this.addZone("smoke", t.x, t.y, 16, 0.4, { owner: id, every: Infinity, damage: 0 });
+        const zid = this.addZone("confetti", ox, oy, skill.width ?? 55, CONFETTI_FUSE, { owner: id, every: Infinity, damage: skill.damage });
+        this.zoneBrains.get(zid)!.blast = { knock: 1, stun: 0 };
+        break;
+      }
+      case "anvil": {
+        const w = skill.width ?? 140;
+        const spot = this.move(p.x, p.y, Math.cos(p.aim) * w, Math.sin(p.aim) * w, 4);
+        const zid = this.addZone("anvil", spot.x, spot.y, skill.radius, ANVIL_FALL, { owner: id, every: Infinity, damage: skill.damage });
+        this.zoneBrains.get(zid)!.blast = { knock: 0, stun: skill.duration ?? 1.5 };
+        break;
+      }
+      case "sparks": {
+        // FORGE SPARKS: a fan of red-hot sparks off the anvil.
+        const n = skill.count ?? 7;
+        const spread = skill.width ?? 0.9;
+        const speed = 330;
+        for (let i = 0; i < n; i++) {
+          const a = p.aim + (n > 1 ? (i / (n - 1) - 0.5) * spread : 0);
+          this.spawnBullet("ember", p.x, p.y, a, speed, { owner: id, damage: skill.damage, pierce: 0, life: skill.radius / speed });
+        }
+        break;
+      }
+      case "wall": {
+        // STONE WALL: rocks rise across the aim; they stop shots until broken (or they crumble).
+        if (brain.walls) for (const eid of brain.walls.ids) [s.enemies.delete(eid), this.enemyBrains.delete(eid)];
+        const cx = p.x + Math.cos(p.aim) * skill.radius;
+        const cy = p.y + Math.sin(p.aim) * skill.radius;
+        const n = skill.count ?? 5;
+        const ids: string[] = [];
+        for (let i = 0; i < n; i++) {
+          const off = (i - (n - 1) / 2) * 16;
+          const x = cx - Math.sin(p.aim) * off;
+          const y = cy + Math.cos(p.aim) * off;
+          if (this.blocked(x, y) || x < 8 || y < 8 || x > WORLD_W - 8 || y > WORLD_H - 8) continue;
+          const e = this.make.enemy();
+          e.kind = "rockwall";
+          e.hp = e.maxHp = ENEMIES.rockwall.hp;
+          [e.x, e.y] = [x, y];
+          const eid = `e${this.nextId++}`;
+          s.enemies.set(eid, e);
+          this.enemyBrains.set(eid, { shootTimer: 999, burstAngle: 0, beamTimer: 999, kbx: 0, kby: 0, owner: id });
+          ids.push(eid);
+        }
+        brain.walls = { ids, left: skill.duration ?? 6 };
+        this.addZone("build", cx, cy, 30, 0.3, { owner: id, every: Infinity, damage: 0 });
+        break;
+      }
+      case "quake": {
+        const zid = this.addZone("quake", p.x, p.y, skill.radius, skill.duration ?? 2, { owner: id, every: 0.4, damage: skill.damage });
+        this.zoneBrains.get(zid)!.slow = 1;
+        break;
+      }
+      case "meteor": {
+        const w = skill.width ?? 170;
+        const spot = this.move(p.x, p.y, Math.cos(p.aim) * w, Math.sin(p.aim) * w, 4);
+        const zid = this.addZone("meteor", spot.x, spot.y, skill.radius, METEOR_FALL, { owner: id, every: Infinity, damage: skill.damage });
+        Object.assign(this.zoneBrains.get(zid)!, { blast: { knock: 1.5, stun: 0 }, embers: { radius: skill.radius, life: skill.duration ?? 3, damage: skill.damage * 0.12 } });
+        break;
+      }
+      case "flamedash": {
+        // FLAME DASH: through the foes, and the way behind him burns.
+        const end = this.move(p.x, p.y, Math.cos(p.aim) * skill.radius, Math.sin(p.aim) * skill.radius, PLAYER_RADIUS);
+        const len = Math.hypot(end.x - p.x, end.y - p.y);
+        const w = skill.width ?? 28;
+        this.lineHit(id, p.x, p.y, p.aim, len, w, skill.damage);
+        const zid = this.addZone("firetrail", p.x, p.y, 4, skill.duration ?? 3, { owner: id, every: 0.5, damage: skill.damage * 0.4 });
+        this.zoneBrains.get(zid)!.lane = { x: p.x, y: p.y, angle: p.aim, len, width: w };
+        for (let d = 0; d <= len; d += 22) {
+          this.addZone("flame", p.x + Math.cos(p.aim) * d, p.y + Math.sin(p.aim) * d, 10, skill.duration ?? 3, { owner: id, every: Infinity, damage: 0 });
+        }
+        p.x = end.x;
+        p.y = end.y;
+        p.warp = (p.warp + 1) % 256;
+        brain.target = undefined;
+        brain.hurtTimer = Math.max(brain.hurtTimer, 0.25);
+        break;
+      }
+      case "iceprison": {
+        const t = this.findTarget(id, p, skill.radius, true);
+        if (!t) break;
+        this.strike(id, t.key, skill.damage, skill.duration ?? 1.8);
+        const zid = this.addZone("iceblock", t.x, t.y, 12, skill.duration ?? 1.8, { owner: id, every: Infinity, damage: 0 });
+        this.zoneBrains.get(zid)!.stick = t.key;
+        break;
+      }
+      case "blizzard": {
+        const w = skill.width ?? 150;
+        const spot = this.move(p.x, p.y, Math.cos(p.aim) * w, Math.sin(p.aim) * w, 4);
+        const zid = this.addZone("blizzard", spot.x, spot.y, skill.radius, skill.duration ?? 4, { owner: id, every: 0.5, damage: skill.damage });
+        this.zoneBrains.get(zid)!.slow = 1;
+        break;
+      }
+      case "lancecharge": {
+        // PIERCING CHARGE: spear first down a lane; everything in it is thrown far back.
+        const end = this.move(p.x, p.y, Math.cos(p.aim) * skill.radius, Math.sin(p.aim) * skill.radius, PLAYER_RADIUS);
+        const len = Math.hypot(end.x - p.x, end.y - p.y);
+        this.lineHit(id, p.x, p.y, p.aim, len, skill.width ?? 30, skill.damage, 0, 2.5);
+        this.addZone("lancetrail", (p.x + end.x) / 2, (p.y + end.y) / 2, len / 2, 0.35, { owner: id, every: Infinity, damage: 0 });
+        p.x = end.x;
+        p.y = end.y;
+        p.warp = (p.warp + 1) % 256;
+        brain.target = undefined;
+        brain.hurtTimer = Math.max(brain.hurtTimer, 0.3);
+        break;
+      }
+      case "dive": {
+        // DRAGOON DIVE: up out of reach; he comes down on the aimed spot when the zone runs out.
+        const w = skill.width ?? 200;
+        const spot = this.move(p.x, p.y, Math.cos(p.aim) * w, Math.sin(p.aim) * w, PLAYER_RADIUS);
+        p.active2 = skill.duration ?? 1;
+        const zid = this.addZone("dive", spot.x, spot.y, skill.radius, skill.duration ?? 1, { owner: id, every: Infinity, damage: skill.damage });
+        Object.assign(this.zoneBrains.get(zid)!, { blast: { knock: 0, stun: 1 }, moveOwner: true });
+        break;
+      }
+      case "roar":
+        this.sweep(id, p.x, p.y, 0, skill.radius, Math.PI * 2, skill.damage, 1.5);
+        this.stunAround(id, p.x, p.y, skill.radius, skill.duration ?? 0.8);
+        this.addZone("roar", p.x, p.y, skill.radius, 0.6, { owner: id, every: Infinity, damage: 0 });
+        break;
+      case "cyclone":
+        brain.cycloneLeft = skill.count ?? 3;
+        brain.cycloneTimer = 0;
         break;
       case "barrage":
         brain.barrageLeft = skill.count ?? 6;
@@ -2516,7 +2904,8 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       if (brain.link) this.usePortal(id, z, brain.link, brain.owner);
       if (z.kind === "castle") this.walkCastle(z, brain, dt);
       if (z.kind === "frost") this.frostSigil(z, brain);
-      if ((z.kind === "sticky" || z.kind === "whip") && brain.stick) {
+      if (z.kind === "jackbox") this.jackInTheBox(id, z, brain);
+      if ((z.kind === "sticky" || z.kind === "whip" || z.kind === "petrify" || z.kind === "iceblock") && brain.stick) {
         // The bomb rides along on whatever it is stuck to.
         const key = brain.stick;
         const v = key.startsWith("p:") ? s.players.get(key.slice(2)) : s.enemies.get(key);
@@ -2531,7 +2920,11 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
             if (this.rootOf(qid) !== this.rootOf(brain.owner) && this.isFoe(brain.owner, qid)) return;
             q.hp = Math.min(q.maxHp, q.hp + q.maxHp * brain.damage);
           });
-        } else if (z.kind === "thunderlane" && brain.lane) {
+        } else if (z.kind === "embers" || z.kind === "quake" || z.kind === "blizzard") {
+          // Burning ground, a shaking quake, a snowstorm: everyone hostile inside is hurt (and slowed).
+          this.sweep(brain.owner, z.x, z.y, 0, z.radius, Math.PI * 2, brain.damage);
+          if (brain.slow) this.slowAround(brain.owner, z.x, z.y, z.radius, brain.slow);
+        } else if (brain.lane) {
           const l = brain.lane;
           this.lineHit(brain.owner, l.x, l.y, l.angle, l.len, l.width, brain.damage);
         } else if (z.kind === "hurricane") {
@@ -2565,6 +2958,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
         this.stunAround(brain.owner, z.x, z.y, z.radius, brain.stun ?? 2);
       }
       if (z.life <= 0 && z.kind === "sticky") this.stickyBlast(z, brain);
+      if (z.life <= 0 && brain.blast) this.landBlast(z, brain);
       if (z.life <= 0 && z.kind === "truck") {
         // The truck lands: everything under it is crushed and thrown back.
         this.sweep(brain.owner, z.x, z.y, 0, z.radius, Math.PI * 2, brain.damage, 2);
@@ -2695,6 +3089,10 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
     // HARDEN: each stack takes a share off every hit.
     const hard = heroOf(p.hero).skill;
     if (hard.kind === "harden" && !raw) amount *= Math.max(0, 1 - hard.damage * p.mode);
+    const s2 = heroOf(p.hero).skill2;
+    if (p.active2 > 0 && s2?.kind === "dive") return; // DRAGOON DIVE: high in the air, out of reach
+    if (p.active2 > 0 && s2?.kind === "gaia" && !raw) amount *= s2.width ?? 0.5; // GAIA SHELL
+    if (p.buff > 0 && hard.kind === "rage" && !raw) amount *= RAGE_TAKEN; // BLOOD RAGE leaves him open
     // Under Yaotsu's reality change, ordinary humans hit for 1.
     if (this.state.reality > 0 && attacker && (attacker === ENEMY || this.isFoe(this.state.realityBy, attacker))) {
       amount = Math.min(amount, 1);
@@ -3256,6 +3654,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
           brain.hit.add(vid);
           this.damagePlayer(vid, (brain.pct ? v.maxHp * brain.pct : brain.damage) * PVP_DAMAGE_SCALE, true, brain.owner);
           if (brain.stun && !v.dead) v.stun = Math.max(v.stun, brain.stun); // POWER SHOT
+          if (brain.slow && !v.dead) v.slow = Math.max(v.slow, brain.slow); // ice shards
           if (brain.pierceLeft <= 0) this.removeBullet(id);
           else brain.pierceLeft--;
         });
@@ -3275,6 +3674,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
           // A drawn card takes its share of the monster's max HP (a tenth of that on bosses).
           this.damageEnemy(eid, brain.pct ? e.maxHp * brain.pct * (def.boss ? 0.1 : 1) : brain.damage, brain.owner);
           if (brain.stun && !def.boss && s.enemies.has(eid)) e.stun = Math.max(e.stun, brain.stun);
+          if (brain.slow && !def.block && s.enemies.has(eid)) e.slow = Math.max(e.slow, brain.slow);
           if (brain.pierceLeft <= 0) this.removeBullet(id);
           else brain.pierceLeft--;
         }
@@ -3294,6 +3694,11 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       return true;
     }
     if (brain.age >= (brain.back ?? 3)) {
+      if (brain.rehit) {
+        // AXE BOOMERANG: on the way home it cuts everyone again.
+        brain.rehit = false;
+        brain.hit.clear();
+      }
       // Snap back: straight home, through everything.
       const dx = owner.x - b.x;
       const dy = owner.y - b.y;
@@ -3477,6 +3882,40 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
         return p.mode < (skill.count ?? 3);
       case "harden":
         return p.mode < (skill.count ?? 10);
+      case "petrify":
+      case "iceprison":
+      case "deathdoor":
+        return dist <= skill.radius;
+      case "error":
+        return dist < 240;
+      case "reap":
+      case "roots":
+      case "roar":
+      case "quake":
+        return dist <= skill.radius + 10;
+      case "cyclone":
+        return dist <= skill.radius + 15;
+      case "gaia":
+        return hpLeft < 0.6 && dist < 200;
+      case "rage":
+        return dist < 90;
+      case "axethrow":
+      case "lancecharge":
+      case "flamedash":
+        return dist <= skill.radius;
+      case "sparks":
+        return dist <= skill.radius * 0.8;
+      case "jackbox":
+        return dist < 90;
+      case "switch":
+        return dist <= skill.radius && dist > 80;
+      case "anvil":
+      case "meteor":
+      case "blizzard":
+      case "dive":
+        return dist <= (skill.width ?? 150) + 40 && dist > 50;
+      case "wall":
+        return dist > 120 && dist < 320;
       case "barrage":
         return dist <= skill.radius + 10;
       case "trojan":

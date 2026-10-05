@@ -1893,3 +1893,122 @@ export const TREE: PixelSprite = {
   ],
   palette: { g: "#2f9e3a", L: "#7fdc5a", t: "#7a4a22" },
 };
+
+export const JUGGLE_BALL: PixelSprite = {
+  grid: [
+    ".rr.",
+    "rwry",
+    "ryyy",
+    ".yy.",
+  ],
+  palette: { r: "#e83a5a", y: "#ffd23f", w: "#ffffff" },
+};
+
+export const PEBBLE: PixelSprite = {
+  grid: [
+    ".bb.",
+    "bLbb",
+    "bbbd",
+    ".dd.",
+  ],
+  palette: { b: "#8a6a4a", L: "#b8946a", d: "#5a4030" },
+};
+
+export const ICE_SHARD: PixelSprite = {
+  grid: [
+    "....bb.",
+    "bbwwwwb",
+    "....bb.",
+  ],
+  palette: { b: "#5ab8ff", w: "#e8f8ff" },
+};
+
+export const AXE_SPIN: PixelSprite = {
+  grid: [
+    ".ss...",
+    "sssw..",
+    "ssswb.",
+    ".s..b.",
+    "....b.",
+    "....b.",
+  ],
+  palette: { s: "#c8d0d8", w: "#ffffff", b: "#7a4a22" },
+};
+
+export const EMBER: PixelSprite = {
+  grid: [
+    ".o.",
+    "oyo",
+    ".o.",
+  ],
+  palette: { o: "#ff6a1a", y: "#fff07a" },
+};
+
+export const ROCK_WALL: PixelSprite = {
+  grid: [
+    "..dddd..",
+    ".dLLbbd.",
+    "dLbbbbbd",
+    "dbbbLbbd",
+    "dbbbbbbd",
+    "dbLbbbdd",
+    ".dbbbbd.",
+    "..dddd..",
+  ],
+  palette: { d: "#4a3a2a", b: "#7a6a52", L: "#a89a7a" },
+};
+
+export const ANVIL: PixelSprite = {
+  grid: [
+    "dddddddddd.",
+    ".gggggggggg",
+    "..ggLgggg..",
+    "...ggggg...",
+    "...ggggg...",
+    "..ggggggg..",
+    ".ddddddddd.",
+  ],
+  palette: { g: "#5a5a68", L: "#9a9aa8", d: "#2a2a34" },
+};
+
+export const METEOR: PixelSprite = {
+  grid: [
+    "....yyoo",
+    "...yoorr",
+    ".ddddorr",
+    "dbbbbdr.",
+    "dbLbbbd.",
+    "dbbbbbd.",
+    "dbbbbd..",
+    ".dddd...",
+  ],
+  palette: { d: "#3a2a2a", b: "#6a4a3a", L: "#9a6a4a", o: "#ff8a1a", y: "#fff07a", r: "#e8341a" },
+};
+
+export const JACK_BOX: PixelSprite = {
+  grid: [
+    "pppppppp",
+    "pyyyyyyp",
+    "pyrpprpp",
+    "pyprrpyp",
+    "pyprrpyp",
+    "pyrpprpp",
+    "pyyyyyyp",
+    "pppppppp",
+  ],
+  palette: { p: "#8a3ad8", y: "#ffd23f", r: "#e83a5a" },
+};
+
+export const ROCK_STATUE: PixelSprite = {
+  grid: [
+    "...dddd...",
+    "..dbbLbd..",
+    ".dbLbbbbd.",
+    "dbbbbbbLbd",
+    "dbbLbbbbbd",
+    "dbbbbbbbbd",
+    ".dbbbbLbd.",
+    "..dddddd..",
+  ],
+  palette: { d: "#4a4a50", b: "#8a8a90", L: "#b8b8c0" },
+};

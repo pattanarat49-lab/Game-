@@ -90,7 +90,18 @@ export type HeroId =
   | "druid"
   | "monk"
   | "robot"
-  | "golem";
+  | "golem"
+  | "hacker"
+  | "reaper"
+  | "mossgolem"
+  | "berserker"
+  | "jester"
+  | "blacksmith"
+  | "geomancer"
+  | "pyromancer"
+  | "cryomancer"
+  | "lancer"
+  | "oni";
 export type AttackStyle = "punch" | "sword" | "rifle" | "lightning" | "magic" | "flame";
 export type SkillKind =
   | "smash"
@@ -176,6 +187,28 @@ export type SkillKind =
   | "bluelaser" // one blue laser blast straight ahead
   | "harden" // takes less damage (stacks)
   | "barrage" // a flurry of punches ahead: stuns foes pinned against a wall, knocks back the rest
+  | "petrify" // REALITY: the nearest foe turns into a plain rock (can't move or act) for `duration`
+  | "error" // ERROR: glitches around the map at random for `duration`, hurting whatever each jump passes through
+  | "reap" // SOUL REAP: a full scythe spin; each foe hit gives a soul and heals a share of max HP
+  | "deathdoor" // DEATH'S DOOR: blink behind the nearest foe and cut, harder per soul (souls are used up)
+  | "roots" // ROOT SNARE: roots burst out around him and tie every foe's legs
+  | "gaia" // GAIA SHELL: moss armour that halves damage taken and heals over time
+  | "rage" // BLOOD RAGE: faster, harder blows for a while, but takes more damage
+  | "axethrow" // AXE BOOMERANG: a spinning axe that flies out and comes back, cutting both ways
+  | "jackbox" // JACK-IN-THE-BOX: a box trap that springs when a foe comes close
+  | "switch" // SWITCHEROO: swap places with the nearest foe, leaving a confetti bomb behind
+  | "anvil" // ANVIL DROP: an anvil falls on the aimed spot
+  | "sparks" // FORGE SPARKS: a cone of red-hot sparks
+  | "wall" // STONE WALL: raises a wall of rocks across the aim
+  | "quake" // EARTHQUAKE: the ground shakes around him, hurting and slowing
+  | "meteor" // METEOR: a meteor falls on the aimed spot and leaves the ground burning
+  | "flamedash" // FLAME DASH: dash ahead leaving a trail of fire
+  | "iceprison" // ICE PRISON: the nearest foe is frozen in a block of ice
+  | "blizzard" // BLIZZARD: a snowstorm on the aimed spot that hurts and slows
+  | "lancecharge" // PIERCING CHARGE: charge ahead spear first, throwing foes back
+  | "dive" // DRAGOON DIVE: leap out of reach, then crash down on the aimed spot
+  | "roar" // DEMON ROAR: stuns and throws back everything nearby
+  | "cyclone" // KANABO CYCLONE: three full spins of the club
   | "charge"; // hold to charge (walking slower), let go to smash: the longer the charge, the harder and longer it hits
 
 export interface SkillDef {
@@ -1092,6 +1125,226 @@ export const HEROES: Record<HeroId, HeroDef> = {
     // ROCK BARRAGE: `count` punches down a `radius` x `width` lane over `duration`*0.5 s; pinned foes are stunned `duration` s.
     skill2: { kind: "barrage", name: "ROCK BARRAGE", cooldown: 9, damage: 14, radius: 50, width: 40, count: 6, duration: 1.5 },
   },
+  // The eleven heroes of 2026-10-05 (second sheet + the Hacker).
+  hacker: {
+    name: "Hacker",
+    role: "Code breaker",
+    blurb: "Glitched code bolts. REALITY: rewrites the nearest foe into a plain rock for 3s (it can't move or act). ERROR (E): becomes a glitch and zips around the map at random for 5s, hurting whatever each jump passes through.",
+    stars: 3,
+    maxHp: 100,
+    speed: 105,
+    attack: "magic",
+    shot: "glitch",
+    attackCooldown: 0.5,
+    damage: 22,
+    range: 240,
+    arc: 0,
+    aoe: 0,
+    shotSpeed: 380,
+    pierce: 0,
+    skill: { kind: "petrify", name: "REALITY", cooldown: 12, damage: 0, radius: 260, duration: 3 },
+    // ERROR: a jump every `width` s, each `radius` long at most, hurting for `damage`.
+    skill2: { kind: "error", name: "ERROR", cooldown: 14, damage: 18, radius: 220, width: 0.3, duration: 5 },
+  },
+  reaper: {
+    name: "Reaper",
+    role: "Soul collector",
+    blurb: "Wide scythe cuts. SOUL REAP: a full spin; every foe hit gives a soul (up to 5) and heals him 6%. DEATH'S DOOR (E): blinks behind the nearest foe and cuts, 40% harder per soul (souls are used up) and double on a foe under 35% HP.",
+    stars: 4,
+    maxHp: 110,
+    speed: 105,
+    attack: "sword",
+    attackCooldown: 0.55,
+    damage: 24,
+    range: 34,
+    arc: 2.2,
+    aoe: 0,
+    shotSpeed: 0,
+    pierce: 0,
+    stacks: { label: "SOULS", max: 5 },
+    // SOUL REAP: `damage` in a full circle of `radius`; heals `width` of max HP per foe hit.
+    skill: { kind: "reap", name: "SOUL REAP", cooldown: 6, damage: 26, radius: 60, width: 0.06, count: 5 },
+    skill2: { kind: "deathdoor", name: "DEATH'S DOOR", cooldown: 10, damage: 40, radius: 280, width: 0.4 },
+  },
+  mossgolem: {
+    name: "Moss Golem",
+    role: "Ancient guardian",
+    blurb: "Huge HP, mossy fists. ROOT SNARE: roots burst out all around him, tying every foe's legs for 2s. GAIA SHELL (E): moss covers him for 5s; he takes half damage and heals 3% HP a second.",
+    stars: 3,
+    maxHp: 300,
+    speed: 85,
+    attack: "punch",
+    attackCooldown: 0.8,
+    damage: 30,
+    range: 24,
+    arc: 1.6,
+    aoe: 0,
+    shotSpeed: 0,
+    pierce: 0,
+    skill: { kind: "roots", name: "ROOT SNARE", cooldown: 8, damage: 15, radius: 100, duration: 2 },
+    // GAIA SHELL: takes `width` of normal damage, heals `damage` of max HP a second.
+    skill2: { kind: "gaia", name: "GAIA SHELL", cooldown: 14, damage: 0.03, radius: 0, width: 0.5, duration: 5 },
+  },
+  berserker: {
+    name: "Berserker",
+    role: "Raging axeman",
+    blurb: "Heavy axe swings. BLOOD RAGE: for 6s he swings much faster and 30% harder, but takes 15% more damage. AXE BOOMERANG (E): hurls his axe; it spins out and comes back, cutting everything both ways.",
+    stars: 3,
+    maxHp: 160,
+    speed: 100,
+    attack: "sword",
+    attackCooldown: 0.6,
+    damage: 30,
+    range: 30,
+    arc: 1.8,
+    aoe: 0,
+    shotSpeed: 0,
+    pierce: 0,
+    // BLOOD RAGE: for `duration` s attack cooldown x`width`, damage x`damage`, and he takes RAGE_TAKEN more damage.
+    skill: { kind: "rage", name: "BLOOD RAGE", cooldown: 12, damage: 1.3, radius: 0, width: 0.6, duration: 6 },
+    skill2: { kind: "axethrow", name: "AXE BOOMERANG", cooldown: 7, damage: 34, radius: 200 },
+  },
+  jester: {
+    name: "Jester",
+    role: "Prankster",
+    blurb: "Juggling balls. JACK-IN-THE-BOX: drops a box trap (up to 3) that springs on the first foe to come close: a big hit that stuns and throws it back. SWITCHEROO (E): swaps places with the nearest foe and leaves a confetti bomb where he stood.",
+    stars: 3,
+    maxHp: 100,
+    speed: 110,
+    attack: "magic",
+    shot: "ball",
+    attackCooldown: 0.4,
+    damage: 18,
+    range: 220,
+    arc: 0,
+    aoe: 0,
+    shotSpeed: 360,
+    pierce: 0,
+    // JACK-IN-THE-BOX: springs on a foe within `radius`; `damage`, stun `duration`; boxes last 20s.
+    skill: { kind: "jackbox", name: "JACK-IN-THE-BOX", cooldown: 4, damage: 50, radius: 34, duration: 1, max: 3 },
+    // SWITCHEROO: swaps with the nearest foe within `radius`; the bomb hits `damage` in `width` after 0.6s.
+    skill2: { kind: "switch", name: "SWITCHEROO", cooldown: 10, damage: 40, radius: 300, width: 55 },
+  },
+  blacksmith: {
+    name: "Blacksmith",
+    role: "Master of the forge",
+    blurb: "Hammer blows that throw foes back. ANVIL DROP: an anvil falls on the aimed spot, crushing and stunning. FORGE SPARKS (E): a hammer strike sends a cone of red-hot sparks flying.",
+    stars: 4,
+    maxHp: 150,
+    speed: 95,
+    attack: "punch",
+    attackCooldown: 0.65,
+    damage: 30,
+    range: 26,
+    arc: 1.6,
+    aoe: 0,
+    shotSpeed: 0,
+    pierce: 0,
+    knock: 1.5,
+    // ANVIL DROP: lands `width` ahead after a moment: `damage` in `radius`, stun `duration`.
+    skill: { kind: "anvil", name: "ANVIL DROP", cooldown: 7, damage: 60, radius: 45, width: 140, duration: 1.5 },
+    skill2: { kind: "sparks", name: "FORGE SPARKS", cooldown: 6, damage: 16, radius: 180, count: 7, width: 0.9 },
+  },
+  geomancer: {
+    name: "Geomancer",
+    role: "Earth shaper",
+    blurb: "Flings pebbles. STONE WALL: raises a wall of rocks across the aim for 6s that stops shots until broken. EARTHQUAKE (E): the ground shakes around him for 2s, hurting and slowing every foe nearby.",
+    stars: 4,
+    maxHp: 110,
+    speed: 100,
+    attack: "magic",
+    shot: "pebble",
+    attackCooldown: 0.55,
+    damage: 22,
+    range: 230,
+    arc: 0,
+    aoe: 0,
+    shotSpeed: 340,
+    pierce: 0,
+    // STONE WALL: `count` rocks across the aim, `radius` ahead, for `duration` seconds.
+    skill: { kind: "wall", name: "STONE WALL", cooldown: 10, damage: 0, radius: 50, count: 5, duration: 6 },
+    skill2: { kind: "quake", name: "EARTHQUAKE", cooldown: 9, damage: 12, radius: 130, duration: 2 },
+  },
+  pyromancer: {
+    name: "Pyromancer",
+    role: "Fire witch",
+    blurb: "Fireballs. METEOR: a meteor crashes down on the aimed spot and leaves the ground burning for 3s. FLAME DASH (E): dashes ahead through foes, leaving a trail of fire behind.",
+    stars: 3,
+    maxHp: 100,
+    speed: 105,
+    attack: "magic",
+    shot: "fireball",
+    attackCooldown: 0.6,
+    damage: 24,
+    range: 230,
+    arc: 0,
+    aoe: 0,
+    shotSpeed: 300,
+    pierce: 0,
+    // METEOR: falls `width` ahead: `damage` in `radius`, then burning ground for `duration`.
+    skill: { kind: "meteor", name: "METEOR", cooldown: 8, damage: 70, radius: 60, width: 170, duration: 3 },
+    skill2: { kind: "flamedash", name: "FLAME DASH", cooldown: 7, damage: 20, radius: 150, width: 28, duration: 3 },
+  },
+  cryomancer: {
+    name: "Cryomancer",
+    role: "Ice witch",
+    blurb: "Ice shards that slow. ICE PRISON: freezes the nearest foe in a block of ice for 1.8s. BLIZZARD (E): a snowstorm on the aimed spot for 4s that hurts and slows everything in it.",
+    stars: 4,
+    maxHp: 100,
+    speed: 105,
+    attack: "magic",
+    shot: "iceshard",
+    attackCooldown: 0.5,
+    damage: 20,
+    range: 240,
+    arc: 0,
+    aoe: 0,
+    shotSpeed: 380,
+    pierce: 0,
+    slowHit: 1,
+    skill: { kind: "iceprison", name: "ICE PRISON", cooldown: 10, damage: 30, radius: 240, duration: 1.8 },
+    // BLIZZARD: `width` ahead, `radius` wide, `damage` every 0.5s for `duration`.
+    skill2: { kind: "blizzard", name: "BLIZZARD", cooldown: 11, damage: 10, radius: 90, width: 150, duration: 4 },
+  },
+  lancer: {
+    name: "Lancer",
+    role: "Spear knight",
+    blurb: "Long spear thrusts down a lane. PIERCING CHARGE: charges ahead spear first, throwing everything in the way far back. DRAGOON DIVE (E): leaps out of reach for 1s, then crashes down on the aimed spot, stunning.",
+    stars: 4,
+    maxHp: 140,
+    speed: 100,
+    attack: "punch",
+    lineAttack: 16,
+    attackCooldown: 0.55,
+    damage: 26,
+    range: 48,
+    arc: 0.6,
+    aoe: 0,
+    shotSpeed: 0,
+    pierce: 0,
+    skill: { kind: "lancecharge", name: "PIERCING CHARGE", cooldown: 7, damage: 30, radius: 180, width: 30 },
+    // DRAGOON DIVE: in the air `duration`, lands `width` ahead: `damage` in `radius`, stun 1s.
+    skill2: { kind: "dive", name: "DRAGOON DIVE", cooldown: 11, damage: 55, radius: 60, width: 200, duration: 1 },
+  },
+  oni: {
+    name: "Oni",
+    role: "Mountain demon",
+    blurb: "Huge HP, a kanabo club that throws foes back. DEMON ROAR: a roar that stuns and throws back everything nearby. KANABO CYCLONE (E): spins the club around three times, smashing everything close.",
+    stars: 4,
+    maxHp: 290,
+    speed: 90,
+    attack: "punch",
+    attackCooldown: 0.85,
+    damage: 36,
+    range: 28,
+    arc: 1.8,
+    aoe: 0,
+    shotSpeed: 0,
+    pierce: 0,
+    knock: 2,
+    skill: { kind: "roar", name: "DEMON ROAR", cooldown: 9, damage: 15, radius: 120, duration: 0.8 },
+    skill2: { kind: "cyclone", name: "KANABO CYCLONE", cooldown: 8, damage: 28, radius: 55, count: 3 },
+  },
   pawn: {
     name: "Pawn",
     role: "Summon",
@@ -1290,8 +1543,8 @@ for (const def of Object.values(HEROES)) {
  */
 const PVP_RANKING: HeroId[] = [
   "trainer", "howl", "healer", "superman", "agamemnon", "rudeus", "isekai", "ricardo", "saitama",
-  "thorfinn", "hanuman", "doraemon", "joyboy", "warrior", "zenitsu", "steve", "lawliet", "ninja", "taekwondo", "vampire", "gojo", "rider",
-  "paladin", "golem", "robot", "simo", "monk", "rick", "okita", "archer", "druid", "deku", "killua", "omni", "theworld", "sakamoto", "starplatinum", "loki",
+  "thorfinn", "hanuman", "doraemon", "joyboy", "lancer", "jester", "mossgolem", "warrior", "zenitsu", "steve", "lawliet", "ninja", "blacksmith", "berserker", "hacker", "pyromancer", "taekwondo", "vampire", "gojo", "rider",
+  "paladin", "golem", "robot", "simo", "monk", "geomancer", "cryomancer", "rick", "okita", "archer", "druid", "oni", "reaper", "deku", "killua", "omni", "theworld", "sakamoto", "starplatinum", "loki",
   "titan", "kid", "swordgod", "yaotsu", "badigadi",
 ];
 /** Heroes taken out of the game (user request 2026-10-04): not on any hero select; their code is kept. */
@@ -1350,6 +1603,18 @@ export const DAMAGE_BALANCE: Partial<Record<HeroId, number>> = {
   monk: 4.5,
   robot: 2.65,
   golem: 1.57,
+  // The eleven heroes of the second 2026-10-05 batch, tuned alone.
+  hacker: 3.05,
+  reaper: 2.55,
+  mossgolem: 1.75,
+  berserker: 1.95,
+  jester: 2.3,
+  blacksmith: 2.85,
+  geomancer: 3.6,
+  pyromancer: 2.65,
+  cryomancer: 2.4,
+  lancer: 1.58,
+  oni: 1.6,
 };
 
 /** Hero classes (user request 2026-10-05), shown and filterable on the hero select. */
@@ -1367,15 +1632,15 @@ const CLASS_OF: Partial<Record<HeroId, HeroClass>> = {
   // Fighters: up close, hard to kill or hard-hitting brawlers.
   ricardo: "fighter", rider: "fighter", titan: "fighter", joyboy: "fighter", taekwondo: "fighter", superman: "fighter",
   saitama: "fighter", deku: "fighter", hanuman: "fighter", theworld: "fighter", starplatinum: "fighter", steve: "fighter",
-  omni: "fighter", badigadi: "fighter", warrior: "fighter", monk: "fighter",
+  omni: "fighter", badigadi: "fighter", warrior: "fighter", monk: "fighter", berserker: "fighter", blacksmith: "fighter", lancer: "fighter",
   // Tanks: huge HP, protect and hold the line.
-  paladin: "tank", golem: "tank",
+  paladin: "tank", golem: "tank", mossgolem: "tank", oni: "tank",
   // Mages: spells and areas from a distance.
-  rudeus: "mage", gojo: "mage", howl: "mage", rick: "mage", yaotsu: "mage", druid: "mage",
+  rudeus: "mage", gojo: "mage", howl: "mage", rick: "mage", yaotsu: "mage", druid: "mage", hacker: "mage", geomancer: "mage", pyromancer: "mage", cryomancer: "mage",
   // Carries: steady, heavy damage that grows a fight in their favour.
   simo: "carry", sakamoto: "carry", isekai: "carry", swordgod: "carry", archer: "carry", robot: "carry",
   // Assassins: fast, fragile, dart in and burst one target down.
-  killua: "assassin", okita: "assassin", zenitsu: "assassin", vampire: "assassin", thorfinn: "assassin", kid: "assassin", ninja: "assassin",
+  killua: "assassin", okita: "assassin", zenitsu: "assassin", vampire: "assassin", thorfinn: "assassin", kid: "assassin", ninja: "assassin", reaper: "assassin", jester: "assassin",
   // Supports: heal, lock down or weaken enemies.
   healer: "support", doraemon: "support",
   // Summoners: fight through the helpers and copies they call out.
@@ -1437,7 +1702,7 @@ export const INTERMISSION_TIME = 6;
 
 export type EnemyKind =
   | "cinderling" | "brute" | "caster" | "warden" | "godzilla" | "monkey" | "bananamonkey" | "kingkong" | "swordsman" | "swordmaster" | "swordgod"
-  | "dirtblock" | "tntblock" | "craftblock";
+  | "dirtblock" | "tntblock" | "craftblock" | "rockwall";
 
 export interface EnemyDef {
   hp: number;
@@ -1471,6 +1736,8 @@ export const ENEMIES: Record<EnemyKind, EnemyDef> = {
   swordgod: { hp: 6000, speed: 80, radius: 8, touchDamage: 30, score: 3000, boss: true },
   // The Block Crafter's blocks (BUILD).
   dirtblock: { hp: 1, speed: 0, radius: 8, touchDamage: 0, score: 0, block: true },
+  // STONE WALL: the Geomancer's rocks; they stop shots until broken.
+  rockwall: { hp: 200, speed: 0, radius: 8, touchDamage: 0, score: 0, block: true },
   tntblock: { hp: 1, speed: 0, radius: 8, touchDamage: 0, score: 0, block: true },
   craftblock: { hp: 1, speed: 0, radius: 8, touchDamage: 0, score: 0, block: true },
   godzilla: { hp: 7000, speed: 24, radius: 22, touchDamage: 105, score: 2000, shootEvery: 3, shotDamage: ENEMY_SHOT_DAMAGE_BASE * 3, boss: true },

@@ -28,6 +28,16 @@ import {
   LEAF_STORM,
   BLUE_BOLT,
   TREE,
+  JUGGLE_BALL,
+  PEBBLE,
+  ICE_SHARD,
+  AXE_SPIN,
+  EMBER,
+  ROCK_WALL,
+  ANVIL,
+  METEOR,
+  JACK_BOX,
+  ROCK_STATUE,
   TROJAN_HORSE,
   HEAL_TOTEM,
   GIANT_PALM,
@@ -175,6 +185,16 @@ export class BootScene extends Phaser.Scene {
     this.addCanvas("leafstorm", renderPixelSprite(LEAF_STORM));
     this.addCanvas("bluebolt", renderPixelSprite(BLUE_BOLT));
     this.addCanvas("tree", renderPixelSprite(TREE));
+    this.addCanvas("ball", renderPixelSprite(JUGGLE_BALL));
+    this.addCanvas("pebble", renderPixelSprite(PEBBLE));
+    this.addCanvas("iceshard", renderPixelSprite(ICE_SHARD));
+    this.addCanvas("axe", renderPixelSprite(AXE_SPIN));
+    this.addCanvas("ember", renderPixelSprite(EMBER));
+    this.addCanvas("rockwall", renderPixelSprite(ROCK_WALL));
+    this.addCanvas("anvil", renderPixelSprite(ANVIL));
+    this.addCanvas("meteor", renderPixelSprite(METEOR));
+    this.addCanvas("jackbox", renderPixelSprite(JACK_BOX));
+    this.addCanvas("rockstatue", renderPixelSprite(ROCK_STATUE));
     this.addCanvas("gladius", renderPixelSprite(GLADIUS));
     this.addCanvas("raygun", renderPixelSprite(RAYGUN));
     this.addCanvas("pistol", renderPixelSprite(PISTOL));

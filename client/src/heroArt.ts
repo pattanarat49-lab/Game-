@@ -17,6 +17,8 @@ interface ArtLayout {
 }
 const LAYOUT: Record<string, ArtLayout> = {
   golem: { scale: 1, originY: 0.97 },
+  mossgolem: { scale: 0.8, originY: 0.97 },
+  oni: { scale: 0.75, originY: 0.97 },
   // The Detective's chess pieces (52px and 66px tall pictures): a small pawn, a queen taller than a hero.
   pawn: { scale: 1 / 3, originY: 0.97 },
   queen: { scale: 0.45, originY: 0.97 },

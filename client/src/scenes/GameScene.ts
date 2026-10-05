@@ -69,7 +69,10 @@ interface PlayerView {
   attackSeq: number;
   skillSeq: number;
   skill2Seq: number;
-  glitch?: Phaser.GameObjects.Image[]; // Yaotsu's "error" afterimages
+  glitch?: Phaser.GameObjects.Image[]; // Yaotsu's and the Hacker's "error" afterimages
+  /** The Hacker: where the server last had him, to draw a glitch streak when he jumps. */
+  gx?: number;
+  gy?: number;
   trail?: Phaser.GameObjects.Image[]; // Speed Raptor's afterimages
   trailPts?: { x: number; y: number }[]; // where the body was over the last frames
   heroId: string; // a hero swap (PvP player select) rebuilds the view
@@ -83,7 +86,7 @@ interface PlayerView {
 
 /** A short-lived swing, slash or shockwave drawn on top of the world. */
 interface Effect {
-  kind: "punch" | "sword" | "smash" | "muzzle" | "bolt" | "storm" | "blast" | "impact" | "heal" | "line" | "slashes" | "ripple" | "jab" | "gatling" | "rewind" | "kick" | "tkick" | "biglight" | "spinkick" | "purple" | "bluelaser" | "flame" | "thunder";
+  kind: "punch" | "sword" | "smash" | "muzzle" | "bolt" | "storm" | "blast" | "impact" | "heal" | "line" | "slashes" | "ripple" | "jab" | "gatling" | "rewind" | "kick" | "tkick" | "biglight" | "spinkick" | "purple" | "bluelaser" | "flame" | "thunder" | "glitchline";
   x: number;
   y: number;
   aim: number;
@@ -125,6 +128,11 @@ const BULLET_TEXTURE: Record<string, string> = {
   leaf: "leaf",
   leafstorm: "leafstorm",
   bluebolt: "bluebolt",
+  ball: "ball",
+  pebble: "pebble",
+  iceshard: "iceshard",
+  axe: "axe",
+  ember: "ember",
 };
 /** Summons drawn bigger than their pixel art. */
 const SUMMON_SCALE: Record<string, number> = { flamedragon: 1.4, quad: 1.25, echo: 0.85 };
@@ -204,6 +212,7 @@ const ENEMY_SCALE: Record<EnemyKind, number> = {
   dirtblock: 1.3,
   tntblock: 1.3,
   craftblock: 1.3,
+  rockwall: 1.3,
 };
 
 export function serverUrl(): string {
@@ -514,7 +523,9 @@ export class GameScene extends Phaser.Scene {
     this.dashCooldown = Math.max(0, this.dashCooldown - dt);
     const state = this.room!.state;
     // Someone stopped time, or a rival's jab stunned us: we cannot move until it passes.
-    const frozen = (state.timeStop > 0 && state.timeStopBy !== this.room!.sessionId && !movesInStoppedTime(me.hero)) || me.stun > 0;
+    const s2 = heroOf(me.hero).skill2?.kind;
+    const carried = me.active2 > 0 && (s2 === "error" || s2 === "dive"); // ERROR and DRAGOON DIVE move us themselves
+    const frozen = (state.timeStop > 0 && state.timeStopBy !== this.room!.sessionId && !movesInStoppedTime(me.hero)) || me.stun > 0 || carried;
     if (me.dead || me.warp !== this.warp) {
       this.warp = me.warp;
       this.predicted = { x: me.x, y: me.y };
@@ -780,6 +791,21 @@ export class GameScene extends Phaser.Scene {
       }
       view.label.setPosition(body.x, body.y - (titanNow ? 66 : 18) * k);
       if (p.hero === "yaotsu") this.drawGlitch(view, p.dead);
+      if (p.hero === "hacker") {
+        // The Hacker always flickers a little; during ERROR he is mostly glitch, streaking from jump to jump.
+        const erroring = !p.dead && p.active2 > 0;
+        this.drawGlitch(view, p.dead, erroring);
+        if (erroring) body.setAlpha(Math.random() < 0.35 ? 0.15 : 0.8);
+        if (view.gx !== undefined && Math.hypot(p.x - view.gx, p.y - view.gy!) > 20 && erroring) {
+          this.effects.push({ kind: "glitchline", x: view.gx, y: view.gy! - 8, aim: Math.atan2(p.y - view.gy!, p.x - view.gx), range: Math.hypot(p.x - view.gx, p.y - view.gy!), arc: 0, age: 0, life: 0.35 });
+        }
+        [view.gx, view.gy] = [p.x, p.y];
+      }
+      // DRAGOON DIVE: high above the field, out of sight.
+      if (!p.dead && p.active2 > 0 && skill2?.kind === "dive") {
+        body.setAlpha(0);
+        view.weapon?.setVisible(false);
+      }
       if (heroOf(p.hero).ram) this.drawTrail(view, p.dead);
       view.label.setDepth(1000);
 
@@ -844,6 +870,16 @@ export class GameScene extends Phaser.Scene {
           // FOCUS: the monk's fists glow until the next hit lands.
           view.bar.fillStyle(0xffb040, 0.08 + 0.08 * pulse).fillCircle(body.x, body.y - 9 * k, 13 * k);
           view.bar.lineStyle(2, 0xffb040, 0.6 + 0.4 * pulse).strokeCircle(body.x, body.y - 9 * k, 13 * k);
+        }
+        if (p.active2 > 0 && skill2?.kind === "gaia") {
+          // GAIA SHELL: a mossy green shell around him.
+          view.bar.fillStyle(0x3a9a3a, 0.2 + 0.1 * pulse).fillCircle(body.x, body.y - 9 * k, 16 * k);
+          view.bar.lineStyle(2, 0x7fdc5a, 0.8).strokeCircle(body.x, body.y - 9 * k, 16 * k);
+        }
+        if (p.buff > 0 && heroOf(p.hero).skill.kind === "rage") {
+          // BLOOD RAGE: red heat rising off him.
+          view.bar.lineStyle(2, 0xff2a2a, 0.5 + 0.5 * pulse).strokeEllipse(body.x, body.y + 1, 22 * k, 8 * k);
+          if (Math.random() < 0.4) view.bar.fillStyle(0xff3a3a, 0.9).fillRect(body.x + (Math.random() - 0.5) * 16, body.y - 4 - Math.random() * 18, 2, 3);
         }
         if (p.mode > 0 && heroOf(p.hero).skill.kind === "harden") {
           // HARDEN: a stone ring that thickens with every stack.
@@ -951,16 +987,16 @@ export class GameScene extends Phaser.Scene {
   }
 
   /** Yaotsu looks like a rendering error: red and cyan copies jitter around the body. */
-  private drawGlitch(view: PlayerView, dead: boolean) {
+  private drawGlitch(view: PlayerView, dead: boolean, wild = false) {
     const body = view.body;
     if (!view.glitch) {
-      view.glitch = [0xff2a6a, 0x2affea].map((tint) =>
-        this.add.image(body.x, body.y, body.texture.key).setOrigin(0.5, 0.85).setTint(tint).setBlendMode(Phaser.BlendModes.ADD),
+      view.glitch = [0xff2a6a, 0x2aff6a].map((tint) =>
+        this.add.image(body.x, body.y, body.texture.key).setOrigin(body.originX, body.originY).setTint(tint).setBlendMode(Phaser.BlendModes.ADD),
       );
     }
-    const burst = Math.random() < 0.12; // every so often the image tears badly
+    const burst = Math.random() < (wild ? 0.6 : 0.12); // every so often the image tears badly
     view.glitch.forEach((g, i) => {
-      const spread = burst ? 4 : 1.5;
+      const spread = burst ? (wild ? 9 : 4) : 1.5;
       g.setTexture(body.texture.key)
         .setScale(body.scaleX * (burst && i === 0 ? 1.15 : 1), body.scaleY)
         .setFlipX(body.flipX)
@@ -1153,6 +1189,45 @@ export class GameScene extends Phaser.Scene {
         break;
       case "barrage":
         this.effects.push({ kind: "gatling", x, y, aim, range: skill.radius, arc: skill.width ?? 40, age: 0, life: 0.75 });
+        break;
+      case "petrify":
+      case "iceprison":
+      case "switch":
+      case "gaia":
+      case "rage":
+      case "jackbox":
+        this.effects.push({ kind: "ripple", x, y, aim, range: 30, arc: 0, age: 0, life: 0.3 });
+        break;
+      case "error":
+        cam.flash(120, 60, 255, 120);
+        cam.shake(150, 0.006);
+        break;
+      case "reap":
+      case "cyclone":
+        this.effects.push({ kind: "sword", x, y, aim, range: skill.radius, arc: Math.PI * 2, age: 0, life: 0.3 });
+        break;
+      case "roots":
+      case "quake":
+      case "roar":
+        cam.shake(200, 0.01);
+        this.effects.push({ kind: "ripple", x, y, aim, range: skill.radius, arc: 0, age: 0, life: 0.45 });
+        break;
+      case "axethrow":
+      case "sparks":
+      case "deathdoor":
+        this.effects.push({ kind: "muzzle", x, y, aim, range: 14, arc: 0, age: 0, life: 0.12 });
+        break;
+      case "wall":
+      case "anvil":
+      case "meteor":
+      case "blizzard":
+      case "dive":
+        this.sparks.explode(8, x, y);
+        break;
+      case "flamedash":
+      case "lancecharge":
+        this.effects.push({ kind: "line", x: x - Math.cos(aim) * skill.radius, y: y - Math.sin(aim) * skill.radius, aim, range: skill.radius, arc: skill.width ?? 28, age: 0, life: 0.3 });
+        cam.shake(120, 0.008);
         break;
       case "charge": {
         // MAX SMASH: as big as our own charge (someone else's charge is not known: drawn half charged).
@@ -1595,6 +1670,18 @@ export class GameScene extends Phaser.Scene {
         g.fillStyle(0xffffff, 0.3 * (1 - t));
         g.slice(e.x, e.y, e.range * 0.6, e.aim - e.arc * 0.4, e.aim + e.arc * 0.4);
         g.fillPath();
+      } else if (e.kind === "glitchline") {
+        // ERROR: a torn streak of code where the Hacker jumped.
+        const cos = Math.cos(e.aim);
+        const sin = Math.sin(e.aim);
+        for (const [c, off] of [[0x2aff6a, -2], [0xff2a6a, 2], [0xffffff, 0]] as const) {
+          const j = (Math.random() - 0.5) * 3;
+          g.lineStyle(off === 0 ? 1 : 3, c, 1 - t).lineBetween(e.x - sin * (off + j), e.y + cos * (off + j), e.x + cos * e.range - sin * (off + j), e.y + sin * e.range + cos * (off + j));
+        }
+        for (let i = 0; i < 6; i++) {
+          const d = Math.random() * e.range;
+          g.fillStyle(Math.random() < 0.5 ? 0x2aff6a : 0xff2a6a, 1 - t).fillRect(e.x + cos * d - 4, e.y + sin * d + (Math.random() - 0.5) * 10, 3 + Math.random() * 8, 2);
+        }
       } else if (e.kind === "bluelaser") {
         // The robot's one-shot plasma laser: a bright blue beam.
         const cos = Math.cos(e.aim);
@@ -1918,6 +2005,59 @@ export class GameScene extends Phaser.Scene {
       }
       case "barrage":
         lane(skill.radius, skill.width ?? 40);
+        break;
+      case "petrify":
+      case "iceprison":
+      case "deathdoor":
+      case "switch":
+        area(x, y, skill.radius); // reaches the nearest foe in range, any way
+        break;
+      case "error":
+        area(x, y, skill.radius);
+        break;
+      case "reap":
+      case "roots":
+      case "roar":
+      case "quake":
+      case "cyclone":
+        area(x, y, skill.radius);
+        break;
+      case "axethrow":
+        lane(skill.radius, 14);
+        break;
+      case "jackbox":
+        area(x, y, skill.radius);
+        break;
+      case "anvil":
+      case "meteor":
+      case "blizzard":
+      case "dive": {
+        const w = skill.width ?? 150;
+        lane(w, 4);
+        area(x + cos * w, y + sin * w, skill.radius);
+        break;
+      }
+      case "sparks": {
+        const n = skill.count ?? 7;
+        const spread = skill.width ?? 0.9;
+        g.lineStyle(2, 0xffd23f, 0.6);
+        for (let i = 0; i < n; i++) {
+          const a = this.aim + (i / (n - 1) - 0.5) * spread;
+          g.lineBetween(x, y, x + Math.cos(a) * skill.radius, y + Math.sin(a) * skill.radius);
+        }
+        break;
+      }
+      case "wall": {
+        const n = skill.count ?? 5;
+        const cx = x + cos * skill.radius;
+        const cy = y + sin * skill.radius;
+        const half = ((n - 1) / 2) * 16 + 8;
+        g.lineStyle(6, 0xffd23f, 0.45).lineBetween(cx + sin * half, cy - cos * half, cx - sin * half, cy + cos * half);
+        break;
+      }
+      case "flamedash":
+      case "lancecharge":
+        lane(skill.radius, skill.width ?? 30);
         break;
       case "charge": {
         const reach = chargeReach(chargePower(this.charging2 ? this.charge2 : 0));
@@ -2390,6 +2530,150 @@ export class GameScene extends Phaser.Scene {
         }
         floor.fillStyle(0xffb040, 0.3 * (1 - t)).fillCircle(z.x, z.y, z.radius);
         floor.lineStyle(3, 0xffe0a0, 1 - t).strokeEllipse(z.x, z.y, z.radius * 2 * (0.5 + t * 0.7), z.radius * (0.5 + t * 0.7));
+      } else if (z.kind === "petrify" || z.kind === "iceblock") {
+        // REALITY: whoever is inside is now just a rock. ICE PRISON: a block of ice around them.
+        const rock = z.kind === "petrify";
+        let img = this.zoneImages.get(id);
+        if (!img) {
+          img = this.add.image(z.x, z.y, "rockstatue").setOrigin(0.5, 0.9).setScale(2.4).setVisible(rock);
+          this.zoneImages.set(id, img);
+          if (rock) this.sparks.explode(10, z.x, z.y - 8);
+        }
+        img.setPosition(z.x, z.y + 2).setDepth(z.y + 1);
+        if (rock) {
+          this.players.forEach((v) => {
+            if (Math.hypot(v.body.x - z.x, v.body.y - z.y) < 14) {
+              v.body.setAlpha(0);
+              v.weapon?.setVisible(false);
+              v.glitch?.forEach((g) => g.setVisible(false));
+            }
+          });
+          this.enemies.forEach((v) => {
+            if (Math.hypot(v.sprite.x - z.x, v.sprite.y - z.y) < 14) v.sprite.setAlpha(0);
+          });
+          if (Math.random() < 0.2) sky.fillStyle(0x2aff6a, 0.9).fillRect(z.x - 10 + Math.random() * 20, z.y - 18 + Math.random() * 16, 4, 1);
+        } else {
+          sky.fillStyle(0x9ad8ff, 0.4).fillRoundedRect(z.x - 13, z.y - 30, 26, 32, 3);
+          sky.lineStyle(2, 0xe8f8ff, 0.9).strokeRoundedRect(z.x - 13, z.y - 30, 26, 32, 3);
+          sky.lineStyle(1, 0xffffff, 0.8).lineBetween(z.x - 8, z.y - 26, z.x - 3, z.y - 14);
+        }
+      } else if (z.kind === "reap" || z.kind === "roar") {
+        // SOUL REAP: a ghostly violet ring. DEMON ROAR: red shock rings.
+        const t = 1 - z.life / z.maxLife;
+        const c = z.kind === "reap" ? 0x9a4aff : 0xff3a2a;
+        floor.lineStyle(4, c, 1 - t).strokeCircle(z.x, z.y, z.radius * (0.4 + 0.6 * t));
+        floor.lineStyle(2, 0xffffff, 0.6 * (1 - t)).strokeCircle(z.x, z.y, z.radius * (0.2 + 0.8 * t));
+        if (z.kind === "reap" && Math.random() < 0.5) sky.fillStyle(0xc8a0ff, 1 - t).fillCircle(z.x + (Math.random() - 0.5) * z.radius, z.y - Math.random() * 20 - t * 20, 2);
+      } else if (z.kind === "scythecut") {
+        // DEATH'S DOOR: a violet scythe slash across the victim.
+        const t = 1 - z.life / z.maxLife;
+        sky.lineStyle(5, 0x6a1aff, 0.7 * (1 - t)).lineBetween(z.x - 18, z.y - 26, z.x + 16, z.y + 4);
+        sky.lineStyle(2, 0xf0d8ff, 1 - t).lineBetween(z.x - 18, z.y - 26, z.x + 16, z.y + 4);
+      } else if (z.kind === "roots") {
+        // ROOT SNARE: roots burst up in a ring.
+        const t = 1 - z.life / z.maxLife;
+        for (let i = 0; i < 14; i++) {
+          const a = (i / 14) * Math.PI * 2 + i;
+          const r = z.radius * ((i % 3) + 1) / 3.2;
+          const rx = z.x + Math.cos(a) * r;
+          const ry = z.y + Math.sin(a) * r * 0.6;
+          const h = 14 * Math.sin(Math.min(1, t * 3) * Math.PI / 2) * (1 - t);
+          sky.lineStyle(3, 0x5a3a1a, 1 - t * 0.6).lineBetween(rx, ry, rx + 3, ry - h);
+          sky.lineStyle(1, 0x7fdc5a, 1 - t * 0.6).lineBetween(rx + 1, ry - h * 0.5, rx + 4, ry - h);
+        }
+        floor.lineStyle(2, 0x7fdc5a, 0.5 * (1 - t)).strokeCircle(z.x, z.y, z.radius);
+      } else if (z.kind === "jackbox") {
+        // JACK-IN-THE-BOX: a gift box, with a little ring showing how close is too close.
+        let img = this.zoneImages.get(id);
+        if (!img) {
+          img = this.add.image(z.x, z.y, "jackbox").setOrigin(0.5, 0.9).setScale(2);
+          this.zoneImages.set(id, img);
+        }
+        img.setDepth(z.y).setY(z.y + Math.sin(now / 150) * 0.8);
+        floor.lineStyle(1, 0xc84aff, 0.35).strokeCircle(z.x, z.y, z.radius);
+      } else if (z.kind === "jackpop" || z.kind === "confettiboom") {
+        // The box springs (a spring and a grinning head), or the confetti bomb goes off.
+        const t = 1 - z.life / z.maxLife;
+        if (!this.zoneImages.has(id)) {
+          this.zoneImages.set(id, this.add.image(z.x, z.y, "spark").setVisible(false));
+          this.cameras.main.shake(150, 0.01);
+        }
+        const cols = [0xff3a5a, 0xffd23f, 0x3ad8ff, 0x7fdc5a, 0xc84aff];
+        for (let i = 0; i < 18; i++) {
+          const a = (i / 18) * Math.PI * 2 + i * 0.7;
+          const r = z.radius * t * (0.6 + (i % 4) * 0.15);
+          sky.fillStyle(cols[i % cols.length], 1 - t).fillRect(z.x + Math.cos(a) * r, z.y - 10 + Math.sin(a) * r * 0.7 + 20 * t * t, 3, 2);
+        }
+        if (z.kind === "jackpop") {
+          const h = 26 * Math.min(1, t * 4);
+          sky.lineStyle(2, 0xd8d8e0, 1 - t).lineBetween(z.x, z.y - 4, z.x, z.y - 4 - h);
+          sky.fillStyle(0xffd8b0, 1 - t).fillCircle(z.x, z.y - 8 - h, 6);
+          sky.fillStyle(0xc84aff, 1 - t).fillTriangle(z.x - 6, z.y - 12 - h, z.x + 6, z.y - 12 - h, z.x, z.y - 22 - h);
+        }
+      } else if (z.kind === "confetti") {
+        // SWITCHEROO: the confetti bomb fizzing on the spot.
+        const blink = Math.floor(now / 80) % 2 === 0;
+        sky.fillStyle(0xc84aff, 1).fillCircle(z.x, z.y - 6, 5);
+        sky.fillStyle(blink ? 0xffd23f : 0xff3a5a, 1).fillRect(z.x - 1, z.y - 13, 2, 3);
+        floor.lineStyle(1, 0xffd23f, 0.6).strokeCircle(z.x, z.y, z.radius);
+      } else if (z.kind === "anvil" || z.kind === "meteor" || z.kind === "dive") {
+        // Something heavy comes down out of the sky: its shadow grows on the landing spot.
+        const left = z.life / z.maxLife;
+        floor.fillStyle(0x000000, 0.4 * (1 - left)).fillEllipse(z.x, z.y, z.radius * 2 * (1.1 - left * 0.6), z.radius * (1.1 - left * 0.6));
+        floor.lineStyle(1, z.kind === "meteor" ? 0xff6a1a : 0xffd23f, 0.7).strokeCircle(z.x, z.y, z.radius);
+        let img = this.zoneImages.get(id);
+        if (!img) {
+          img = this.add.image(z.x, z.y, z.kind === "dive" ? "spark" : z.kind).setOrigin(0.5, 0.9).setScale(z.kind === "meteor" ? 3.4 : 2.6);
+          if (z.kind === "dive") img.setVisible(false);
+          this.zoneImages.set(id, img);
+        }
+        const drop = left * left * 380;
+        img.setPosition(z.x + (z.kind === "meteor" ? drop * 0.5 : 0), z.y - drop).setDepth(z.y + 50);
+        if (z.kind === "meteor" && Math.random() < 0.6) this.sparks.explode(1, img.x, img.y - 10);
+        if (z.kind === "dive") {
+          // the lance point coming down
+          const h = drop + 6;
+          sky.lineStyle(3, 0x9ab8ff, 1).lineBetween(z.x, z.y - h - 30, z.x, z.y - h);
+          sky.fillStyle(0xffffff, 1).fillTriangle(z.x - 3, z.y - h, z.x + 3, z.y - h, z.x, z.y - h + 7);
+        }
+      } else if (z.kind === "embers") {
+        // METEOR crater: the ground keeps burning.
+        floor.fillStyle(0x3a1a0a, 0.5 * fade).fillCircle(z.x, z.y, z.radius);
+        floor.lineStyle(2, 0xff6a1a, 0.6 * fade).strokeCircle(z.x, z.y, z.radius);
+        if (Math.random() < 0.5) {
+          const a = Math.random() * Math.PI * 2;
+          const r = Math.random() * z.radius;
+          sky.fillStyle(Math.random() < 0.5 ? 0xff8a1a : 0xffd23f, fade).fillRect(z.x + Math.cos(a) * r, z.y + Math.sin(a) * r - Math.random() * 10, 2, 3);
+        }
+      } else if (z.kind === "flame") {
+        // FLAME DASH: the trail left burning.
+        const flick = 0.7 + Math.random() * 0.3;
+        sky.fillStyle(0xff6a1a, 0.6 * fade * flick).fillTriangle(z.x - 6, z.y, z.x + 6, z.y, z.x + (Math.random() - 0.5) * 3, z.y - 12 * flick);
+        sky.fillStyle(0xffd23f, 0.8 * fade * flick).fillTriangle(z.x - 3, z.y, z.x + 3, z.y, z.x, z.y - 7 * flick);
+      } else if (z.kind === "quake") {
+        // EARTHQUAKE: cracks in the ground and a constant rumble.
+        if (!this.zoneImages.has(id)) this.zoneImages.set(id, this.add.image(z.x, z.y, "spark").setVisible(false));
+        if (Math.random() < 0.3) this.cameras.main.shake(80, 0.004);
+        floor.fillStyle(0x6a5a4a, 0.25 * fade).fillCircle(z.x, z.y, z.radius);
+        for (let i = 0; i < 8; i++) {
+          const a = (i / 8) * Math.PI * 2 + 0.3;
+          floor.lineStyle(2, 0x2a1a0a, 0.8 * fade).lineBetween(z.x + Math.cos(a) * 10, z.y + Math.sin(a) * 6, z.x + Math.cos(a + 0.2) * z.radius * 0.6, z.y + Math.sin(a + 0.2) * z.radius * 0.4);
+          floor.lineStyle(2, 0x2a1a0a, 0.8 * fade).lineBetween(z.x + Math.cos(a + 0.2) * z.radius * 0.6, z.y + Math.sin(a + 0.2) * z.radius * 0.4, z.x + Math.cos(a - 0.1) * z.radius, z.y + Math.sin(a - 0.1) * z.radius * 0.7);
+        }
+        if (Math.random() < 0.4) this.sparks.explode(1, z.x + (Math.random() - 0.5) * z.radius * 1.6, z.y + (Math.random() - 0.5) * z.radius);
+      } else if (z.kind === "blizzard") {
+        // BLIZZARD: a whirl of snow over the area.
+        floor.fillStyle(0xbfe8ff, 0.18 * fade).fillCircle(z.x, z.y, z.radius);
+        floor.lineStyle(2, 0xe8f8ff, 0.5 * fade).strokeCircle(z.x, z.y, z.radius);
+        for (let i = 0; i < 24; i++) {
+          const a = (i / 24) * Math.PI * 2 + now / 400 + i;
+          const r = z.radius * (((i * 37) % 100) / 100);
+          sky.fillStyle(0xffffff, 0.9 * fade).fillRect(z.x + Math.cos(a) * r, z.y + Math.sin(a) * r * 0.8 - 10, 2, 2);
+        }
+      } else if (z.kind === "lancetrail") {
+        // PIERCING CHARGE: speed lines along the charge.
+        const t = 1 - z.life / z.maxLife;
+        floor.lineStyle(10, 0x9ab8ff, 0.3 * (1 - t)).strokeCircle(z.x, z.y, 0.1);
       } else if (z.kind === "totem") {
         // HEAL TOTEM: a carved post with green rings pulsing out over the healing area.
         let img = this.zoneImages.get(id);
@@ -2626,7 +2910,9 @@ export class GameScene extends Phaser.Scene {
         if (b.kind === "stone") sprite.setScale(1.2);
         if (b.kind === "sonic") sprite.setScale(1.3).setRotation(Math.atan2(b.vy, b.vx));
         if (b.kind === "boulder") sprite.setScale(1.6);
-        if (b.kind === "arrow" || b.kind === "bigarrow") sprite.setRotation(Math.atan2(b.vy, b.vx));
+        if (b.kind === "arrow" || b.kind === "bigarrow" || b.kind === "iceshard") sprite.setRotation(Math.atan2(b.vy, b.vx));
+        if (b.kind === "axe") sprite.setScale(1.6);
+        if (b.kind === "ball" || b.kind === "pebble") sprite.setScale(1.3);
         if (b.kind === "bigarrow") sprite.setScale(1.3);
         if (b.kind === "leafstorm") sprite.setScale(2);
         if (b.kind === "bluebolt") sprite.setScale(1.3);
@@ -2637,7 +2923,7 @@ export class GameScene extends Phaser.Scene {
         sprite.x += b.vx * dt;
         sprite.y += b.vy * dt;
       }
-      if (b.kind === "banana" || b.kind === "boulder" || b.kind === "shuriken" || b.kind === "leaf" || b.kind === "leafstorm") sprite.rotation += dt * 12; // spinning throws
+      if (b.kind === "banana" || b.kind === "boulder" || b.kind === "shuriken" || b.kind === "leaf" || b.kind === "leafstorm" || b.kind === "axe" || b.kind === "pebble") sprite.rotation += dt * (b.kind === "axe" ? 20 : 12); // spinning throws
       if (b.kind === "missile") {
         sprite.setRotation(Math.atan2(b.vy, b.vx)); // homing missiles turn as they chase
         if (Math.random() < 0.4) this.sparks.explode(1, sprite.x - b.vx * 0.03, sprite.y - b.vy * 0.03);
