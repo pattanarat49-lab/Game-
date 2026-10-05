@@ -33,6 +33,7 @@ import {
   ICE_SHARD,
   AXE_SPIN,
   EMBER,
+  FIRE_BOLT,
   ROCK_WALL,
   ANVIL,
   METEOR,
@@ -190,6 +191,7 @@ export class BootScene extends Phaser.Scene {
     this.addCanvas("iceshard", renderPixelSprite(ICE_SHARD));
     this.addCanvas("axe", renderPixelSprite(AXE_SPIN));
     this.addCanvas("ember", renderPixelSprite(EMBER));
+    this.addCanvas("firebolt", renderPixelSprite(FIRE_BOLT));
     this.addCanvas("rockwall", renderPixelSprite(ROCK_WALL));
     this.addCanvas("anvil", renderPixelSprite(ANVIL));
     this.addCanvas("meteor", renderPixelSprite(METEOR));

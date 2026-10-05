@@ -237,7 +237,7 @@ export type BulletKind =
   | "snipe" | "wave" | "godslash" | "magic" | "fireball" | "enemy" | "banana" | "boulder" | "holy" | "stone" | "loki" | "glitch" | "bullet" | "slash"
   | "laser" | "missile" | "air" | "dragonfire" | "knife" | "fist" | "star"
   | "arrow" | "bigarrow" | "shuriken" | "leaf" | "leafstorm" | "bluebolt"
-  | "ball" | "pebble" | "iceshard" | "axe" | "ember"
+  | "ball" | "pebble" | "iceshard" | "axe" | "ember" | "firebolt"
   | `card${number}`; // DRAW CARD: the number on the card (1-9)
 
 /** A lasting area on the map: a storm cloud, an illusion kingdom, a domain. */

@@ -1935,6 +1935,18 @@ export const AXE_SPIN: PixelSprite = {
   palette: { s: "#c8d0d8", w: "#ffffff", b: "#7a4a22" },
 };
 
+export const FIRE_BOLT: PixelSprite = {
+  grid: [
+    "..rr..",
+    ".roor.",
+    "royyor",
+    "royyor",
+    ".roor.",
+    "..rr..",
+  ],
+  palette: { r: "#e8341a", o: "#ff8a1a", y: "#fff07a" },
+};
+
 export const EMBER: PixelSprite = {
   grid: [
     ".o.",

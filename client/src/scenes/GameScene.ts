@@ -86,7 +86,7 @@ interface PlayerView {
 
 /** A short-lived swing, slash or shockwave drawn on top of the world. */
 interface Effect {
-  kind: "punch" | "sword" | "smash" | "muzzle" | "bolt" | "storm" | "blast" | "impact" | "heal" | "line" | "slashes" | "ripple" | "jab" | "gatling" | "rewind" | "kick" | "tkick" | "biglight" | "spinkick" | "purple" | "bluelaser" | "flame" | "thunder" | "glitchline";
+  kind: "punch" | "sword" | "smash" | "muzzle" | "bolt" | "storm" | "blast" | "impact" | "heal" | "line" | "slashes" | "ripple" | "jab" | "gatling" | "rewind" | "kick" | "tkick" | "biglight" | "spinkick" | "purple" | "bluelaser" | "flame" | "thunder" | "glitchline" | "firestreak";
   x: number;
   y: number;
   aim: number;
@@ -133,6 +133,7 @@ const BULLET_TEXTURE: Record<string, string> = {
   iceshard: "iceshard",
   axe: "axe",
   ember: "ember",
+  firebolt: "firebolt",
 };
 /** Summons drawn bigger than their pixel art. */
 const SUMMON_SCALE: Record<string, number> = { flamedragon: 1.4, quad: 1.25, echo: 0.85 };
@@ -1225,6 +1226,10 @@ export class GameScene extends Phaser.Scene {
         this.sparks.explode(8, x, y);
         break;
       case "flamedash":
+        // FLAME DASH: a streak of fire along the dash (just fire, no lightning).
+        this.effects.push({ kind: "firestreak", x: x - Math.cos(aim) * skill.radius, y: y - Math.sin(aim) * skill.radius, aim, range: skill.radius, arc: skill.width ?? 28, age: 0, life: 0.4 });
+        cam.shake(120, 0.008);
+        break;
       case "lancecharge":
         this.effects.push({ kind: "line", x: x - Math.cos(aim) * skill.radius, y: y - Math.sin(aim) * skill.radius, aim, range: skill.radius, arc: skill.width ?? 28, age: 0, life: 0.3 });
         cam.shake(120, 0.008);
@@ -1670,6 +1675,23 @@ export class GameScene extends Phaser.Scene {
         g.fillStyle(0xffffff, 0.3 * (1 - t));
         g.slice(e.x, e.y, e.range * 0.6, e.aim - e.arc * 0.4, e.aim + e.arc * 0.4);
         g.fillPath();
+      } else if (e.kind === "firestreak") {
+        // FLAME DASH: an orange band of fire with tongues of flame, fading out.
+        const cos = Math.cos(e.aim);
+        const sin = Math.sin(e.aim);
+        const ex = e.x + cos * e.range;
+        const ey = e.y + sin * e.range;
+        g.lineStyle(e.arc, 0xe8341a, 0.35 * (1 - t)).lineBetween(e.x, e.y, ex, ey);
+        g.lineStyle(e.arc * 0.55, 0xff8a1a, 0.6 * (1 - t)).lineBetween(e.x, e.y, ex, ey);
+        g.lineStyle(e.arc * 0.2, 0xfff07a, 0.8 * (1 - t)).lineBetween(e.x, e.y, ex, ey);
+        for (let i = 0; i < 8; i++) {
+          const d = ((i + 0.5) / 8) * e.range;
+          const side = (Math.random() - 0.5) * e.arc * 0.6;
+          const fx = e.x + cos * d - sin * side;
+          const fy = e.y + sin * d + cos * side;
+          const h = (6 + Math.random() * 8) * (1 - t);
+          g.fillStyle(Math.random() < 0.5 ? 0xff8a1a : 0xffd23f, 1 - t).fillTriangle(fx - 3, fy, fx + 3, fy, fx, fy - h);
+        }
       } else if (e.kind === "glitchline") {
         // ERROR: a torn streak of code where the Hacker jumped.
         const cos = Math.cos(e.aim);
@@ -2912,7 +2934,7 @@ export class GameScene extends Phaser.Scene {
         if (b.kind === "boulder") sprite.setScale(1.6);
         if (b.kind === "arrow" || b.kind === "bigarrow" || b.kind === "iceshard") sprite.setRotation(Math.atan2(b.vy, b.vx));
         if (b.kind === "axe") sprite.setScale(1.6);
-        if (b.kind === "ball" || b.kind === "pebble") sprite.setScale(1.3);
+        if (b.kind === "ball" || b.kind === "pebble" || b.kind === "firebolt") sprite.setScale(1.3);
         if (b.kind === "bigarrow") sprite.setScale(1.3);
         if (b.kind === "leafstorm") sprite.setScale(2);
         if (b.kind === "bluebolt") sprite.setScale(1.3);
@@ -2948,6 +2970,7 @@ export class GameScene extends Phaser.Scene {
         this.effects.push({ kind: "blast", x: sprite.x, y: sprite.y, aim: 0, range: radius, arc: big ? 1 : 0, age: 0, life: big ? 0.45 : 0.3 });
         if (big) this.cameras.main.shake(180, 0.01);
       }
+      if (kind === "firebolt") this.sparks.explode(3, sprite.x, sprite.y); // a small fireball just puffs out
       // Enemy shots burst into sparks when they hit something or get cut down by a melee swing.
       if (kind === "enemy" || kind === "banana" || kind === "boulder" || kind === "slash") this.sparks.explode(5, sprite.x, sprite.y);
       sprite.destroy();

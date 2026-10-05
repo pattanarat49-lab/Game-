@@ -1273,7 +1273,7 @@ export const HEROES: Record<HeroId, HeroDef> = {
     maxHp: 100,
     speed: 105,
     attack: "magic",
-    shot: "fireball",
+    shot: "firebolt",
     attackCooldown: 0.6,
     damage: 24,
     range: 230,
