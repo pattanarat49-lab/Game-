@@ -1111,6 +1111,37 @@ export const DAMAGE_BALANCE: Partial<Record<HeroId, number>> = {
   swordgod: 1.15,
 };
 
+/** Hero classes (user request 2026-10-05), shown and filterable on the hero select. */
+export type HeroClass = "fighter" | "mage" | "carry" | "support" | "summoner" | "assassin";
+export const HERO_CLASSES: { id: HeroClass; name: string; color: string }[] = [
+  { id: "fighter", name: "FIGHTER", color: "#ff7a3a" },
+  { id: "mage", name: "MAGE", color: "#9a7aff" },
+  { id: "carry", name: "CARRY", color: "#ff3a5a" },
+  { id: "support", name: "SUPPORT", color: "#5aff9a" },
+  { id: "summoner", name: "SUMMONER", color: "#3ad8ff" },
+  { id: "assassin", name: "ASSASSIN", color: "#c8c8d8" },
+];
+const CLASS_OF: Partial<Record<HeroId, HeroClass>> = {
+  // Fighters: up close, hard to kill or hard-hitting brawlers.
+  ricardo: "fighter", rider: "fighter", titan: "fighter", joyboy: "fighter", taekwondo: "fighter", superman: "fighter",
+  saitama: "fighter", deku: "fighter", hanuman: "fighter", theworld: "fighter", starplatinum: "fighter", steve: "fighter",
+  omni: "fighter", badigadi: "fighter",
+  // Mages: spells and areas from a distance.
+  rudeus: "mage", gojo: "mage", howl: "mage", rick: "mage", yaotsu: "mage",
+  // Carries: steady, heavy damage that grows a fight in their favour.
+  simo: "carry", sakamoto: "carry", isekai: "carry", swordgod: "carry",
+  // Assassins: fast, fragile, dart in and burst one target down.
+  killua: "assassin", okita: "assassin", zenitsu: "assassin", vampire: "assassin", thorfinn: "assassin", kid: "assassin",
+  // Supports: heal, lock down or weaken enemies.
+  healer: "support", lawliet: "support", doraemon: "support",
+  // Summoners: fight through the helpers and copies they call out.
+  trainer: "summoner", agamemnon: "summoner", loki: "summoner",
+};
+export function heroClass(id: string): HeroClass {
+  const base = HEROES[id as HeroId]?.formOf ?? id;
+  return CLASS_OF[base as HeroId] ?? "fighter";
+}
+
 /** A hero's estimated stats on a 1-10 scale, ranked against every pickable hero (shown on the hero select). */
 export interface HeroRatings {
   hp: number;

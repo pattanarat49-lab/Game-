@@ -4,7 +4,7 @@
 // PvE Squad uses the same screen with four player slots (1P-4P), a small bot slot at the top centre
 // (tap it, then a hero, to choose who the bot plays) and the bot's difficulty under it.
 
-import { BOT_LEVELS, HEROES, HERO_IDS, HeroId, heroOf, heroRatings } from "../../shared/game";
+import { BOT_LEVELS, HEROES, HERO_CLASSES, HERO_IDS, HeroId, heroClass, heroOf, heroRatings } from "../../shared/game";
 import { HERO_SPRITES, renderPixelSprite } from "./art";
 import { heroPortrait } from "./heroArt";
 
@@ -24,6 +24,13 @@ const CSS = `
 #lobby .side .who { font-size: clamp(7px, 1.6vh, 11px); color: #c9b8c0; text-align: center; overflow-wrap: anywhere; }
 #lobby .side canvas { width: min(18vh, 16vw); height: auto; image-rendering: pixelated; }
 #lobby .side .hname { font-size: clamp(9px, 2.4vh, 16px); color: #ffd23f; text-align: center; }
+#lobby .classes { display: flex; gap: 4px; flex-wrap: wrap; justify-content: center; }
+#lobby .classes button { font: inherit; font-size: clamp(6px, 1.4vh, 10px); padding: 0.6vh 0.8vw; cursor: pointer; color: var(--c);
+  background: #15121e; border: 2px solid var(--c); border-radius: 4px; }
+#lobby .classes button.on { background: var(--c); color: #1a0f14; }
+#lobby .tile.off { display: none; }
+#lobby .grid { background: #2a2440; align-content: start; }
+#lobby .cls { display: inline-block; font-size: 0.7em; padding: 1px 3px; margin-top: 0.4vh; color: #1a0f14; background: var(--c); border-radius: 2px; }
 #lobby .side .rates { display: grid; grid-template-columns: auto 1fr auto; gap: 2px 4px; align-items: center; width: 92%;
   font-size: clamp(5px, 1.2vh, 8px); color: #c9b8c0; }
 #lobby .side .rates b { height: 5px; background: #ffd23f; border-radius: 2px; }
@@ -136,6 +143,22 @@ export class Lobby {
     const sub = this.pve ? "PVE SQUAD - 1 TO 4 PLAYERS VS BOT" : "PVP ARENA - 1 VS 1";
     this.root.innerHTML = `<div class="title">PLAYER SELECT<small>${sub}</small></div><div class="row"></div><div class="bottom"></div>`;
     const row = this.root.querySelector(".row")!;
+    // Class filter over the hero grid.
+    const classes = document.createElement("div");
+    classes.className = "classes";
+    for (const c of [{ id: "all", name: "ALL", color: "#ffd23f" }, ...HERO_CLASSES]) {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.textContent = c.name;
+      b.style.setProperty("--c", c.color);
+      b.classList.toggle("on", c.id === "all");
+      b.addEventListener("click", () => {
+        classes.querySelectorAll("button").forEach((x) => x.classList.toggle("on", x === b));
+        for (const [id, tile] of this.tiles) tile.classList.toggle("off", c.id !== "all" && heroClass(id) !== c.id);
+      });
+      classes.append(b);
+    }
+    row.before(classes);
     this.p1 = this.side("p1", "1P");
     if (this.pve) this.buildBotBox();
     const grid = document.createElement("div");
@@ -321,7 +344,8 @@ export class Lobby {
         side.art.width = 16;
         side.art.height = 18;
       }
-      side.hero.textContent = hero ? heroOf(hero).name : "";
+      const cls = hero ? HERO_CLASSES.find((c) => c.id === heroClass(hero)) : undefined;
+      side.hero.innerHTML = hero ? `${heroOf(hero).name}<br><span class="cls" style="--c:${cls!.color}">${cls!.name}</span>` : "";
       const r = hero ? heroRatings(hero) : undefined;
       side.rates.innerHTML = r
         ? [["HP", r.hp], ["DMG", r.damage], ["ATK SPD", r.speed], ["RANGE", r.range]]

@@ -3,7 +3,7 @@ import { BootScene } from "./scenes/BootScene";
 import { GameScene } from "./scenes/GameScene";
 import { HudScene } from "./scenes/HudScene";
 import { isTouchDevice } from "./touch";
-import { HEROES, HERO_IDS, HeroId, STAGES, STAGE_IDS, StageId, heroRatings } from "../../shared/game";
+import { HEROES, HERO_CLASSES, HERO_IDS, HeroId, STAGES, STAGE_IDS, StageId, heroClass, heroRatings } from "../../shared/game";
 import { GODZILLA, KINGKONG, SWORD_GOD, HERO_SPRITES, WARDEN, renderPixelSprite } from "./art";
 import { heroPortrait } from "./heroArt";
 
@@ -104,6 +104,24 @@ function buildStagePicker() {
 /** The character select cards, built from the hero list in shared/game.ts. */
 function buildHeroPicker() {
   const container = document.getElementById("heroes")!;
+  // Class filter: ALL, or one class at a time.
+  const tabs = document.createElement("div");
+  tabs.id = "hero-classes";
+  const show = (cls: string) => {
+    tabs.querySelectorAll("button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.cls === cls)));
+    container.querySelectorAll<HTMLElement>(".hero").forEach((c) => (c.hidden = cls !== "all" && c.dataset.cls !== cls));
+  };
+  for (const c of [{ id: "all", name: "ALL", color: "#ffd23f" }, ...HERO_CLASSES]) {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.dataset.cls = c.id;
+    b.id = `class-${c.id}`;
+    b.textContent = c.name;
+    b.style.setProperty("--c", c.color);
+    b.addEventListener("click", () => show(c.id));
+    tabs.append(b);
+  }
+  container.before(tabs);
   const bars = (value: number) => `<div class="bar"><span style="width:${Math.round(Math.min(1, value) * 100)}%"></span></div>`;
   for (const id of HERO_IDS) {
     const hero = HEROES[id];
@@ -113,6 +131,8 @@ function buildHeroPicker() {
     card.id = `hero-${id}`;
     card.setAttribute("aria-pressed", String(id === selectedHero));
     const rate = heroRatings(id);
+    const cls = HERO_CLASSES.find((c) => c.id === heroClass(id))!;
+    card.dataset.cls = cls.id;
     card.innerHTML = `
       <span class="name">${hero.name}</span>
       ${
@@ -120,7 +140,7 @@ function buildHeroPicker() {
           ? `<span class="stars special" title="${hero.stars} stars, special">${"★".repeat(hero.stars)} SPECIAL</span>`
           : `<span class="stars" title="${hero.stars} of 5 stars">${"★".repeat(hero.stars)}<span class="dim">${"★".repeat(5 - hero.stars)}</span></span>`
       }
-      <span class="role">${hero.role}</span>
+      <span class="role"><b class="cls" style="--c:${cls.color}">${cls.name}</b> ${hero.role}</span>
       <span class="role">Skill: ${hero.skill.name}${hero.skill2 ? ` + ${hero.skill2.name}` : ""}</span>
       <div class="stats">
         <span>HP ${rate.hp}</span>${bars(rate.hp / 10)}
@@ -138,6 +158,7 @@ function buildHeroPicker() {
     });
     container.append(card);
   }
+  show("all");
 }
 
 const soloOnly = import.meta.env.VITE_SOLO_ONLY === "1";
