@@ -56,6 +56,9 @@ import { attackArtLayout, attackFrame, facingOf, frontOnly, hasHeroArt, heroArtL
 
 interface PlayerView {
   body: Phaser.GameObjects.Image;
+  /** Where another player's dash began, until we see which way it goes (for the dash burst). */
+  dashFrom?: { x: number; y: number; t: number };
+  wasDashing?: boolean;
   weapon?: Phaser.GameObjects.Image;
   label: Phaser.GameObjects.Text;
   bar: Phaser.GameObjects.Graphics;
@@ -202,9 +205,6 @@ export function serverUrl(): string {
   // In dev the client runs on Vite (5173) and the server on its own port.
   return location.port === "5173" ? `${proto}://${location.hostname}:${SERVER_PORT}` : `${proto}://${location.host}`;
 }
-
-/** Frames in the DAGGER RUSH animation (art/props/daggerdash_0..11.png). */
-const DAGGER_DASH_FRAMES = 12;
 
 export class GameScene extends Phaser.Scene {
   room?: Room<any> | LocalRoom;
@@ -528,6 +528,7 @@ export class GameScene extends Phaser.Scene {
         this.dashDir = dir.x || dir.y ? dir : { x: Math.cos(input.aim), y: Math.sin(input.aim) };
         this.dashTimer = DASH_TIME;
         this.dashCooldown = DASH_COOLDOWN;
+        this.playDashBurst(this.predicted.x, this.predicted.y, Math.atan2(this.dashDir.y, this.dashDir.x));
       }
       const slow = this.charging2 ? CHARGE_SLOW : 1; // charging MAX SMASH
       let vx = dir.x * heroSpeed(me) * slow;
@@ -660,6 +661,20 @@ export class GameScene extends Phaser.Scene {
       const k = HERO_SCALE * (p.big > 0 && !p.dead ? BIG_SCALE : 1);
       body.setDepth(body.y);
       body.setAlpha(p.dead ? 0.25 : p.dashing ? 0.6 : 1);
+      // Other players' dashes: a burst where the dash began, pointing the way they went (ours plays on the key press).
+      if (!isMe) {
+        if (p.dashing && !view.wasDashing && !p.dead) view.dashFrom = { x: body.x, y: body.y, t: this.time.now };
+        view.wasDashing = !!p.dashing;
+        const from = view.dashFrom;
+        if (from) {
+          const dx = body.x - from.x;
+          const dy = body.y - from.y;
+          if (dx * dx + dy * dy > 9 || this.time.now - from.t > 150) {
+            this.playDashBurst(from.x, from.y, dx * dx + dy * dy > 9 ? Math.atan2(dy, dx) : aim);
+            view.dashFrom = undefined;
+          }
+        }
+      }
 
       if (view.weapon) {
         if (heroOf(p.hero).gun) view.weapon.setTexture(p.mode === 1 ? "machinegun" : WEAPON_TEXTURE[p.hero]!);
@@ -1002,6 +1017,7 @@ export class GameScene extends Phaser.Scene {
       this.effects.push({ kind: "muzzle", x, y, aim, range: 20, arc: 0, age: 0, life: 0.05 });
     } else if (hero.sword && p.buff > 0) {
       this.effects.push({ kind: "sword", x, y, aim, range: hero.sword.range, arc: hero.sword.arc, age: 0, life: 0.18 });
+      this.playSwordSlash(x, y, aim, hero.sword.range);
     } else if (hero.lineAttack) {
       this.effects.push({ kind: "tkick", x, y, aim, range: hero.range, arc: hero.lineAttack, age: 0, life: 0.14 });
     } else if (hero.attack === "rifle") {
@@ -1017,6 +1033,7 @@ export class GameScene extends Phaser.Scene {
       this.effects.push({ kind: "bolt", x: tx, y: ty, aim, range: hero.aoe, arc: 0, age: 0, life: 0.22 });
     } else {
       this.effects.push({ kind: hero.attack, x, y, aim, range: hero.range, arc: hero.arc, age: 0, life: hero.attack === "punch" ? 0.14 : 0.18 });
+      if (hero.attack === "sword") this.playSwordSlash(x, y, aim, hero.range);
     }
   }
 
@@ -1637,21 +1654,46 @@ export class GameScene extends Phaser.Scene {
   private popups: { text: Phaser.GameObjects.Text; life: number; vx: number }[] = [];
 
   /** A number pops up and floats away wherever someone takes damage (or heals). */
-  /** DAGGER RUSH: the user's hand-drawn dash animation (art/props/daggerdash_N.png), from `x,y` along `aim` for `len`. */
-  private playDaggerDash(x: number, y: number, aim: number, len: number) {
-    // In the frames the dash starts at (40, 58) and its streak runs 206px to the right edge.
-    const img = this.add.image(x, y, "daggerdash_0").setOrigin(40 / 246, 58 / 100).setRotation(aim);
-    img.setScale(len / 206).setFlipY(Math.cos(aim) < 0).setDepth(955);
+  /**
+   * Play one of the user's hand-drawn effect animations (art/props/<name>_0..N-1.png) once at `x,y`,
+   * turned to `angle`, then remove it. Pictures are drawn pointing right; `flip` mirrors them across that line (`flipX` across the other).
+   */
+  private playFrames(name: string, frames: number, delay: number, x: number, y: number, angle: number, originX: number, originY: number, scale: number, flip: boolean, flipX = false) {
+    const img = this.add.image(x, y, `${name}_0`).setOrigin(originX, originY).setRotation(angle);
+    img.setScale(scale).setFlipY(flip).setFlipX(flipX).setDepth(955);
     let frame = 0;
     this.time.addEvent({
-      delay: 70,
-      repeat: DAGGER_DASH_FRAMES - 1,
+      delay,
+      repeat: frames - 1,
       callback: () => {
         frame++;
-        if (frame >= DAGGER_DASH_FRAMES) img.destroy();
-        else img.setTexture(`daggerdash_${frame}`);
+        if (frame >= frames) img.destroy();
+        else img.setTexture(`${name}_${frame}`);
       },
     });
+  }
+
+  /** DAGGER RUSH, from `x,y` along `aim` for `len`. In the frames the dash starts at (40, 58) and its streak runs 206px. */
+  private playDaggerDash(x: number, y: number, aim: number, len: number) {
+    this.playFrames("daggerdash", 12, 70, x, y, aim, 40 / 246, 58 / 100, len / 206, Math.cos(aim) < 0);
+  }
+
+  /**
+   * A sword or knife basic attack: the blade comes down onto the spot `reach` ahead. The frames show it falling
+   * from the top-left onto (80, 122), so they are turned a quarter turn back to make "down" point along the aim.
+   */
+  private playSwordSlash(x: number, y: number, aim: number, reach: number) {
+    const tx = x + Math.cos(aim) * reach * 0.8;
+    const ty = y + Math.sin(aim) * reach * 0.8;
+    // Mirrored when aiming left, so the blade always comes over the top.
+    const left = Math.cos(aim) < 0;
+    this.playFrames("swordslash", 4, 70, tx, ty, aim - Math.PI / 2, left ? 48 / 128 : 80 / 128, 122 / 128, (reach * 0.9) / 90, false, left);
+  }
+
+  /** The normal dash: a burst left where the dash began, its point along `angle` and its trail behind. */
+  private playDashBurst(x: number, y: number, angle: number) {
+    // The frames point left with the burst's front at (5, 38); turn them half round to point along the dash.
+    this.playFrames("dashburst", 11, 45, x, y, angle + Math.PI, 5 / 100, 38 / 75, 0.55, Math.cos(angle) > 0);
   }
 
   private popDamage(x: number, y: number, amount: number, color: string, sign = "") {
