@@ -7,6 +7,10 @@ import {
   CHARGE_FULL,
   chargePower,
   chargeTimeOf,
+  fxBuffs,
+  type FxStep,
+  type FxHit,
+  type FxAt,
   chargeReach,
   BOT_LEVELS,
   DEFAULT_BOT_LEVEL,
@@ -238,6 +242,7 @@ export type BulletKind =
   | "laser" | "missile" | "air" | "dragonfire" | "knife" | "fist" | "star"
   | "arrow" | "bigarrow" | "shuriken" | "leaf" | "leafstorm" | "bluebolt"
   | "ball" | "pebble" | "iceshard" | "axe" | "ember" | "firebolt"
+  | `fxo:${string}` // combo shots: fxo:<shape>:<colour>:<size>
   | `card${number}`; // DRAW CARD: the number on the card (1-9)
 
 /** A lasting area on the map: a storm cloud, an illusion kingdom, a domain. */
@@ -343,6 +348,10 @@ interface PlayerBrain {
   /** KANABO CYCLONE: spins still to come and the time to the next. */
   cycloneLeft?: number;
   cycloneTimer?: number;
+  /** Combo skills: steps still to go off, seconds until each, and the aim they were cast with. */
+  /** Set when a combo blinked behind a foe: its later steps aim at that foe. */
+  fxAim?: number;
+  fxQueue?: { t: number; step: FxStep; aim: number; sx: number; sy: number }[];
   /** STONE WALL: the rocks standing and seconds until they crumble. */
   walls?: { ids: string[]; left: number };
   /** STAR SHOT: shots of the volley still to fire. */
@@ -400,6 +409,12 @@ interface ZoneBrain {
   moveOwner?: boolean;
   /** Ticking ground zones (EARTHQUAKE, BLIZZARD): seconds of slow each tick puts on foes inside. */
   slow?: number;
+  /** Combo fields: what each tick does to foes inside (and the share of max HP it heals friends). */
+  fxHit?: FxHit & { heal?: number };
+  /** Combo drops: what lands when the zone runs out. */
+  fxEnd?: FxHit & { color: string };
+  /** Combo fields that move with their caster. */
+  follow?: boolean;
   /** SEVENTH FORM: the crackling lane (start, direction, length, width). */
   lane?: { x: number; y: number; angle: number; len: number; width: number };
 }
@@ -633,6 +648,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
         brain.errorTimer = 0;
         brain.diveTo = undefined;
         brain.walls = undefined;
+        brain.fxQueue = undefined;
       }
       // Stacks and charged-up hits start over each round.
       const h = heroOf(p.hero);
@@ -679,7 +695,8 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
     const p = this.state.players.get(this.rootOf(attacker));
     if (!p) return 1;
     const bot = this.brains.get(this.rootOf(attacker))?.bot;
-    const rage = p.buff > 0 && heroOf(p.hero).skill.kind === "rage" ? heroOf(p.hero).skill.damage : 1; // BLOOD RAGE
+    let rage = p.buff > 0 && heroOf(p.hero).skill.kind === "rage" ? heroOf(p.hero).skill.damage : 1; // BLOOD RAGE
+    for (const b of fxBuffs(p)) rage *= b.dmg ?? 1; // combo damage buffs
     return rage * (bot ? BOT_LEVELS[bot.level].damage : 1) * (p.power || 1) * (DAMAGE_BALANCE[(heroOf(p.hero).formOf ?? p.hero) as HeroId] ?? 1); // an alien form hits like its hero
   }
 
@@ -909,6 +926,221 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
     p.warp = (p.warp + 1) % 256;
     brain.target = undefined;
     brain.hurtTimer = Math.max(brain.hurtTimer, 0.4);
+  }
+
+  // ------------------------------------------------------------- combo skills
+
+  /** Start a combo skill: its steps go into the queue (repeats spread out), and those due now go off at once. */
+  private castCombo(id: string, p: P, skill: SkillDef, brain: PlayerBrain) {
+    const q = (brain.fxQueue ??= []);
+    brain.fxAim = undefined;
+    for (const step of skill.steps ?? []) {
+      const n = step.times ?? 1;
+      for (let i = 0; i < n; i++) q.push({ t: (step.wait ?? 0) + i * (step.gap ?? 0.15), step, aim: p.aim, sx: p.x, sy: p.y });
+      if (step.do === "buff") {
+        if (skill === heroOf(p.hero).skill) p.buff = Math.max(p.buff, step.dur);
+        else p.active2 = Math.max(p.active2, step.dur);
+        brain.attackTimer = 0;
+      }
+    }
+    this.runFxQueue(id, p, brain, 0);
+  }
+
+  private runFxQueue(id: string, p: P, brain: PlayerBrain, dt: number) {
+    const q = brain.fxQueue!;
+    const due: typeof q = [];
+    for (let i = q.length - 1; i >= 0; i--) {
+      q[i].t -= dt;
+      if (q[i].t <= 0) due.unshift(...q.splice(i, 1));
+    }
+    for (const e of due) if (!p.dead) this.fxStep(id, p, brain, e.step, brain.fxAim ?? e.aim, e.sx, e.sy);
+    if (!q.length) brain.fxAim = undefined;
+  }
+
+  /** Where a drop or field goes. */
+  private fxSpot(id: string, p: P, at: FxAt, aim: number): { x: number; y: number } {
+    if (at === "self") return { x: p.x, y: p.y };
+    if (at === "target") {
+      const t = this.findTarget(id, p, 320, true);
+      if (t) return { x: t.x, y: t.y };
+      at = 120;
+    }
+    return this.move(p.x, p.y, Math.cos(aim) * at, Math.sin(aim) * at, 4);
+  }
+
+  /** Hit every foe for which `inside` says yes: damage, stun, slow, root, and a push away from (or pull toward) `from`. */
+  private fxArea(owner: string, inside: (x: number, y: number, r: number) => boolean, h: FxHit, from: { x: number; y: number }, dir?: number) {
+    const s = this.state;
+    const push = (x: number, y: number): [number, number] => (dir !== undefined ? [Math.cos(dir), Math.sin(dir)] : [x - from.x, y - from.y]);
+    s.enemies.forEach((e, eid) => {
+      const def = ENEMIES[e.kind as EnemyKind];
+      if (!inside(e.x, e.y, this.er(e))) return;
+      if (h.dmg) this.damageEnemy(eid, h.dmg, owner);
+      if (!s.enemies.has(eid) || def.block) return;
+      if (h.slow) e.slow = Math.max(e.slow, h.slow);
+      if (def.boss) return;
+      if (h.stun) e.stun = Math.max(e.stun, h.stun);
+      if (h.root) e.root = Math.max(e.root, h.root);
+      if (h.knock) {
+        const [dx, dy] = push(e.x, e.y);
+        this.knockEnemy(eid, h.knock > 0 ? dx : -dx, h.knock > 0 ? dy : -dy, Math.abs(h.knock));
+      }
+    });
+    if (!this.pvpLive()) return;
+    s.players.forEach((v, vid) => {
+      if (v.dead || !this.isFoe(owner, vid) || !inside(v.x, v.y, this.pr(v))) return;
+      if (h.dmg) this.damagePlayer(vid, h.dmg * PVP_DAMAGE_SCALE, true, owner);
+      if (v.dead) return;
+      if (h.stun) v.stun = Math.max(v.stun, h.stun);
+      if (h.slow) v.slow = Math.max(v.slow, h.slow);
+      if (h.root) v.root = Math.max(v.root, h.root);
+      if (h.knock) {
+        const [dx, dy] = push(v.x, v.y);
+        this.knockPlayer(vid, h.knock > 0 ? dx : -dx, h.knock > 0 ? dy : -dy, Math.abs(h.knock));
+      }
+    });
+  }
+
+  /** A hit test for a lane from (x, y) along `angle`. */
+  private laneTest(x: number, y: number, angle: number, len: number, width: number) {
+    const cos = Math.cos(angle);
+    const sin = Math.sin(angle);
+    return (tx: number, ty: number, r: number) => {
+      const along = (tx - x) * cos + (ty - y) * sin;
+      const across = Math.abs(-(tx - x) * sin + (ty - y) * cos);
+      return along >= -r && along <= len + r && across <= width / 2 + r;
+    };
+  }
+
+  private fxLaneZone(owner: string, look: string, color: string, x: number, y: number, angle: number, len: number, width: number, life = 0.35) {
+    this.addZone(`fxl:${look}:${color}:${angle.toFixed(3)}:${Math.round(len)}:${Math.round(width)}`, x, y, len, life, { owner, every: Infinity, damage: 0 });
+  }
+
+  /** One step of a combo skill. */
+  private fxStep(id: string, p: P, brain: PlayerBrain, st: FxStep, aim: number, sx: number, sy: number) {
+    const s = this.state;
+    switch (st.do) {
+      case "dash": {
+        const end = this.move(p.x, p.y, Math.cos(aim) * st.len, Math.sin(aim) * st.len, PLAYER_RADIUS);
+        const len = Math.hypot(end.x - p.x, end.y - p.y);
+        const w = st.width ?? 26;
+        this.fxArea(id, this.laneTest(p.x, p.y, aim, len, w), st, { x: p.x, y: p.y }, aim);
+        this.fxLaneZone(id, "dash", st.color, p.x, p.y, aim, len, w);
+        [p.x, p.y] = [end.x, end.y];
+        p.warp = (p.warp + 1) % 256;
+        brain.target = undefined;
+        brain.hurtTimer = Math.max(brain.hurtTimer, 0.25);
+        break;
+      }
+      case "blink": {
+        let to: { x: number; y: number } | undefined;
+        if (st.to === "behind") {
+          const t = this.findTarget(id, p, st.range, true);
+          if (t) {
+            const d = Math.hypot(t.x - p.x, t.y - p.y) || 1;
+            to = this.move(t.x, t.y, ((t.x - p.x) / d) * 18, ((t.y - p.y) / d) * 18, PLAYER_RADIUS);
+            p.aim = Math.atan2(t.y - to.y, t.x - to.x);
+            brain.fxAim = p.aim; // the rest of the combo turns to face the foe
+          }
+        } else if (st.to === "start") to = { x: sx, y: sy };
+        to ??= this.move(p.x, p.y, Math.cos(aim) * st.range, Math.sin(aim) * st.range, PLAYER_RADIUS);
+        this.addZone(`fx:puff:${st.color}`, p.x, p.y, 16, 0.4, { owner: id, every: Infinity, damage: 0 });
+        [p.x, p.y] = [to.x, to.y];
+        this.addZone(`fx:puff:${st.color}`, p.x, p.y, 16, 0.4, { owner: id, every: Infinity, damage: 0 });
+        p.warp = (p.warp + 1) % 256;
+        brain.target = undefined;
+        break;
+      }
+      case "lane":
+        this.fxArea(id, this.laneTest(p.x, p.y, aim, st.len, st.width), st, { x: p.x, y: p.y }, aim);
+        this.fxLaneZone(id, st.look ?? "beam", st.color, p.x, p.y, aim, st.len, st.width, 0.4);
+        if (st.knock || st.dmg) this.cutBulletsInLane(id, p.x, p.y, aim, st.len, st.width);
+        break;
+      case "ring":
+        this.fxArea(id, (x, y, r) => Math.hypot(x - p.x, y - p.y) <= st.radius + r, st, { x: p.x, y: p.y });
+        this.addZone(`fx:${st.look ?? "burst"}:${st.color}`, p.x, p.y, st.radius, 0.45, { owner: id, every: Infinity, damage: 0 });
+        break;
+      case "cone": {
+        const inCone = (x: number, y: number, r: number) => {
+          if (Math.hypot(x - p.x, y - p.y) > st.range + r) return false;
+          let diff = Math.atan2(y - p.y, x - p.x) - aim;
+          diff = Math.atan2(Math.sin(diff), Math.cos(diff));
+          return Math.abs(diff) <= st.arc / 2;
+        };
+        this.fxArea(id, inCone, st, { x: p.x, y: p.y });
+        this.cutBullets(id, p.x, p.y, aim, st.range, st.arc);
+        this.addZone(`fxc:${st.color}:${aim.toFixed(3)}:${st.arc.toFixed(3)}`, p.x, p.y, st.range, 0.35, { owner: id, every: Infinity, damage: 0 });
+        break;
+      }
+      case "shots": {
+        for (let i = 0; i < st.n; i++) {
+          const a = st.spread >= Math.PI * 2 - 0.01 ? aim + (i / st.n) * Math.PI * 2 : aim + (st.n > 1 ? (i / (st.n - 1) - 0.5) * st.spread : 0);
+          const bid = this.spawnBullet(`fxo:${st.shape ?? "orb"}:${st.color}:${st.size ?? 3}`, p.x, p.y, a, st.speed, { owner: id, damage: st.dmg ?? 0, pierce: st.pierce ?? 0, life: st.range / st.speed });
+          const b = this.bulletBrains.get(bid)!;
+          if (st.stun) b.stun = st.stun;
+          if (st.slow) b.slow = st.slow;
+          if (st.home) [b.homing, b.age] = [true, 0];
+        }
+        break;
+      }
+      case "drop": {
+        const spot = this.fxSpot(id, p, st.at, aim);
+        const zid = this.addZone(`fxd:${st.look ?? "meteor"}:${st.color}`, spot.x, spot.y, st.radius, st.delay, { owner: id, every: Infinity, damage: 0 });
+        this.zoneBrains.get(zid)!.fxEnd = { dmg: st.dmg, stun: st.stun, slow: st.slow, root: st.root, knock: st.knock, color: st.color };
+        break;
+      }
+      case "field": {
+        const spot = this.fxSpot(id, p, st.at, aim);
+        const zid = this.addZone(`fxf:${st.look ?? "storm"}:${st.color}`, spot.x, spot.y, st.radius, st.life, { owner: id, every: st.tick, damage: 0 });
+        const zb = this.zoneBrains.get(zid)!;
+        zb.fxHit = { dmg: st.dmg, stun: st.stun, slow: st.slow, root: st.root, knock: st.knock, heal: st.heal };
+        if (st.follow) zb.follow = true;
+        break;
+      }
+      case "lock": {
+        const t = this.findTarget(id, p, st.range, true);
+        if (!t) break;
+        this.fxArea(id, (x, y) => Math.hypot(x - t.x, y - t.y) < 1, st, { x: p.x, y: p.y });
+        this.fxLaneZone(id, st.look ?? "chain", st.color, p.x, p.y, Math.atan2(t.y - p.y, t.x - p.x), Math.hypot(t.x - p.x, t.y - p.y), 6, 0.5);
+        if (st.drag) {
+          // Dragged right up to the caster.
+          const d = Math.hypot(t.x - p.x, t.y - p.y) || 1;
+          const to = this.move(p.x, p.y, ((t.x - p.x) / d) * 22, ((t.y - p.y) / d) * 22, PLAYER_RADIUS);
+          if (t.key.startsWith("p:")) {
+            const v = s.players.get(t.key.slice(2));
+            const vb = this.brains.get(t.key.slice(2));
+            if (v && !v.dead) {
+              [v.x, v.y] = [to.x, to.y];
+              v.warp = (v.warp + 1) % 256;
+              if (vb) [vb.target, vb.dashTimer] = [undefined, 0];
+            }
+          } else {
+            const e = s.enemies.get(t.key);
+            if (e && !ENEMIES[e.kind as EnemyKind].boss) [e.x, e.y] = [to.x, to.y];
+          }
+        }
+        break;
+      }
+      case "buff":
+        break; // set up when cast (its timer is the skill's buff / active2)
+      case "heal":
+        s.players.forEach((q, qid) => {
+          if (q.dead) return;
+          const mine = qid === id;
+          if (!mine && (!st.radius || this.isFoe(id, qid) || Math.hypot(q.x - p.x, q.y - p.y) > st.radius)) return;
+          q.hp = Math.min(q.maxHp, q.hp + q.maxHp * st.pct);
+        });
+        this.addZone(`fx:heal:${st.color}`, p.x, p.y, st.radius ?? 30, 0.6, { owner: id, every: Infinity, damage: 0 });
+        break;
+      case "shield":
+        s.players.forEach((q, qid) => {
+          if (q.dead) return;
+          if (qid !== id && (!st.radius || this.isFoe(id, qid) || Math.hypot(q.x - p.x, q.y - p.y) > st.radius)) return;
+          q.barrier = Math.max(q.barrier, st.dur);
+        });
+        this.addZone(`fx:shock:${st.color}`, p.x, p.y, st.radius ?? 30, 0.5, { owner: id, every: Infinity, damage: 0 });
+        break;
+    }
   }
 
   /** Hit one target by key (a monster id, or "p:" + a player id), stunning it (bosses shrug stuns off). */
@@ -1371,6 +1603,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
         brain.barrageLeft = 0;
         brain.cycloneLeft = 0;
         brain.diveTo = undefined;
+        brain.fxQueue = undefined;
         if (hero.stacks && hero.skill.kind !== "tree") p.mode = 0; // BOOST and ARMOR stacks are lost on falling
         if (hero.skill.kind === "empower") p.mode = 0;
         p.titan = 0;
@@ -1406,6 +1639,8 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       const auto = this.autoMove(id, p, brain, hero, dt); // ERROR / DRAGOON DIVE move him themselves
       p.active2 = Math.max(0, p.active2 - dt);
       if (p.active2 > 0 && hero.skill2?.kind === "gaia") p.hp = Math.min(p.maxHp, p.hp + p.maxHp * hero.skill2.damage * dt);
+      for (const b of fxBuffs(p)) if (b.regen) p.hp = Math.min(p.maxHp, p.hp + p.maxHp * b.regen * dt);
+      if (brain.fxQueue?.length) this.runFxQueue(id, p, brain, dt);
       if (brain.walls) {
         brain.walls.left -= dt;
         if (brain.walls.left <= 0) {
@@ -1495,6 +1730,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
         const bat = p.active2 > 0 && hero.skill2?.kind === "bat";
         const rage = p.buff > 0 && hero.skill.kind === "rage";
         brain.attackTimer = hero.attackCooldown * (bat ? hero.skill2!.width ?? 0.35 : 1) * (rage ? hero.skill.width ?? 0.6 : 1);
+        for (const b of fxBuffs(p)) brain.attackTimer *= b.atk ?? 1; // combo attack-speed buffs
         p.attackSeq++;
         if (p.titan > 0) {
           // A 50m Titan's blows crush everything around it.
@@ -1958,6 +2194,9 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
         break;
       case "harden":
         p.mode = Math.min(skill.count ?? 10, p.mode + 1);
+        break;
+      case "combo":
+        this.castCombo(id, p, skill, brain);
         break;
       case "petrify": {
         // REALITY: the code of the nearest foe is rewritten; it is now a plain rock.
@@ -2905,6 +3144,10 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       if (z.kind === "castle") this.walkCastle(z, brain, dt);
       if (z.kind === "frost") this.frostSigil(z, brain);
       if (z.kind === "jackbox") this.jackInTheBox(id, z, brain);
+      if (brain.follow) {
+        const o = s.players.get(brain.owner);
+        if (o && !o.dead) [z.x, z.y] = [o.x, o.y];
+      }
       if ((z.kind === "sticky" || z.kind === "whip" || z.kind === "petrify" || z.kind === "iceblock") && brain.stick) {
         // The bomb rides along on whatever it is stuck to.
         const key = brain.stick;
@@ -2920,6 +3163,16 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
             if (this.rootOf(qid) !== this.rootOf(brain.owner) && this.isFoe(brain.owner, qid)) return;
             q.hp = Math.min(q.maxHp, q.hp + q.maxHp * brain.damage);
           });
+        } else if (brain.fxHit) {
+          // A combo field: hurts (and slows, roots...) foes inside, heals friends inside.
+          const fx = brain.fxHit;
+          this.fxArea(brain.owner, (x, y, r) => Math.hypot(x - z.x, y - z.y) <= z.radius + r, fx, { x: z.x, y: z.y });
+          if (fx.heal) {
+            s.players.forEach((q, qid) => {
+              if (q.dead || Math.hypot(q.x - z.x, q.y - z.y) > z.radius || this.isFoe(brain.owner, qid)) return;
+              q.hp = Math.min(q.maxHp, q.hp + q.maxHp * fx.heal!);
+            });
+          }
         } else if (z.kind === "embers" || z.kind === "quake" || z.kind === "blizzard") {
           // Burning ground, a shaking quake, a snowstorm: everyone hostile inside is hurt (and slowed).
           this.sweep(brain.owner, z.x, z.y, 0, z.radius, Math.PI * 2, brain.damage);
@@ -2959,6 +3212,11 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       }
       if (z.life <= 0 && z.kind === "sticky") this.stickyBlast(z, brain);
       if (z.life <= 0 && brain.blast) this.landBlast(z, brain);
+      if (z.life <= 0 && brain.fxEnd) {
+        // A combo drop lands.
+        this.fxArea(brain.owner, (x, y, r) => Math.hypot(x - z.x, y - z.y) <= z.radius + r, brain.fxEnd, { x: z.x, y: z.y });
+        this.addZone(`fx:burst:${brain.fxEnd.color}`, z.x, z.y, z.radius, 0.45, { owner: brain.owner, every: Infinity, damage: 0 });
+      }
       if (z.life <= 0 && z.kind === "truck") {
         // The truck lands: everything under it is crushed and thrown back.
         this.sweep(brain.owner, z.x, z.y, 0, z.radius, Math.PI * 2, brain.damage, 2);
@@ -3093,6 +3351,10 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
     if (p.active2 > 0 && s2?.kind === "dive") return; // DRAGOON DIVE: high in the air, out of reach
     if (p.active2 > 0 && s2?.kind === "gaia" && !raw) amount *= s2.width ?? 0.5; // GAIA SHELL
     if (p.buff > 0 && hard.kind === "rage" && !raw) amount *= RAGE_TAKEN; // BLOOD RAGE leaves him open
+    for (const b of fxBuffs(p)) {
+      if (b.invuln) return;
+      if (!raw) amount *= b.armor ?? 1;
+    }
     // Under Yaotsu's reality change, ordinary humans hit for 1.
     if (this.state.reality > 0 && attacker && (attacker === ENEMY || this.isFoe(this.state.realityBy, attacker))) {
       amount = Math.min(amount, 1);
@@ -3171,6 +3433,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
     if (!attacker || attacker === ENEMY || dealt <= 0) return;
     const v = this.state.players.get(attacker);
     const bat = v && heroOf(v.hero).skill2;
+    if (v && !v.dead) for (const b of fxBuffs(v)) if (b.leech) v.hp = Math.min(v.maxHp, v.hp + dealt * b.leech); // combo lifesteal
     if (!v || v.dead || v.active2 <= 0 || bat?.kind !== "bat") return;
     v.hp = Math.min(v.maxHp, v.hp + dealt * bat.damage);
   }
@@ -3882,6 +4145,8 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
         return p.mode < (skill.count ?? 3);
       case "harden":
         return p.mode < (skill.count ?? 10);
+      case "combo":
+        return skill.botHp !== undefined ? hpLeft < skill.botHp && dist < Math.max(skill.radius, 200) : dist <= skill.radius;
       case "petrify":
       case "iceprison":
       case "deathdoor":

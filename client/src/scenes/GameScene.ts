@@ -52,6 +52,7 @@ import {
 } from "../../../shared/game";
 import type { HudScene } from "./HudScene";
 import { LocalRoom } from "../localRoom";
+import { drawFxAura, drawFxZone, fxBuffStep, fxGuide, fxShotTexture } from "../fx";
 import { Lobby } from "../lobby";
 import { RiftSim, TITAN_ATTACK_COOLDOWN } from "../../../shared/sim";
 import { attackArtLayout, attackFrame, facingOf, frontOnly, hasHeroArt, heroArtLayout, SWING_TIME } from "../heroArt";
@@ -877,6 +878,10 @@ export class GameScene extends Phaser.Scene {
           view.bar.fillStyle(0x3a9a3a, 0.2 + 0.1 * pulse).fillCircle(body.x, body.y - 9 * k, 16 * k);
           view.bar.lineStyle(2, 0x7fdc5a, 0.8).strokeCircle(body.x, body.y - 9 * k, 16 * k);
         }
+        const fxb1 = p.buff > 0 ? fxBuffStep(heroOf(p.hero).skill) : undefined;
+        if (fxb1) drawFxAura(view.bar, fxb1, body.x, body.y, k, this.time.now);
+        const fxb2 = p.active2 > 0 ? fxBuffStep(skill2) : undefined;
+        if (fxb2) drawFxAura(view.bar, fxb2, body.x, body.y, k, this.time.now);
         if (p.buff > 0 && heroOf(p.hero).skill.kind === "rage") {
           // BLOOD RAGE: red heat rising off him.
           view.bar.lineStyle(2, 0xff2a2a, 0.5 + 0.5 * pulse).strokeEllipse(body.x, body.y + 1, 22 * k, 8 * k);
@@ -1114,6 +1119,10 @@ export class GameScene extends Phaser.Scene {
   private playSkillEffect(skill: SkillDef, x: number, y: number, aim: number, view?: PlayerView) {
     const cam = this.cameras.main;
     switch (skill.kind) {
+      case "combo": {
+        this.sparks.explode(10, x, y);
+        break;
+      }
       case "smash":
         if (skill.duration) cam.flash(80, 255, 240, 160);
         this.effects.push({ kind: "smash", x, y: y + 5, aim, range: skill.radius, arc: Math.PI * 2, age: 0, life: 0.35 });
@@ -1946,6 +1955,12 @@ export class GameScene extends Phaser.Scene {
       g.lineStyle(1, 0xffd23f, 0.7).strokeCircle(cx, cy, r);
     };
     switch (skill.kind) {
+      case "combo":
+        fxGuide(skill, this.aim, x, y, lane, area, (range, arc) => {
+          g.fillStyle(0xffd23f, 0.12).slice(x, y, range, this.aim - arc / 2, this.aim + arc / 2, false).fillPath();
+          g.lineStyle(1, 0xffd23f, 0.7).beginPath().arc(x, y, range, this.aim - arc / 2, this.aim + arc / 2).strokePath();
+        });
+        break;
       case "wave":
       case "line":
       case "jab":
@@ -2371,6 +2386,7 @@ export class GameScene extends Phaser.Scene {
       seen.add(id);
       const age = z.maxLife - z.life;
       const fade = Math.max(0, Math.min(1, age / 0.4, z.life / 0.6));
+      if (drawFxZone(floor, sky, z, now)) return;
       if (z.kind === "domain") {
         // Unlimited Void: the whole map becomes an endless starfield.
         floor.fillStyle(0x07000f, 0.85 * fade).fillRect(0, 0, WORLD_W, WORLD_H);
@@ -2922,7 +2938,7 @@ export class GameScene extends Phaser.Scene {
       seen.add(id);
       let sprite = this.bullets.get(id);
       if (!sprite) {
-        const texture = b.kind.startsWith("card") ? b.kind : BULLET_TEXTURE[b.kind] ?? "snipe";
+        const texture = b.kind.startsWith("fxo:") ? fxShotTexture(this, b.kind) : b.kind.startsWith("card") ? b.kind : BULLET_TEXTURE[b.kind] ?? "snipe";
         sprite = this.add.image(b.x, b.y, texture).setDepth(900).setData("kind", b.kind);
         if (b.kind === "wave" || b.kind === "snipe" || b.kind === "bullet" || b.kind === "slash" || b.kind === "godslash" || b.kind === "laser" || b.kind === "knife") sprite.setRotation(Math.atan2(b.vy, b.vx));
         if (b.kind.startsWith("card")) sprite.setScale(1.3);
@@ -2938,6 +2954,7 @@ export class GameScene extends Phaser.Scene {
         if (b.kind === "bigarrow") sprite.setScale(1.3);
         if (b.kind === "leafstorm") sprite.setScale(2);
         if (b.kind === "bluebolt") sprite.setScale(1.3);
+        if (b.kind.startsWith("fxo:blade") || b.kind.startsWith("fxo:spike")) sprite.setRotation(Math.atan2(b.vy, b.vx));
         this.bullets.set(id, sprite);
       }
       // Bullets fly in straight lines, so extrapolate locally and drift toward the server.
@@ -2946,6 +2963,8 @@ export class GameScene extends Phaser.Scene {
         sprite.y += b.vy * dt;
       }
       if (b.kind === "banana" || b.kind === "boulder" || b.kind === "shuriken" || b.kind === "leaf" || b.kind === "leafstorm" || b.kind === "axe" || b.kind === "pebble") sprite.rotation += dt * (b.kind === "axe" ? 20 : 12); // spinning throws
+      if (b.kind.startsWith("fxo:star")) sprite.rotation += dt * 14;
+      if (b.kind.startsWith("fxo:") && sprite.getData("home")) sprite.setRotation(Math.atan2(b.vy, b.vx));
       if (b.kind === "missile") {
         sprite.setRotation(Math.atan2(b.vy, b.vx)); // homing missiles turn as they chase
         if (Math.random() < 0.4) this.sparks.explode(1, sprite.x - b.vx * 0.03, sprite.y - b.vy * 0.03);

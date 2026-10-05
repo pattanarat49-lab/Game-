@@ -1,3 +1,4 @@
+import { NEW_HEROES, NewHeroId, newHeroDefs } from "./heroes2";
 // Game rules shared by the client (prediction, rendering) and the server (authority).
 
 export const TILE = 16;
@@ -37,7 +38,7 @@ export const KNOCKBACK_DECAY = 12; // how fast the push dies out (per second)
 export const DASH_COOLDOWN = 0.5;
 
 // Heroes. Every number here is safe to tweak for balance.
-export type HeroId =
+type BaseHeroId =
   | "superman"
   | "isekai"
   | "simo"
@@ -102,6 +103,8 @@ export type HeroId =
   | "cryomancer"
   | "lancer"
   | "oni";
+/** Every hero: the hand-made ones above plus the big roster in heroes2.ts. */
+export type HeroId = BaseHeroId | NewHeroId;
 export type AttackStyle = "punch" | "sword" | "rifle" | "lightning" | "magic" | "flame";
 export type SkillKind =
   | "smash"
@@ -209,6 +212,7 @@ export type SkillKind =
   | "dive" // DRAGOON DIVE: leap out of reach, then crash down on the aimed spot
   | "roar" // DEMON ROAR: stuns and throws back everything nearby
   | "cyclone" // KANABO CYCLONE: three full spins of the club
+  | "combo" // a skill built from FX steps (dash, lane, ring, shots, drop, field, lock, buff, heal, shield, blink)
   | "charge"; // hold to charge (walking slower), let go to smash: the longer the charge, the harder and longer it hits
 
 export interface SkillDef {
@@ -223,6 +227,55 @@ export interface SkillDef {
   pet?: HeroId; // for "summon": which helper comes out (damage = its share of the summoner's max HP)
   max?: number; // for "summon": most of these helpers out at once (the oldest leaves); default `count`
   chargeTime?: number; // for charged skills: seconds to a full charge (default CHARGE_FULL)
+  /** "combo" skills: what happens, in order (each step can wait a moment after the cast). */
+  steps?: FxStep[];
+  /** "combo" skills: bots use it when a foe is within `radius`, or (when set) only below this share of HP. */
+  botHp?: number;
+}
+
+/** What an FX hit does to each foe it touches. */
+export interface FxHit {
+  dmg?: number;
+  stun?: number;
+  slow?: number;
+  root?: number;
+  /** Throw foes back (times a normal knockback); negative pulls them in. */
+  knock?: number;
+}
+
+/** Where a "drop" or "field" goes: this far ahead along the aim, on the caster ("self"), or on the nearest foe ("target"). */
+export type FxAt = number | "self" | "target";
+
+/**
+ * One piece of a "combo" skill. Colours are hex strings without "#" ("ff6a1a"); `look` picks how it is drawn.
+ * `wait`: seconds after the cast before this step goes off. `times`/`gap`: repeat it.
+ */
+export type FxStep = { wait?: number; times?: number; gap?: number; color: string } & (
+  | ({ do: "dash"; len: number; width?: number } & FxHit)
+  | { do: "blink"; to: "behind" | "aim" | "start"; range: number }
+  | ({ do: "lane"; len: number; width: number; look?: "beam" | "slash" | "wave" | "chain" | "bolt" } & FxHit)
+  | ({ do: "ring"; radius: number; look?: "burst" | "shock" | "petal" | "spin" } & FxHit)
+  | ({ do: "cone"; range: number; arc: number } & FxHit)
+  | ({ do: "shots"; n: number; spread: number; speed: number; range: number; pierce?: number; shape?: "orb" | "blade" | "star" | "spike"; size?: number; home?: boolean } & FxHit)
+  | ({ do: "drop"; at: FxAt; delay: number; radius: number; look?: "meteor" | "pillar" | "bolt" | "fist" | "blade" } & FxHit)
+  | ({ do: "field"; at: FxAt; follow?: boolean; radius: number; life: number; tick: number; heal?: number; look?: "storm" | "mist" | "flames" | "sand" | "petals" | "dark" | "ice" | "light" | "water" | "web" } & FxHit)
+  | ({ do: "lock"; range: number; drag?: boolean; look?: "chain" | "bolt" | "grab" | "eye" } & FxHit)
+  | { do: "buff"; dur: number; speed?: number; dmg?: number; atk?: number; armor?: number; leech?: number; regen?: number; invuln?: boolean }
+  | { do: "heal"; pct: number; radius?: number }
+  | { do: "shield"; dur: number; radius?: number }
+);
+
+/** The buff steps a hero has running now (skill 1 while `buff` ticks, skill 2 while `active2` ticks). */
+export function fxBuffs(p: { hero: string; buff?: number; active2?: number }): Extract<FxStep, { do: "buff" }>[] {
+  const hero = heroOf(p.hero);
+  const out: Extract<FxStep, { do: "buff" }>[] = [];
+  const add = (sk: SkillDef | undefined, on: boolean) => {
+    if (!on || sk?.kind !== "combo") return;
+    for (const st of sk.steps ?? []) if (st.do === "buff") out.push(st);
+  };
+  add(hero.skill, (p.buff ?? 0) > 0);
+  add(hero.skill2, (p.active2 ?? 0) > 0);
+  return out;
 }
 
 export interface HeroDef {
@@ -266,7 +319,7 @@ export interface HeroDef {
   ram?: number;
 }
 
-export const HEROES: Record<HeroId, HeroDef> = {
+const BASE_HEROES: Record<BaseHeroId, HeroDef> = {
   superman: {
     name: "Captain Steel",
     role: "Melee bruiser",
@@ -1519,6 +1572,8 @@ export const HEROES: Record<HeroId, HeroDef> = {
   },
 };
 
+export const HEROES: Record<HeroId, HeroDef> = { ...BASE_HEROES, ...newHeroDefs() };
+
 /** Every hero has this many times the HP written above (user request 2026-10-03: triple HP, nothing else changed). */
 export const HP_SCALE = 3;
 for (const def of Object.values(HEROES)) def.maxHp *= HP_SCALE;
@@ -1547,6 +1602,11 @@ const PVP_RANKING: HeroId[] = [
   "paladin", "golem", "robot", "simo", "monk", "geomancer", "cryomancer", "rick", "okita", "archer", "druid", "oni", "reaper", "deku", "killua", "omni", "theworld", "sakamoto", "starplatinum", "loki",
   "titan", "kid", "swordgod", "yaotsu", "badigadi",
 ];
+// The big roster (heroes2.ts) slots into the ranking by its bot-duel win rate (old heroes span about 44-56%).
+for (const [id, e] of Object.entries(NEW_HEROES).sort((a, b) => a[1].win - b[1].win)) {
+  const at = Math.round(Math.max(0, Math.min(1, (e.win - 44) / 12)) * PVP_RANKING.length);
+  PVP_RANKING.splice(at, 0, id as HeroId);
+}
 /** Heroes taken out of the game (user request 2026-10-04): not on any hero select; their code is kept. */
 const REMOVED_HEROES: HeroId[] = ["swordgod", "yaotsu", "badigadi"];
 export const HERO_IDS = [
@@ -1646,6 +1706,10 @@ const CLASS_OF: Partial<Record<HeroId, HeroClass>> = {
   // Summoners: fight through the helpers and copies they call out.
   trainer: "summoner", agamemnon: "summoner", loki: "summoner", lawliet: "summoner",
 };
+for (const [id, e] of Object.entries(NEW_HEROES)) {
+  CLASS_OF[id as HeroId] = e.cls;
+  DAMAGE_BALANCE[id as HeroId] ??= e.bal;
+}
 export function heroClass(id: string): HeroClass {
   const base = HEROES[id as HeroId]?.formOf ?? id;
   return CLASS_OF[base as HeroId] ?? "fighter";
@@ -1912,10 +1976,11 @@ export function formFromAim(hero: string, aim: number): HeroId | undefined {
 /** Burned by the Blaze Alien's flamethrower: moves this much slower. */
 export const BURN_SLOW = 0.55;
 
-export function heroSpeed(p: { hero: string; big: number; active2?: number; slow?: number; root?: number }): number {
+export function heroSpeed(p: { hero: string; big: number; active2?: number; buff?: number; slow?: number; root?: number }): number {
   if ((p.root ?? 0) > 0) return 0; // SHADOW WHIP: legs tied
   const hero = heroOf(p.hero);
-  const bike = (p.active2 ?? 0) > 0 && (hero.skill2?.kind === "bike" || hero.skill2?.kind === "sprint") ? hero.skill2.width ?? 2 : 1;
+  let bike = (p.active2 ?? 0) > 0 && (hero.skill2?.kind === "bike" || hero.skill2?.kind === "sprint") ? hero.skill2.width ?? 2 : 1;
+  for (const b of fxBuffs(p)) bike *= b.speed ?? 1; // combo speed buffs
   const base = hero.ram ? hero.speed * MOVE_SCALE : HERO_WALK; // the Speed Raptor keeps its own speed
   return base * (p.big > 0 ? BIG_SLOW : 1) * ((p.slow ?? 0) > 0 ? BURN_SLOW : 1) * bike;
 }
