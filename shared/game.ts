@@ -80,7 +80,9 @@ export type HeroId =
   | "quad"
   | "echo"
   | "raptor"
-  | "zenitsu";
+  | "zenitsu"
+  | "pawn"
+  | "queen";
 export type AttackStyle = "punch" | "sword" | "rifle" | "lightning" | "magic" | "flame";
 export type SkillKind =
   | "smash"
@@ -162,6 +164,7 @@ export interface SkillDef {
   duration?: number; // for lasting skills (time stop, storms, illusions, clones)
   count?: number; // how many missiles or summons
   pet?: HeroId; // for "summon": which helper comes out (damage = its share of the summoner's max HP)
+  max?: number; // for "summon": most of these helpers out at once (the oldest leaves); default `count`
 }
 
 export interface HeroDef {
@@ -191,6 +194,8 @@ export interface HeroDef {
   sword?: { attackCooldown: number; damage: number; range: number; arc: number };
   /** Helpers called out by skills: not shown on the hero select screen. */
   summon?: boolean;
+  /** A summon that never moves and fires at anything within `range` (THE QUEEN). */
+  turret?: boolean;
   /** An alien form of this hero (ALIEN TRANSFORM): not on the hero select screen; turns back when the time runs out. */
   formOf?: HeroId;
   /** Melee knockback, times a normal one. */
@@ -453,22 +458,23 @@ export const HEROES: Record<HeroId, HeroDef> = {
   },
   lawliet: {
     name: "The Detective",
-    role: "Detective",
-    blurb: "Weak hits. PASSIVE: sees where every monster and boss will be 0.5s ahead (ghost images). SOLVE IT (E) locks on to the nearest enemy in range and stuns it for 5s.",
-    stars: 3,
+    role: "Chess master",
+    blurb: "Weak hits; fights through his chess pieces. PAWN: places a pawn that follows him and attacks up close (low HP, quick cooldown, up to 3). QUEEN (E): places a queen that stands still as a turret, with lots of HP, firing heavy shots across the whole arena.",
+    stars: 4,
     maxHp: 100,
     speed: 116,
     attack: "punch",
     attackCooldown: 0.45,
-    damage: 24,
+    damage: 12,
     range: 20,
     arc: 1.4,
     aoe: 0,
     shotSpeed: 0,
     pierce: 0,
-    skill: { kind: "passive", name: "FORESIGHT", cooldown: 1, damage: 0, radius: 0, duration: 0.5 },
-    // SOLVE IT: no aiming needed, it finds the nearest target within `radius` (bosses are not stunned).
-    skill2: { kind: "solve", name: "SOLVE IT", cooldown: 15, damage: 10, radius: 220, duration: 5 },
+    // PAWN: `damage` is its share of his max HP; up to `max` out at once, each for `duration` seconds.
+    skill: { kind: "summon", name: "PAWN", cooldown: 4, damage: 0.35, radius: 0, count: 1, max: 3, duration: 20, pet: "pawn" },
+    // QUEEN: a turret with `damage` times his max HP, for `duration` seconds.
+    skill2: { kind: "summon", name: "QUEEN", cooldown: 22, damage: 1.5, radius: 0, count: 1, duration: 12, pet: "queen" },
   },
   thorfinn: {
     name: "Viking Kid",
@@ -898,6 +904,44 @@ export const HEROES: Record<HeroId, HeroDef> = {
     pierce: 0,
     skill: { kind: "passive", name: "", cooldown: 1, damage: 0, radius: 0 },
   },
+  pawn: {
+    name: "Pawn",
+    role: "Summon",
+    blurb: "",
+    stars: 1,
+    summon: true,
+    maxHp: 1,
+    speed: 110,
+    attack: "punch",
+    attackCooldown: 0.6,
+    damage: 110,
+    range: 22,
+    arc: 1.6,
+    aoe: 0,
+    shotSpeed: 0,
+    pierce: 0,
+    skill: { kind: "passive", name: "", cooldown: 1, damage: 0, radius: 0 },
+  },
+  queen: {
+    name: "Queen",
+    role: "Summon",
+    blurb: "",
+    stars: 1,
+    summon: true,
+    turret: true,
+    maxHp: 1,
+    speed: 0,
+    attack: "magic",
+    attackCooldown: 1,
+    damage: 320,
+    range: 1200, // the whole PvP arena
+    arc: 0,
+    aoe: 0,
+    shotSpeed: 330,
+    pierce: 0,
+    shot: "laser",
+    skill: { kind: "passive", name: "", cooldown: 1, damage: 0, radius: 0 },
+  },
   gladiator: {
     name: "Gladiator",
     role: "Summon",
@@ -1057,8 +1101,8 @@ for (const def of Object.values(HEROES)) {
  * The character select shows them in this order. Heroes missing here go at the end.
  */
 const PVP_RANKING: HeroId[] = [
-  "trainer", "howl", "healer", "superman", "agamemnon", "rudeus", "lawliet", "isekai", "ricardo", "saitama",
-  "thorfinn", "hanuman", "doraemon", "joyboy", "zenitsu", "steve", "taekwondo", "vampire", "gojo", "rider",
+  "trainer", "howl", "healer", "superman", "agamemnon", "rudeus", "isekai", "ricardo", "saitama",
+  "thorfinn", "hanuman", "doraemon", "joyboy", "zenitsu", "steve", "lawliet", "taekwondo", "vampire", "gojo", "rider",
   "simo", "rick", "okita", "deku", "killua", "omni", "theworld", "sakamoto", "starplatinum", "loki",
   "titan", "kid", "swordgod", "yaotsu", "badigadi",
 ];
@@ -1080,7 +1124,7 @@ export const DAMAGE_BALANCE: Partial<Record<HeroId, number>> = {
   superman: 0.62,
   agamemnon: 0.59,
   rudeus: 1.9,
-  lawliet: 3.93,
+  lawliet: 1,
   isekai: 1.46,
   ricardo: 0.83,
   saitama: 0.3,
@@ -1133,9 +1177,9 @@ const CLASS_OF: Partial<Record<HeroId, HeroClass>> = {
   // Assassins: fast, fragile, dart in and burst one target down.
   killua: "assassin", okita: "assassin", zenitsu: "assassin", vampire: "assassin", thorfinn: "assassin", kid: "assassin",
   // Supports: heal, lock down or weaken enemies.
-  healer: "support", lawliet: "support", doraemon: "support",
+  healer: "support", doraemon: "support",
   // Summoners: fight through the helpers and copies they call out.
-  trainer: "summoner", agamemnon: "summoner", loki: "summoner",
+  trainer: "summoner", agamemnon: "summoner", loki: "summoner", lawliet: "summoner",
 };
 export function heroClass(id: string): HeroClass {
   const base = HEROES[id as HeroId]?.formOf ?? id;

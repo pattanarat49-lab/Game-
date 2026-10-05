@@ -15,7 +15,11 @@ interface ArtLayout {
   scale: number;
   originY: number;
 }
-const LAYOUT: Record<string, ArtLayout> = {};
+const LAYOUT: Record<string, ArtLayout> = {
+  // The Detective's chess pieces (52px and 66px tall pictures): a small pawn, a queen taller than a hero.
+  pawn: { scale: 1 / 3, originY: 0.97 },
+  queen: { scale: 0.45, originY: 0.97 },
+};
 /** Same for the basic-attack swing frames, which can be a bigger canvas than the standing pictures. */
 const ATTACK_LAYOUT: Record<string, ArtLayout> = {};
 /** How long a basic-attack swing animation plays, in seconds. */

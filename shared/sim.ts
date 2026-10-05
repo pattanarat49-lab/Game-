@@ -1858,7 +1858,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
         this.addZone("rewind", p.x, p.y, 400, 0.8, { owner: id, every: Infinity, damage: 0 });
         break;
       case "summon":
-        this.spawnSummon(id, p, skill.pet!, skill.damage, skill.count ?? 1, skill.duration ?? Infinity);
+        this.spawnSummon(id, p, skill.pet!, skill.damage, skill.count ?? 1, skill.duration ?? Infinity, skill.max ?? skill.count ?? 1);
         break;
       case "card": {
         // Draw a card: its number is the share of the target's HP it takes (x10%).
@@ -2132,8 +2132,10 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       c.hero = hero;
       c.owner = ownerId;
       c.color = owner.color;
-      const a = owner.aim + Math.PI / 2 + (i * Math.PI * 2) / count;
-      const spot = this.move(owner.x + Math.cos(a) * 20, owner.y + Math.sin(a) * 20, 0, 0, PLAYER_RADIUS);
+      // A turret is set down just ahead; the rest come out around him.
+      const a = def.turret ? owner.aim : owner.aim + Math.PI / 2 + (i * Math.PI * 2) / count;
+      const out = def.turret ? 30 : 20;
+      const spot = this.move(owner.x + Math.cos(a) * out, owner.y + Math.sin(a) * out, 0, 0, PLAYER_RADIUS);
       c.x = spot.x;
       c.y = spot.y;
       c.aim = owner.aim;
@@ -2169,7 +2171,9 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
     // Find something to fight: the nearest enemy, or a rival player in the arena.
     let tx = 0;
     let ty = 0;
-    let best = CLONE_SIGHT;
+    // A turret (THE QUEEN) sees as far as it shoots; everything else looks around itself.
+    const sight = hero.turret ? hero.range : CLONE_SIGHT;
+    let best = sight;
     this.state.enemies.forEach((e) => {
       if (ENEMIES[e.kind as EnemyKind].block) return;
       const r = ENEMIES[e.kind as EnemyKind].radius;
@@ -2184,7 +2188,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
     const melee = hero.attack === "sword" || hero.attack === "punch";
     let mx = 0;
     let my = 0;
-    if (best < CLONE_SIGHT) {
+    if (best < sight) {
       c.aim = Math.atan2(ty - c.y, tx - c.x);
       // Keep at casting distance.
       const want = melee ? (best > hero.range * 0.6 ? 1 : 0) : best > hero.range * 0.7 ? 1 : best < hero.range * 0.35 ? -1 : 0;
@@ -2216,6 +2220,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       if (d < 0.01) [mx, my] = [mx + Math.random() - 0.5, my + Math.random() - 0.5];
       else [mx, my] = [mx + (dx / d) * (1 - d / SQUAD_SPACING) * 1.5, my + (dy / d) * (1 - d / SQUAD_SPACING) * 1.5];
     });
+    if (hero.turret) [mx, my] = [0, 0]; // it stands where it was placed
     const len = Math.hypot(mx, my);
     if (len > 1) [mx, my] = [mx / len, my / len];
     const speed = heroSpeed(c); // BIG LIGHT and burns slow them as well
