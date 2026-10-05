@@ -203,6 +203,9 @@ export function serverUrl(): string {
   return location.port === "5173" ? `${proto}://${location.hostname}:${SERVER_PORT}` : `${proto}://${location.host}`;
 }
 
+/** Frames in the DAGGER RUSH animation (art/props/daggerdash_0..11.png). */
+const DAGGER_DASH_FRAMES = 12;
+
 export class GameScene extends Phaser.Scene {
   room?: Room<any> | LocalRoom;
   private players = new Map<string, PlayerView>();
@@ -1073,8 +1076,8 @@ export class GameScene extends Phaser.Scene {
         this.sparks.explode(20, x, y);
         break;
       case "rush":
-        // We are already at the end of the dash: draw the cut back along the path.
-        this.effects.push({ kind: "line", x: x - Math.cos(aim) * skill.radius, y: y - Math.sin(aim) * skill.radius, aim, range: skill.radius, arc: 10, age: 0, life: 0.3 });
+        // We are already at the end of the dash: play the dagger-dash animation back along the path.
+        this.playDaggerDash(x - Math.cos(aim) * skill.radius, y - Math.sin(aim) * skill.radius, aim, skill.radius);
         break;
       case "titan":
         break; // the transformation is drawn when the body changes
@@ -1634,6 +1637,23 @@ export class GameScene extends Phaser.Scene {
   private popups: { text: Phaser.GameObjects.Text; life: number; vx: number }[] = [];
 
   /** A number pops up and floats away wherever someone takes damage (or heals). */
+  /** DAGGER RUSH: the user's hand-drawn dash animation (art/props/daggerdash_N.png), from `x,y` along `aim` for `len`. */
+  private playDaggerDash(x: number, y: number, aim: number, len: number) {
+    // In the frames the dash starts at (40, 58) and its streak runs 206px to the right edge.
+    const img = this.add.image(x, y, "daggerdash_0").setOrigin(40 / 246, 58 / 100).setRotation(aim);
+    img.setScale(len / 206).setFlipY(Math.cos(aim) < 0).setDepth(955);
+    let frame = 0;
+    this.time.addEvent({
+      delay: 70,
+      repeat: DAGGER_DASH_FRAMES - 1,
+      callback: () => {
+        frame++;
+        if (frame >= DAGGER_DASH_FRAMES) img.destroy();
+        else img.setTexture(`daggerdash_${frame}`);
+      },
+    });
+  }
+
   private popDamage(x: number, y: number, amount: number, color: string, sign = "") {
     if (amount < 1) return;
     let pop = this.popups.find((q) => q.life <= 0);
