@@ -1682,15 +1682,11 @@ export class GameScene extends Phaser.Scene {
   }
 
   /**
-   * A sword or knife basic attack: the blade comes down onto the spot `reach` ahead. The frames show it falling
-   * from the top-left onto (80, 122), so they are turned a quarter turn back to make "down" point along the aim.
+   * A sword or knife basic attack: the user's 3-frame swing (art/props/swordslash_N.png) sweeps round in front,
+   * from over the top to below. In the frames the hero stands at (40, 60) and the blade reaches 72px to the right.
    */
   private playSwordSlash(x: number, y: number, aim: number, reach: number) {
-    const tx = x + Math.cos(aim) * reach * 0.8;
-    const ty = y + Math.sin(aim) * reach * 0.8;
-    // Mirrored when aiming left, so the blade always comes over the top.
-    const left = Math.cos(aim) < 0;
-    this.playFrames("swordslash", 4, 70, tx, ty, aim - Math.PI / 2, left ? 48 / 128 : 80 / 128, 122 / 128, (reach * 0.9) / 90, false, left);
+    this.playFrames("swordslash", 3, 60, x, y, aim, 40 / 114, 60 / 117, reach / 72, Math.cos(aim) < 0);
   }
 
   /** The normal dash: a burst left where the dash began, its point along `angle` and its trail behind. */
