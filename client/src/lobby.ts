@@ -15,7 +15,7 @@ const CSS = `
 #lobby[hidden] { display: none; }
 #lobby .title { font-size: clamp(14px, 4.5vh, 30px); color: #b8ff5a; text-shadow: 0 0 10px #7adf5a, 3px 3px 0 #1a3a10; text-align: center; }
 #lobby .title small { display: block; font-size: 0.45em; color: #9fd8ff; margin-top: 0.6vh; text-shadow: none; }
-#lobby .row { display: flex; align-items: stretch; justify-content: center; gap: 1.5vw; width: 100%; max-width: 1200px; min-height: 0; }
+#lobby .row { display: flex; align-items: stretch; justify-content: center; gap: 1.5vw; width: 100%; max-width: 1200px; min-height: 0; flex: 1 1 0; }
 #lobby .side { flex: 0 0 22%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.8vh;
   background: #15121e; border: 3px solid #2a2440; border-radius: 6px; padding: 1vh 0.5vw; min-width: 0; }
 #lobby .side .tag { font-size: clamp(18px, 7vh, 46px); font-weight: bold; }
@@ -29,7 +29,7 @@ const CSS = `
   background: #15121e; border: 2px solid var(--c); border-radius: 4px; }
 #lobby .classes button.on { background: var(--c); color: #1a0f14; }
 #lobby .tile.off { display: none; }
-#lobby .grid { background: #2a2440; align-content: start; }
+#lobby .grid { background: #2a2440; align-content: start !important; }
 #lobby .cls { display: inline-block; font-size: 0.7em; padding: 1px 3px; margin-top: 0.4vh; color: #1a0f14; background: var(--c); border-radius: 2px; }
 #lobby .side .rates { display: grid; grid-template-columns: auto 1fr auto; gap: 2px 4px; align-items: center; width: 92%;
   font-size: clamp(5px, 1.2vh, 8px); color: #c9b8c0; }
@@ -40,7 +40,8 @@ const CSS = `
 #lobby .side .status:empty { display: none; }
 #lobby .side .status.ready { background: #2fae6a; color: #fff; }
 #lobby .grid { flex: 1 1 auto; display: grid; grid-template-columns: repeat(8, 1fr); gap: 3px; align-content: center;
-  background: #8a8a9a; padding: 3px; border-radius: 4px; max-width: 62vw; }
+  background: #8a8a9a; padding: 3px; border-radius: 4px; max-width: 62vw;
+  min-height: 0; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; touch-action: pan-y; }
 #lobby .tile { position: relative; background: #1a1622; border: 0; padding: 2px; cursor: pointer; aspect-ratio: 1; min-width: 0;
   display: flex; align-items: center; justify-content: center; }
 #lobby .tile canvas { width: 82%; height: auto; image-rendering: pixelated; }
