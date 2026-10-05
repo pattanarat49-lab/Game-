@@ -34,7 +34,7 @@ export const DASH_TIME = 0.15;
 // Melee basic attacks (punch and sword heroes) knock enemies and rival players back. Bosses don't budge.
 export const KNOCKBACK_DISTANCE = 46; // pixels the push carries a target in total
 export const KNOCKBACK_DECAY = 12; // how fast the push dies out (per second)
-export const DASH_COOLDOWN = 1.2;
+export const DASH_COOLDOWN = 0.5;
 
 // Heroes. Every number here is safe to tweak for balance.
 export type HeroId =
