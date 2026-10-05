@@ -43,6 +43,8 @@ import {
   CHARGE_FULL,
   CHARGE_SLOW,
   chargePower,
+  chargeTimeOf,
+  isChargeSkill,
   chargeReach,
   alienForms,
   formAngle,
@@ -81,7 +83,7 @@ interface PlayerView {
 
 /** A short-lived swing, slash or shockwave drawn on top of the world. */
 interface Effect {
-  kind: "punch" | "sword" | "smash" | "muzzle" | "bolt" | "storm" | "blast" | "impact" | "heal" | "line" | "slashes" | "ripple" | "jab" | "gatling" | "rewind" | "kick" | "tkick" | "biglight" | "spinkick" | "purple" | "flame" | "thunder";
+  kind: "punch" | "sword" | "smash" | "muzzle" | "bolt" | "storm" | "blast" | "impact" | "heal" | "line" | "slashes" | "ripple" | "jab" | "gatling" | "rewind" | "kick" | "tkick" | "biglight" | "spinkick" | "purple" | "bluelaser" | "flame" | "thunder";
   x: number;
   y: number;
   aim: number;
@@ -117,6 +119,12 @@ const BULLET_TEXTURE: Record<string, string> = {
   fist: "fist",
   star: "starshot",
   sonic: "sonic",
+  arrow: "arrow",
+  bigarrow: "bigarrow",
+  shuriken: "shuriken",
+  leaf: "leaf",
+  leafstorm: "leafstorm",
+  bluebolt: "bluebolt",
 };
 /** Summons drawn bigger than their pixel art. */
 const SUMMON_SCALE: Record<string, number> = { flamedragon: 1.4, quad: 1.25, echo: 0.85 };
@@ -429,17 +437,24 @@ export class GameScene extends Phaser.Scene {
     };
   }
 
-  /** MAX SMASH: while its button is held (and ready) the charge builds up and the hero slows down. */
+  /** Charged skills (MAX SMASH, CLEAVE...): while the button is held (and ready) the charge builds up and the hero slows down. */
   private updateCharge(me: any, alive: boolean) {
     const now = performance.now();
-    this.charging2 = alive && heroOf(me.hero).skill2?.kind === "charge" && this.aimingSkill() === 2 && me.skill2Cooldown <= 0;
+    const slot = this.aimingSkill();
+    const hero = heroOf(me.hero);
+    const skill = slot === 1 ? hero.skill : slot === 2 ? hero.skill2 : undefined;
+    const ready = slot === 1 ? me.skillCooldown <= 0 : me.skill2Cooldown <= 0;
+    this.charging2 = alive && isChargeSkill(skill) && ready;
     if (!this.charging2) {
       this.chargeStart = 0; // the last charge stays in charge2 while the cast goes out
       return;
     }
+    this.chargeFull = chargeTimeOf(skill!);
     if (!this.chargeStart) this.chargeStart = now;
-    this.charge2 = Math.min(CHARGE_FULL, (now - this.chargeStart) / 1000);
+    this.charge2 = Math.min(this.chargeFull, (now - this.chargeStart) / 1000);
   }
+  /** Seconds to a full charge for the skill being charged. */
+  private chargeFull = CHARGE_FULL;
 
   /**
    * Skills are aimed while their key is held (the mouse points the way) and go off when it is let go.
@@ -813,9 +828,26 @@ export class GameScene extends Phaser.Scene {
         const pulse = 0.5 + 0.5 * Math.sin(this.time.now / 120);
         if (doveForm) this.drawDoves(view.bar, body.x, body.y - 12 * k);
         else if (p.barrier > 0) {
-          // IMMORTAL: a dark-violet barrier around the Demon Lord.
-          view.bar.fillStyle(0x9a4aff, 0.18 + 0.1 * pulse).fillCircle(body.x, body.y - 9 * k, 17 * k);
-          view.bar.lineStyle(2, 0xd8a8ff, 0.7 + 0.3 * pulse).strokeCircle(body.x, body.y - 9 * k, 17 * k);
+          // IMMORTAL: a dark-violet barrier around the Demon Lord; anyone else is under a golden HOLY SHIELD.
+          const holy = heroOf(p.hero).skill.kind !== "immortal";
+          view.bar.fillStyle(holy ? 0xffd23f : 0x9a4aff, 0.18 + 0.1 * pulse).fillCircle(body.x, body.y - 9 * k, 17 * k);
+          view.bar.lineStyle(2, holy ? 0xfff0a0 : 0xd8a8ff, 0.7 + 0.3 * pulse).strokeCircle(body.x, body.y - 9 * k, 17 * k);
+        }
+        if (p.active2 > 0 && skill2?.kind === "reflect") {
+          // PARRY: a silver arc in front of the warrior bats shots back.
+          view.bar.lineStyle(3, 0xd8e8ff, 0.6 + 0.4 * pulse);
+          view.bar.beginPath();
+          view.bar.arc(body.x, body.y - 9 * k, 16 * k, aim - 1.1, aim + 1.1);
+          view.bar.strokePath();
+        }
+        if (p.mode > 0 && heroOf(p.hero).skill.kind === "empower") {
+          // FOCUS: the monk's fists glow until the next hit lands.
+          view.bar.fillStyle(0xffb040, 0.08 + 0.08 * pulse).fillCircle(body.x, body.y - 9 * k, 13 * k);
+          view.bar.lineStyle(2, 0xffb040, 0.6 + 0.4 * pulse).strokeCircle(body.x, body.y - 9 * k, 13 * k);
+        }
+        if (p.mode > 0 && heroOf(p.hero).skill.kind === "harden") {
+          // HARDEN: a stone ring that thickens with every stack.
+          view.bar.lineStyle(1 + p.mode * 0.3, 0xa8a098, 0.7).strokeEllipse(body.x, body.y + 1, 20 * k, 8 * k);
         }
         if (p.beam > 0) {
           // HEAT VISION: twin red beams from the eyes, following his aim.
@@ -998,12 +1030,14 @@ export class GameScene extends Phaser.Scene {
     if (state.reality > 0 && state.realityBy !== room.sessionId && ringStage(state.stage)) return;
     // Lock the button until the server's cooldown has had time to reach us.
     const lock = Math.max(0.4, (this.pingMs * 1.5) / 1000);
-    if (input.skill && me.skillCooldown <= 0 && this.localSkillLock <= 0 && hero.skill.kind !== "passive") {
+    // POWER SHOT only fires on a full charge, so a short tap shows nothing.
+    const unready = (sk?: SkillDef) => sk?.kind === "chargeshot" && (input.charge2 ?? 0) < chargeTimeOf(sk) - 0.05;
+    if (input.skill && me.skillCooldown <= 0 && this.localSkillLock <= 0 && hero.skill.kind !== "passive" && !unready(hero.skill)) {
       this.localSkillLock = lock;
       this.predictedSkills.push(performance.now());
       this.playSkillEffect(hero.skill, x, y, this.aim, this.players.get(room.sessionId));
     }
-    if (hero.skill2 && input.skill2 && me.skill2Cooldown <= 0 && this.localSkill2Lock <= 0) {
+    if (hero.skill2 && input.skill2 && me.skill2Cooldown <= 0 && this.localSkill2Lock <= 0 && !unready(hero.skill2)) {
       this.localSkill2Lock = lock;
       this.predictedSkills2.push(performance.now());
       this.playSkillEffect(hero.skill2, x, y, this.aim, this.players.get(room.sessionId));
@@ -1068,6 +1102,57 @@ export class GameScene extends Phaser.Scene {
       case "line":
         this.effects.push({ kind: "line", x, y, aim, range: skill.radius, arc: skill.width ?? 40, age: 0, life: 0.45 });
         cam.shake(250, 0.015);
+        break;
+      case "chargeslash": {
+        // CLEAVE: a wide sword arc as big as our own charge (someone else's is drawn half charged).
+        const mine = !!view && view === this.players.get(this.room?.sessionId ?? "");
+        const power = chargePower(mine ? this.charge2 : chargeTimeOf(skill) / 2, chargeTimeOf(skill));
+        this.effects.push({ kind: "sword", x, y, aim, range: skill.radius * chargeReach(power), arc: skill.width ?? 2.4, age: 0, life: 0.3 });
+        this.playSwordSlash(x, y, aim, skill.radius * chargeReach(power));
+        cam.shake(100 + power * 50, 0.004 * power);
+        break;
+      }
+      case "chargeshot":
+        this.effects.push({ kind: "muzzle", x, y, aim, range: 22, arc: 0, age: 0, life: 0.15 });
+        cam.shake(120, 0.006);
+        break;
+      case "reflect":
+      case "harden":
+        this.effects.push({ kind: "ripple", x, y, aim, range: 26, arc: 0, age: 0, life: 0.3 });
+        break;
+      case "sprint":
+        this.sparks.explode(10, x, y + 4);
+        break;
+      case "shadowstep":
+        // We are already at the end of the dash (or back at the shadow): a dark streak along the cut.
+        this.effects.push({ kind: "line", x: x - Math.cos(aim) * skill.radius, y: y - Math.sin(aim) * skill.radius, aim, range: skill.radius, arc: 8, age: 0, life: 0.25 });
+        break;
+      case "shuriken":
+      case "leafstorm":
+      case "boost":
+        this.effects.push({ kind: "muzzle", x, y, aim, range: 12, arc: 0, age: 0, life: 0.12 });
+        break;
+      case "shield":
+        cam.flash(100, 255, 240, 170);
+        break;
+      case "shieldcharge":
+        this.effects.push({ kind: "line", x: x - Math.cos(aim) * skill.radius * 0.6, y: y - Math.sin(aim) * skill.radius * 0.6, aim, range: skill.radius * 0.6, arc: skill.width ?? 30, age: 0, life: 0.3 });
+        cam.shake(150, 0.008);
+        break;
+      case "tree":
+      case "empower":
+        this.sparks.explode(12, x, y);
+        break;
+      case "leap":
+        cam.shake(200, 0.012);
+        this.sparks.explode(24, x, y + 5);
+        break;
+      case "bluelaser":
+        this.effects.push({ kind: "bluelaser", x, y, aim, range: skill.radius, arc: skill.width ?? 14, age: 0, life: 0.4 });
+        cam.shake(180, 0.01);
+        break;
+      case "barrage":
+        this.effects.push({ kind: "gatling", x, y, aim, range: skill.radius, arc: skill.width ?? 40, age: 0, life: 0.75 });
         break;
       case "charge": {
         // MAX SMASH: as big as our own charge (someone else's charge is not known: drawn half charged).
@@ -1510,6 +1595,17 @@ export class GameScene extends Phaser.Scene {
         g.fillStyle(0xffffff, 0.3 * (1 - t));
         g.slice(e.x, e.y, e.range * 0.6, e.aim - e.arc * 0.4, e.aim + e.arc * 0.4);
         g.fillPath();
+      } else if (e.kind === "bluelaser") {
+        // The robot's one-shot plasma laser: a bright blue beam.
+        const cos = Math.cos(e.aim);
+        const sin = Math.sin(e.aim);
+        const ex = e.x + cos * e.range;
+        const ey = e.y + sin * e.range;
+        const w = e.arc * (t < 0.15 ? t / 0.15 : 1 - (t - 0.15) / 0.85);
+        g.lineStyle(w + 10, 0x1a6aff, 0.35).lineBetween(e.x, e.y, ex, ey);
+        g.lineStyle(w, 0x4ab0ff, 0.85).lineBetween(e.x, e.y, ex, ey);
+        g.lineStyle(Math.max(1, w / 3), 0xd8f0ff, 1).lineBetween(e.x, e.y, ex, ey);
+        g.fillStyle(0xa0d8ff, 1 - t).fillCircle(e.x + cos * 10, e.y + sin * 10, e.arc * 0.6 * (1 - t));
       } else if (e.kind === "purple") {
         // A thick violet beam that flares, then thins out.
         const cos = Math.cos(e.aim);
@@ -1585,7 +1681,7 @@ export class GameScene extends Phaser.Scene {
     this.drawFormWheel(skill?.kind === "omnitrix" ? me.hero : undefined, x, y);
     if (skill) {
       this.drawSkillGuide(g, skill, hero.range, x, y);
-      if (skill.kind === "charge" && this.charging2) this.drawChargeGauge(g, x, y);
+      if (isChargeSkill(skill) && this.charging2) this.drawChargeGauge(g, x, y);
       return;
     }
     if (hero.attack === "lightning") {
@@ -1638,7 +1734,7 @@ export class GameScene extends Phaser.Scene {
   /** While a skill is held: where it will land (a lane for straight skills, an area for the rest). */
   /** MAX SMASH: a gauge over the hero's head fills up (green, yellow, red) with the power it will hit with. */
   private drawChargeGauge(g: Phaser.GameObjects.Graphics, x: number, y: number) {
-    const share = Math.min(1, this.charge2 / CHARGE_FULL);
+    const share = Math.min(1, this.charge2 / this.chargeFull);
     const w = 34;
     const top = y - 42; // above the name tag
     g.fillStyle(0x1a0f14, 0.9).fillRect(x - w / 2 - 1, top - 1, w + 2, 6);
@@ -1648,7 +1744,8 @@ export class GameScene extends Phaser.Scene {
     if (!this.chargeLabel) {
       this.chargeLabel = this.add.text(0, 0, "", { fontFamily: "monospace", fontSize: "8px", color: "#ffffff", stroke: "#1a0f14", strokeThickness: 2 }).setOrigin(0.5, 1).setDepth(10000);
     }
-    this.chargeLabel.setText(`x${chargePower(this.charge2).toFixed(1)}`).setPosition(x, top - 1).setVisible(true);
+    const label = share >= 1 ? "FULL" : `x${chargePower(this.charge2, this.chargeFull).toFixed(1)}`;
+    this.chargeLabel.setText(label).setPosition(x, top - 1).setVisible(true);
   }
 
   private chargeLabel?: Phaser.GameObjects.Text;
@@ -1656,7 +1753,6 @@ export class GameScene extends Phaser.Scene {
   private enemyHp = new Map<string, number>();
   private popups: { text: Phaser.GameObjects.Text; life: number; vx: number }[] = [];
 
-  /** A number pops up and floats away wherever someone takes damage (or heals). */
   /**
    * Play one of the user's hand-drawn effect animations (art/props/<name>_0..N-1.png) once at `x,y`,
    * turned to `angle`, then remove it. Pictures are drawn pointing right; `flip` mirrors them across that line (`flipX` across the other).
@@ -1695,6 +1791,7 @@ export class GameScene extends Phaser.Scene {
     this.playFrames("dashburst", 11, 45, x, y, angle + Math.PI, 5 / 100, 38 / 75, 0.55, Math.cos(angle) > 0);
   }
 
+  /** A number pops up and floats away wherever someone takes damage (or heals). */
   private popDamage(x: number, y: number, amount: number, color: string, sign = "") {
     if (amount < 1) return;
     let pop = this.popups.find((q) => q.life <= 0);
@@ -1770,6 +1867,57 @@ export class GameScene extends Phaser.Scene {
       case "thunderdash":
       case "seventh":
         lane(skill.radius, skill.width ?? 26);
+        break;
+      case "chargeslash": {
+        const r = skill.radius * chargeReach(chargePower(this.charging2 ? this.charge2 : 0, this.chargeFull));
+        const arc = skill.width ?? 2.4;
+        g.fillStyle(0xffd23f, 0.14);
+        g.slice(x, y, r, this.aim - arc / 2, this.aim + arc / 2);
+        g.fillPath();
+        g.lineStyle(1, 0xffd23f, 0.7);
+        g.beginPath();
+        g.arc(x, y, r, this.aim - arc / 2, this.aim + arc / 2);
+        g.strokePath();
+        break;
+      }
+      case "chargeshot":
+      case "bluelaser":
+        lane(skill.radius, skill.kind === "chargeshot" ? 6 : skill.width ?? 14);
+        break;
+      case "shadowstep":
+        lane(skill.radius, skill.width ?? 24);
+        break;
+      case "shieldcharge": {
+        const share = this.charging2 ? Math.min(1, this.charge2 / this.chargeFull) : 0;
+        lane(skill.radius * (0.35 + 0.65 * share), skill.width ?? 30);
+        break;
+      }
+      case "shuriken": {
+        const n = skill.count ?? 5;
+        g.lineStyle(2, 0xffd23f, 0.6);
+        for (let i = 0; i < n; i++) {
+          const a = this.aim + (i - (n - 1) / 2) * (skill.width ?? 0.2);
+          g.lineBetween(x, y, x + Math.cos(a) * skill.radius, y + Math.sin(a) * skill.radius);
+        }
+        break;
+      }
+      case "shield":
+        area(x, y, skill.radius);
+        break;
+      case "tree":
+        area(x + cos * (skill.width ?? 40), y + sin * (skill.width ?? 40), 12);
+        break;
+      case "leafstorm":
+        lane(skill.radius, 22);
+        break;
+      case "leap": {
+        const w = skill.width ?? 170;
+        lane(w, 4);
+        area(x + cos * w, y + sin * w, skill.radius);
+        break;
+      }
+      case "barrage":
+        lane(skill.radius, skill.width ?? 40);
         break;
       case "charge": {
         const reach = chargeReach(chargePower(this.charging2 ? this.charge2 : 0));
@@ -2198,6 +2346,50 @@ export class GameScene extends Phaser.Scene {
         const label = this.zoneTexts.get(id)!;
         label.setText(String(left)).setPosition(z.x, z.y - img.displayHeight - 2).setColor(z.life < 3 ? "#ff5040" : "#ffd23f");
         floor.lineStyle(1, 0xff4040, 0.25 + (z.life < 3 ? 0.4 : 0)).strokeCircle(z.x, z.y, z.radius);
+      } else if (z.kind === "tree") {
+        // GROW TREE: a tree that stays for the whole round, with its healing circle.
+        let img = this.zoneImages.get(id);
+        if (!img) {
+          img = this.add.image(z.x, z.y, "tree").setOrigin(0.5, 0.95).setScale(2.4);
+          this.zoneImages.set(id, img);
+          this.sparks.explode(8, z.x, z.y);
+        }
+        img.setDepth(z.y);
+        floor.fillStyle(0x5aff8a, 0.06).fillCircle(z.x, z.y, 100);
+        floor.lineStyle(1, 0x5aff8a, 0.35).strokeCircle(z.x, z.y, 100);
+      } else if (z.kind === "shadow") {
+        // SHADOW STEP: a dark copy of the ninja waits where the dash began.
+        let img = this.zoneImages.get(id);
+        if (!img) {
+          const tex = this.textures.exists("hero_ninja_south") ? "hero_ninja_south" : "hero_ninja";
+          const lay = heroArtLayout("ninja");
+          img = this.add.image(z.x, z.y, tex).setOrigin(0.5, lay.originY).setScale(lay.scale).setTintFill(0x201030);
+          this.zoneImages.set(id, img);
+        }
+        img.setDepth(z.y).setAlpha(0.55 + 0.15 * Math.sin(now / 120));
+        floor.fillStyle(0x6a2aa0, 0.35).fillEllipse(z.x, z.y, 22, 8);
+      } else if (z.kind === "smoke") {
+        // A puff of smoke where the ninja vanishes or comes back.
+        const t = 1 - z.life / z.maxLife;
+        for (let i = 0; i < 7; i++) {
+          const a = (i / 7) * Math.PI * 2;
+          sky.fillStyle(0x8a8a9a, 0.6 * (1 - t)).fillCircle(z.x + Math.cos(a) * 12 * t, z.y - 8 + Math.sin(a) * 8 * t, 6 * (1 - t * 0.5));
+        }
+      } else if (z.kind === "holyshield") {
+        // HOLY SHIELD: a golden dome spreads over the paladin's friends.
+        const t = 1 - z.life / z.maxLife;
+        floor.fillStyle(0xffe680, 0.25 * (1 - t)).fillCircle(z.x, z.y, z.radius * Math.min(1, t * 3));
+        floor.lineStyle(3, 0xffd23f, 1 - t).strokeCircle(z.x, z.y, z.radius * Math.min(1, t * 3));
+      } else if (z.kind === "landing") {
+        // SKY LEAP: the shockwave ring where the monk lands.
+        const t = 1 - z.life / z.maxLife;
+        if (!this.zoneImages.has(id)) {
+          this.zoneImages.set(id, this.add.image(z.x, z.y, "spark").setVisible(false));
+          this.cameras.main.shake(200, 0.012);
+          this.sparks.explode(18, z.x, z.y);
+        }
+        floor.fillStyle(0xffb040, 0.3 * (1 - t)).fillCircle(z.x, z.y, z.radius);
+        floor.lineStyle(3, 0xffe0a0, 1 - t).strokeEllipse(z.x, z.y, z.radius * 2 * (0.5 + t * 0.7), z.radius * (0.5 + t * 0.7));
       } else if (z.kind === "totem") {
         // HEAL TOTEM: a carved post with green rings pulsing out over the healing area.
         let img = this.zoneImages.get(id);
@@ -2434,6 +2626,10 @@ export class GameScene extends Phaser.Scene {
         if (b.kind === "stone") sprite.setScale(1.2);
         if (b.kind === "sonic") sprite.setScale(1.3).setRotation(Math.atan2(b.vy, b.vx));
         if (b.kind === "boulder") sprite.setScale(1.6);
+        if (b.kind === "arrow" || b.kind === "bigarrow") sprite.setRotation(Math.atan2(b.vy, b.vx));
+        if (b.kind === "bigarrow") sprite.setScale(1.3);
+        if (b.kind === "leafstorm") sprite.setScale(2);
+        if (b.kind === "bluebolt") sprite.setScale(1.3);
         this.bullets.set(id, sprite);
       }
       // Bullets fly in straight lines, so extrapolate locally and drift toward the server.
@@ -2441,7 +2637,7 @@ export class GameScene extends Phaser.Scene {
         sprite.x += b.vx * dt;
         sprite.y += b.vy * dt;
       }
-      if (b.kind === "banana" || b.kind === "boulder") sprite.rotation += dt * 12; // spinning throws
+      if (b.kind === "banana" || b.kind === "boulder" || b.kind === "shuriken" || b.kind === "leaf" || b.kind === "leafstorm") sprite.rotation += dt * 12; // spinning throws
       if (b.kind === "missile") {
         sprite.setRotation(Math.atan2(b.vy, b.vx)); // homing missiles turn as they chase
         if (Math.random() < 0.4) this.sparks.explode(1, sprite.x - b.vx * 0.03, sprite.y - b.vy * 0.03);

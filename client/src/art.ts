@@ -1816,3 +1816,80 @@ export const STAR_SHOT: PixelSprite = {
   ],
   palette: { y: "#ffd23f", w: "#fff8d0" },
 };
+
+export const ARROW_SHOT: PixelSprite = {
+  grid: [
+    "f.......",
+    ".fwwwwwa",
+    "f.......",
+  ],
+  palette: { f: "#e8e0c8", w: "#8a5a2b", a: "#c8d0d8" },
+};
+
+export const BIG_ARROW: PixelSprite = {
+  grid: [
+    "ff.........y.",
+    ".ffwwwwwwwyay",
+    "ff.........y.",
+  ],
+  palette: { f: "#fff4a8", w: "#b07a3b", a: "#ffffff", y: "#ffd23f" },
+};
+
+export const SHURIKEN: PixelSprite = {
+  grid: [
+    "..s..",
+    "..ss.",
+    "sssss",
+    ".ss..",
+    "..s..",
+  ],
+  palette: { s: "#b8c4d0" },
+};
+
+export const LEAF_SHOT: PixelSprite = {
+  grid: [
+    "..gg.",
+    ".gLgg",
+    "gLgg.",
+    ".gg..",
+  ],
+  palette: { g: "#3fbf4a", L: "#a8f07a" },
+};
+
+export const LEAF_STORM: PixelSprite = {
+  grid: [
+    ".g..L..",
+    "..gg..g",
+    "L.gLg..",
+    "..gg.L.",
+    "g..L.g.",
+  ],
+  palette: { g: "#2fa83a", L: "#b8f08a" },
+};
+
+export const BLUE_BOLT: PixelSprite = {
+  grid: [
+    ".bb.",
+    "bwwb",
+    "bwwb",
+    ".bb.",
+  ],
+  palette: { b: "#2a8aff", w: "#d8f0ff" },
+};
+
+export const TREE: PixelSprite = {
+  grid: [
+    "....gggg....",
+    "..ggLgggggg.",
+    ".gggggLggggg",
+    "ggLggggggLgg",
+    "gggggggggggg",
+    ".ggggLgggggg",
+    "..gggggggLg.",
+    "....gttg....",
+    ".....tt.....",
+    ".....tt.....",
+    "....tttt....",
+  ],
+  palette: { g: "#2f9e3a", L: "#7fdc5a", t: "#7a4a22" },
+};

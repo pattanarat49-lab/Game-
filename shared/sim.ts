@@ -6,6 +6,7 @@ import {
   movesInStoppedTime,
   CHARGE_FULL,
   chargePower,
+  chargeTimeOf,
   chargeReach,
   BOT_LEVELS,
   DEFAULT_BOT_LEVEL,
@@ -122,6 +123,7 @@ const BULLET_CUT_SLACK = 8; // shots are small and fast, so melee reaches them a
 const ENEMY = "#enemy"; // attacker id for damage dealt by monsters
 const CLONE_SIGHT = 300;
 const GATLING_GAP = 0.1; // seconds between GATLING PUNCH hits
+const BARRAGE_GAP = 0.12; // seconds between ROCK BARRAGE punches
 const PORTAL_REACH = 14; // how close to a portal's centre you must walk to go through
 const PORTAL_WAIT = 10; // seconds a lone portal waits for its partner
 const MISSILE_SPEED = 210;
@@ -223,6 +225,7 @@ export interface SimEnemy {
 export type BulletKind =
   | "snipe" | "wave" | "godslash" | "magic" | "fireball" | "enemy" | "banana" | "boulder" | "holy" | "stone" | "loki" | "glitch" | "bullet" | "slash"
   | "laser" | "missile" | "air" | "dragonfire" | "knife" | "fist" | "star"
+  | "arrow" | "bigarrow" | "shuriken" | "leaf" | "leafstorm" | "bluebolt"
   | `card${number}`; // DRAW CARD: the number on the card (1-9)
 
 /** A lasting area on the map: a storm cloud, an illusion kingdom, a domain. */
@@ -315,6 +318,12 @@ interface PlayerBrain {
   hitAt?: Map<string, number>;
   /** THUNDER DASH hit: seconds left to dash a second time before the cooldown starts. */
   thunderWindow?: number;
+  /** SHADOW STEP: where the shadow waits, its zone, and seconds left to flash back to it. */
+  shadow?: { x: number; y: number; zone: string; left: number };
+  /** ROCK BARRAGE: punches still to come, the time to the next, and the lane they go down. */
+  barrageLeft?: number;
+  barrageTimer?: number;
+  barrageAim?: number;
   /** STAR SHOT: shots of the volley still to fire. */
   volleyLeft?: number;
   volleyTimer?: number;
@@ -379,6 +388,8 @@ interface BulletBrain {
   /** RUBBER PUNCH: bounces off walls until `back` seconds old, then flies home to its owner. */
   bounce?: boolean;
   back?: number;
+  /** POWER SHOT: stuns whatever it hits for this many seconds. */
+  stun?: number;
 }
 
 /** Where everyone was at one moment, for the TIME MACHINE. */
@@ -583,7 +594,12 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
         brain.dashTimer = 0;
         brain.kbx = brain.kby = 0;
         if (brain.thunderWindow) [brain.thunderWindow, p.mode] = [0, 0];
+        brain.shadow = undefined;
+        brain.barrageLeft = 0;
       }
+      // Stacks and charged-up hits start over each round.
+      const h = heroOf(p.hero);
+      if (h.stacks || h.skill.kind === "empower" || h.skill.kind === "shadowstep") p.mode = 0;
       p.kbx = p.kby = 0;
     });
     for (const h of helpers) this.removePlayer(h);
@@ -1188,6 +1204,17 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
           p.skillCooldown = Math.max(p.skillCooldown, hero.skill.cooldown);
         }
       }
+      if (brain.shadow) {
+        // SHADOW STEP: the shadow fades if he does not flash back in time; then the cooldown starts.
+        brain.shadow.left -= dt;
+        if (brain.shadow.left <= 0 || p.dead) {
+          this.removeZone(brain.shadow.zone);
+          brain.shadow = undefined;
+          p.mode = 0;
+          p.skillCooldown = Math.max(p.skillCooldown, hero.skill.cooldown);
+        }
+      }
+      if (hero.skill.kind === "tree" && !p.owner) this.tendTrees(id, p, hero.skill, dt);
 
       if (p.owner) {
         this.updateClone(id, p, brain, hero, dt);
@@ -1198,6 +1225,9 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
         brain.burstLeft = 0;
         brain.slashLeft = 0;
         brain.gatlingLeft = 0;
+        brain.barrageLeft = 0;
+        if (hero.stacks && hero.skill.kind !== "tree") p.mode = 0; // BOOST and ARMOR stacks are lost on falling
+        if (hero.skill.kind === "empower") p.mode = 0;
         p.titan = 0;
         p.barrier = 0;
         p.revive = 0;
@@ -1324,6 +1354,15 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
           this.lineHit(id, p.x, p.y, input.aim, hero.range, hero.lineAttack, hero.damage, 0, 1);
         } else if (hero.attack === "rifle") {
           this.spawnBullet("snipe", p.x, p.y, input.aim, hero.shotSpeed, { owner: id, damage: hero.damage, pierce: hero.pierce, life: hero.range / hero.shotSpeed });
+        } else if (hero.attack === "magic" && hero.skill.kind === "boost") {
+          // BOOSTING: one more shot side by side for every stack.
+          const n = 1 + p.mode;
+          for (let i = 0; i < n; i++) {
+            const off = (i - (n - 1) / 2) * 7;
+            const bx = p.x - Math.sin(input.aim) * off;
+            const by = p.y + Math.cos(input.aim) * off;
+            this.spawnBullet((hero.shot ?? "magic") as BulletKind, bx, by, input.aim, hero.shotSpeed, { owner: id, damage: hero.damage, pierce: 0, life: hero.range / hero.shotSpeed });
+          }
         } else if (hero.attack === "magic") {
           this.spawnBullet((hero.shot ?? "magic") as BulletKind, p.x, p.y, input.aim, hero.shotSpeed, { owner: id, damage: hero.damage, pierce: 0, life: hero.range / hero.shotSpeed, blast: hero.aoe });
         } else if (hero.skill2?.kind === "yoyo" && p.mode === 1) {
@@ -1337,6 +1376,10 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
           const tx = p.x + Math.cos(input.aim) * hero.range;
           const ty = p.y + Math.sin(input.aim) * hero.range;
           this.sweep(id, tx, ty, 0, hero.aoe, Math.PI * 2, hero.damage);
+        } else if (hero.skill.kind === "empower" && p.mode === 1) {
+          // FOCUS: this blow hits much harder and stuns.
+          p.mode = 0;
+          this.sweep(id, p.x, p.y, input.aim, hero.range, hero.arc, hero.damage * hero.skill.damage, 2, hero.skill.duration ?? 1);
         } else {
           this.sweep(id, p.x, p.y, input.aim, hero.range, hero.arc, hero.damage, hero.knock ?? true);
         }
@@ -1344,12 +1387,12 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
 
       // Skills (ordinary humans under a reality change cannot use any)
       const powerless = s.reality > 0 && this.isFoe(s.realityBy, id);
-      if (input.skill && p.skillCooldown <= 0 && hero.skill.kind !== "passive" && !powerless) {
+      if (input.skill && p.skillCooldown <= 0 && hero.skill.kind !== "passive" && !powerless && this.chargedEnough(hero.skill, brain)) {
         p.skillCooldown = hero.skill.cooldown;
         p.skillSeq++;
         this.useSkill(id, p, hero, hero.skill, brain);
       }
-      if (hero.skill2 && input.skill2 && p.skill2Cooldown <= 0 && !powerless) {
+      if (hero.skill2 && input.skill2 && p.skill2Cooldown <= 0 && !powerless && this.chargedEnough(hero.skill2, brain)) {
         p.skill2Cooldown = hero.skill2.cooldown;
         p.skill2Seq++;
         this.useSkill(id, p, hero, hero.skill2, brain);
@@ -1384,6 +1427,17 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
           brain.gatlingTimer += GATLING_GAP;
           const g = hero.skill;
           this.lineHit(id, p.x, p.y, brain.gatlingAim, g.radius, g.width ?? 40, g.damage);
+        }
+      }
+
+      // ROCK BARRAGE keeps punching down its lane.
+      if ((brain.barrageLeft ?? 0) > 0 && hero.skill2) {
+        brain.barrageTimer = (brain.barrageTimer ?? 0) - dt;
+        if (brain.barrageTimer <= 0) {
+          brain.barrageLeft!--;
+          brain.barrageTimer += BARRAGE_GAP;
+          p.attackSeq++;
+          this.barragePunch(id, p, brain.barrageAim ?? p.aim, hero.skill2);
         }
       }
 
@@ -1613,9 +1667,132 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
         }
         break;
       }
+      case "chargeslash": {
+        // CLEAVE: a wide sword arc, bigger and harder the longer it was charged.
+        const power = this.chargeOf(skill, brain);
+        this.sweep(id, p.x, p.y, p.aim, skill.radius * chargeReach(power), skill.width ?? 2.4, skill.damage * power, 1 + power / 2);
+        break;
+      }
+      case "chargeshot": {
+        // POWER SHOT: a heavy arrow that goes through everything and stuns.
+        const speed = 520;
+        const bid = this.spawnBullet("bigarrow", p.x, p.y, p.aim, speed, { owner: id, damage: skill.damage, pierce: 99, life: skill.radius / speed });
+        this.bulletBrains.get(bid)!.stun = skill.duration ?? 1;
+        break;
+      }
+      case "reflect":
+      case "sprint":
+        p.active2 = skill.duration ?? 1;
+        break;
+      case "shadowstep": {
+        if (brain.shadow) {
+          // Flash back to the shadow; now the cooldown starts.
+          const back = this.move(brain.shadow.x, brain.shadow.y, 0, 0, PLAYER_RADIUS);
+          this.addZone("smoke", p.x, p.y, 16, 0.4, { owner: id, every: Infinity, damage: 0 });
+          p.x = back.x;
+          p.y = back.y;
+          p.warp = (p.warp + 1) % 256;
+          brain.target = undefined;
+          this.removeZone(brain.shadow.zone);
+          brain.shadow = undefined;
+          p.mode = 0;
+          break;
+        }
+        // Dash ahead cutting the lane; a shadow stays where he started.
+        const zone = this.addZone("shadow", p.x, p.y, 10, (skill.duration ?? 3) + 0.1, { owner: id, every: Infinity, damage: 0 });
+        brain.shadow = { x: p.x, y: p.y, zone, left: skill.duration ?? 3 };
+        const end = this.move(p.x, p.y, Math.cos(p.aim) * skill.radius, Math.sin(p.aim) * skill.radius, PLAYER_RADIUS);
+        this.lineHit(id, p.x, p.y, p.aim, Math.hypot(end.x - p.x, end.y - p.y), skill.width ?? 24, skill.damage);
+        p.x = end.x;
+        p.y = end.y;
+        p.warp = (p.warp + 1) % 256;
+        brain.target = undefined;
+        brain.hurtTimer = Math.max(brain.hurtTimer, 0.25);
+        p.mode = 1; // shown on the HUD: the flash back is ready
+        p.skillCooldown = 0.3;
+        break;
+      }
+      case "shuriken": {
+        const n = skill.count ?? 5;
+        const speed = 380;
+        for (let i = 0; i < n; i++) {
+          const a = p.aim + (i - (n - 1) / 2) * (skill.width ?? 0.2);
+          this.spawnBullet("shuriken", p.x, p.y, a, speed, { owner: id, damage: skill.damage, pierce: 0, life: skill.radius / speed });
+        }
+        break;
+      }
+      case "shield":
+        // HOLY SHIELD: he and every ally close by are untouchable for a moment.
+        this.state.players.forEach((q, qid) => {
+          if (q.dead || (qid !== id && this.isFoe(id, qid))) return;
+          if (Math.hypot(q.x - p.x, q.y - p.y) > skill.radius) return;
+          q.barrier = Math.max(q.barrier, skill.duration ?? 2.5);
+        });
+        this.addZone("holyshield", p.x, p.y, skill.radius, 0.6, { owner: id, every: Infinity, damage: 0 });
+        break;
+      case "shieldcharge": {
+        // SHIELD BASH: the longer the charge, the further the rush; a full one stuns.
+        const held = brain.bot ? chargeTimeOf(skill) : brain.input.charge2 ?? 0;
+        const share = Math.min(1, held / chargeTimeOf(skill));
+        const full = share >= 0.999;
+        const dist = skill.radius * (0.35 + 0.65 * share);
+        const end = this.move(p.x, p.y, Math.cos(p.aim) * dist, Math.sin(p.aim) * dist, PLAYER_RADIUS);
+        this.lineHit(id, p.x, p.y, p.aim, Math.hypot(end.x - p.x, end.y - p.y) + 10, skill.width ?? 30, skill.damage, full ? skill.duration ?? 2 : 0, full ? 0 : 1);
+        p.x = end.x;
+        p.y = end.y;
+        p.warp = (p.warp + 1) % 256;
+        brain.target = undefined;
+        brain.hurtTimer = Math.max(brain.hurtTimer, 0.3);
+        break;
+      }
+      case "tree": {
+        // GROW TREE: it takes root a little way ahead and stays for good.
+        const w = skill.width ?? 40;
+        const spot = this.move(p.x, p.y, Math.cos(p.aim) * w, Math.sin(p.aim) * w, 6);
+        this.addZone("tree", spot.x, spot.y, 14, Infinity, { owner: id, every: Infinity, damage: 0 });
+        p.mode++;
+        break;
+      }
+      case "leafstorm": {
+        // LEAF STORM: every tree he has planted adds to the storm.
+        const speed = 300;
+        const bid = this.spawnBullet("leafstorm", p.x, p.y, p.aim, speed, { owner: id, damage: skill.damage * (1 + (skill.width ?? 0.35) * p.mode), pierce: 99, life: skill.radius / speed });
+        void bid;
+        break;
+      }
+      case "empower":
+        p.mode = 1;
+        brain.attackTimer = 0;
+        break;
+      case "leap": {
+        // SKY LEAP: up and over onto the aimed spot (rocks stop the jump short), then a crushing landing.
+        const w = skill.width ?? 170;
+        const end = this.move(p.x, p.y, Math.cos(p.aim) * w, Math.sin(p.aim) * w, PLAYER_RADIUS);
+        p.x = end.x;
+        p.y = end.y;
+        p.warp = (p.warp + 1) % 256;
+        brain.target = undefined;
+        this.sweep(id, p.x, p.y, 0, skill.radius, Math.PI * 2, skill.damage, 1, skill.duration ?? 1);
+        this.addZone("landing", p.x, p.y, skill.radius, 0.5, { owner: id, every: Infinity, damage: 0 });
+        break;
+      }
+      case "boost":
+        p.mode = Math.min(skill.count ?? 3, p.mode + 1);
+        break;
+      case "bluelaser":
+        this.lineHit(id, p.x, p.y, p.aim, skill.radius, skill.width ?? 14, skill.damage);
+        break;
+      case "harden":
+        p.mode = Math.min(skill.count ?? 10, p.mode + 1);
+        break;
+      case "barrage":
+        brain.barrageLeft = skill.count ?? 6;
+        brain.barrageTimer = 0;
+        brain.barrageAim = p.aim;
+        break;
       case "charge": {
         // MAX SMASH: the longer it was charged, the harder and further it hits (the bot charges halfway).
-        const power = chargePower(brain.bot ? CHARGE_FULL / 2 : brain.input.charge2 ?? 0);
+        const power = this.chargeOf(skill, brain);
         const reach = chargeReach(power);
         this.lineHit(id, p.x, p.y, p.aim, skill.radius * reach, (skill.width ?? 40) * reach, skill.damage * power, 0, 1 + power / 2);
         break;
@@ -1998,6 +2175,82 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
     p.skillCooldown = 0.4;
   }
 
+  /** How hard a charged skill hits (x1..x4): from how long it was held (bots charge halfway, or fully when they must). */
+  private chargeOf(skill: SkillDef, brain: PlayerBrain): number {
+    const full = chargeTimeOf(skill);
+    const held = brain.bot ? (skill.kind === "chargeshot" ? full : full / 2) : brain.input.charge2 ?? 0;
+    return chargePower(held, full);
+  }
+
+  /** POWER SHOT only goes off at full charge; every other skill goes off whenever. */
+  private chargedEnough(skill: SkillDef, brain: PlayerBrain): boolean {
+    if (skill.kind !== "chargeshot" || brain.bot) return true;
+    return (brain.input.charge2 ?? 0) >= chargeTimeOf(skill) - 0.05;
+  }
+
+  /** GROW TREE: count his trees (for LEAF STORM and the HUD) and heal him for each one he stands near. */
+  private tendTrees(id: string, p: P, skill: SkillDef, dt: number) {
+    let n = 0;
+    let near = 0;
+    this.state.zones.forEach((z, zid) => {
+      if (z.kind !== "tree" || this.zoneBrains.get(zid)?.owner !== id) return;
+      n++;
+      if (Math.hypot(z.x - p.x, z.y - p.y) <= skill.radius) near++;
+    });
+    p.mode = n;
+    if (near > 0 && !p.dead) p.hp = Math.min(p.maxHp, p.hp + p.maxHp * skill.damage * near * dt);
+  }
+
+  /** ROCK BARRAGE: one punch down the lane. A foe with a wall right behind it is stunned; the rest fly back. */
+  private barragePunch(id: string, p: P, aim: number, skill: SkillDef) {
+    const cos = Math.cos(aim);
+    const sin = Math.sin(aim);
+    const pinned = (x: number, y: number) => {
+      const pushed = this.move(x, y, cos * 24, sin * 24, PLAYER_RADIUS);
+      return Math.hypot(pushed.x - x, pushed.y - y) < 12;
+    };
+    const len = skill.radius;
+    const half = (skill.width ?? 40) / 2;
+    const inLane = (tx: number, ty: number, r: number) => {
+      const along = (tx - p.x) * cos + (ty - p.y) * sin;
+      const across = Math.abs(-(tx - p.x) * sin + (ty - p.y) * cos);
+      return along >= -r && along <= len + r && across <= half + r;
+    };
+    this.state.enemies.forEach((e, eid) => {
+      const def = ENEMIES[e.kind as EnemyKind];
+      if (!inLane(e.x, e.y, this.er(e))) return;
+      this.damageEnemy(eid, skill.damage, id);
+      if (def.boss || def.block) return;
+      if (pinned(e.x, e.y)) e.stun = Math.max(e.stun, skill.duration ?? 1.5);
+      else this.knockEnemy(eid, cos, sin, 0.6);
+    });
+    if (!this.pvpLive()) return;
+    this.state.players.forEach((v, vid) => {
+      if (v.dead || !this.isFoe(id, vid) || !inLane(v.x, v.y, this.pr(v))) return;
+      this.damagePlayer(vid, skill.damage * PVP_DAMAGE_SCALE, true, id);
+      if (v.dead) return;
+      if (pinned(v.x, v.y)) v.stun = Math.max(v.stun, skill.duration ?? 1.5);
+      else this.knockPlayer(vid, cos, sin, 0.6);
+    });
+  }
+
+  /** PARRY: a shot that hits a parrying Warrior turns round and flies back, now his, and harder. */
+  private reflectBullet(b: B, brain: BulletBrain, by: string) {
+    const hero = heroOf(this.state.players.get(by)?.hero ?? "");
+    b.vx = -b.vx;
+    b.vy = -b.vy;
+    b.hostile = false;
+    brain.owner = by;
+    brain.hit = new Set([by]);
+    brain.damage *= hero.skill2?.damage ?? 1.5;
+    brain.life = Math.max(brain.life, 1.5);
+    brain.homing = false;
+  }
+
+  private reflecting(p: P): boolean {
+    return p.active2 > 0 && heroOf(p.hero).skill2?.kind === "reflect" && !p.dead;
+  }
+
   /** The portals' owner (only he can use them) walks into a linked portal and comes out of its partner. */
   private usePortal(zid: string, z: Z, link: string, owner: string) {
     const out = this.state.zones.get(link);
@@ -2319,7 +2572,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
   }
   /** Hit every enemy inside a slice of a circle (a punch, a sword swing, or a full circle). */
   /** `knock`: true for a normal melee knockback, or a number for that many times as far. */
-  private sweep(owner: string, x: number, y: number, aim: number, range: number, arc: number, damage: number, knock: boolean | number = false) {
+  private sweep(owner: string, x: number, y: number, aim: number, range: number, arc: number, damage: number, knock: boolean | number = false, stun = 0) {
     const kb = knock === true ? 1 : Number(knock) || 0;
     if (knock) this.cutBullets(owner, x, y, aim, range, arc);
     this.state.enemies.forEach((e, eid) => {
@@ -2333,6 +2586,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
         if (Math.abs(diff) > arc / 2) return;
       }
       this.damageEnemy(eid, damage, owner);
+      if (stun > 0 && !def.boss && !def.block && this.state.enemies.has(eid)) e.stun = Math.max(e.stun, stun);
       if (kb && !def.boss && !def.block) this.knockEnemy(eid, dx, dy, kb);
     });
     if (!this.pvpLive()) return;
@@ -2347,6 +2601,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
         if (Math.abs(diff) > arc / 2) return;
       }
       this.damagePlayer(vid, damage * PVP_DAMAGE_SCALE, true, owner);
+      if (stun > 0 && !v.dead) v.stun = Math.max(v.stun, stun);
       if (kb) this.knockPlayer(vid, dx, dy, kb);
     });
   }
@@ -2415,6 +2670,9 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
     if (!p || !brain || p.dead || p.dashing) return;
     if (heroOf(p.hero).invincible || p.barrier > 0) return;
     if (attacker && attacker !== ENEMY && !raw) amount *= this.dmgMul(attacker);
+    // HARDEN: each stack takes a share off every hit.
+    const hard = heroOf(p.hero).skill;
+    if (hard.kind === "harden" && !raw) amount *= Math.max(0, 1 - hard.damage * p.mode);
     // Under Yaotsu's reality change, ordinary humans hit for 1.
     if (this.state.reality > 0 && attacker && (attacker === ENEMY || this.isFoe(this.state.realityBy, attacker))) {
       amount = Math.min(amount, 1);
@@ -2945,8 +3203,12 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
           return;
         }
         s.players.forEach((p, pid) => {
-          if (!s.bullets.has(id) || p.dead || p.dashing) return;
+          if (!s.bullets.has(id) || p.dead || p.dashing || !b.hostile) return;
           if (Math.hypot(p.x - b.x, p.y - b.y) < PLAYER_RADIUS + 2) {
+            if (this.reflecting(p)) {
+              this.reflectBullet(b, brain, pid);
+              return;
+            }
             this.damagePlayer(pid, brain.damage, false, ENEMY);
             this.removeBullet(id);
           }
@@ -2960,6 +3222,10 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
         s.players.forEach((v, vid) => {
           if (!s.bullets.has(id) || !this.isFoe(brain.owner, vid) || v.dead || brain.hit.has(vid)) return;
           if (Math.hypot(v.x - b.x, v.y - b.y) >= this.pr(v) + hitRadius) return;
+          if (this.reflecting(v) && !b.kind.startsWith("card")) {
+            this.reflectBullet(b, brain, vid);
+            return;
+          }
           if (brain.blast > 0) {
             this.sweep(brain.owner ?? "", b.x, b.y, 0, brain.blast, Math.PI * 2, brain.damage);
             this.removeBullet(id);
@@ -2967,6 +3233,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
           }
           brain.hit.add(vid);
           this.damagePlayer(vid, (brain.pct ? v.maxHp * brain.pct : brain.damage) * PVP_DAMAGE_SCALE, true, brain.owner);
+          if (brain.stun && !v.dead) v.stun = Math.max(v.stun, brain.stun); // POWER SHOT
           if (brain.pierceLeft <= 0) this.removeBullet(id);
           else brain.pierceLeft--;
         });
@@ -2985,6 +3252,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
           brain.hit.add(eid);
           // A drawn card takes its share of the monster's max HP (a tenth of that on bosses).
           this.damageEnemy(eid, brain.pct ? e.maxHp * brain.pct * (def.boss ? 0.1 : 1) : brain.damage, brain.owner);
+          if (brain.stun && !def.boss && s.enemies.has(eid)) e.stun = Math.max(e.stun, brain.stun);
           if (brain.pierceLeft <= 0) this.removeBullet(id);
           else brain.pierceLeft--;
         }
@@ -3161,6 +3429,35 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
         return dist <= skill.radius * chargeReach(chargePower(CHARGE_FULL / 2));
       case "grapple":
         return dist > 130;
+      case "chargeslash":
+        return dist <= skill.radius * 1.3 + PLAYER_RADIUS;
+      case "chargeshot":
+      case "leafstorm":
+      case "bluelaser":
+      case "shuriken":
+        return dist <= skill.radius * 0.8;
+      case "reflect":
+        return dist > 50 && dist < 260 && Math.random() < 0.3;
+      case "sprint":
+        return dist > 160;
+      case "shadowstep":
+        return p.mode === 1 ? hpLeft < 0.5 || dist > 140 : dist <= reach;
+      case "shield":
+        return hpLeft < 0.7 && dist < 160;
+      case "shieldcharge":
+        return dist <= skill.radius;
+      case "tree":
+        return true;
+      case "empower":
+        return dist < 60;
+      case "leap":
+        return dist <= (skill.width ?? 170) + 20 && dist > 40;
+      case "boost":
+        return p.mode < (skill.count ?? 3);
+      case "harden":
+        return p.mode < (skill.count ?? 10);
+      case "barrage":
+        return dist <= skill.radius + 10;
       case "trojan":
         return dist < 140;
       case "totem":

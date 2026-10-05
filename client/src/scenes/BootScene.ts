@@ -21,6 +21,13 @@ import {
   FIST_SHOT,
   STAR_SHOT,
   SONIC_SHOT,
+  ARROW_SHOT,
+  BIG_ARROW,
+  SHURIKEN,
+  LEAF_SHOT,
+  LEAF_STORM,
+  BLUE_BOLT,
+  TREE,
   TROJAN_HORSE,
   HEAL_TOTEM,
   GIANT_PALM,
@@ -161,6 +168,13 @@ export class BootScene extends Phaser.Scene {
     this.addCanvas("fist", renderPixelSprite(FIST_SHOT));
     this.addCanvas("starshot", renderPixelSprite(STAR_SHOT));
     this.addCanvas("sonic", renderPixelSprite(SONIC_SHOT));
+    this.addCanvas("arrow", renderPixelSprite(ARROW_SHOT));
+    this.addCanvas("bigarrow", renderPixelSprite(BIG_ARROW));
+    this.addCanvas("shuriken", renderPixelSprite(SHURIKEN));
+    this.addCanvas("leaf", renderPixelSprite(LEAF_SHOT));
+    this.addCanvas("leafstorm", renderPixelSprite(LEAF_STORM));
+    this.addCanvas("bluebolt", renderPixelSprite(BLUE_BOLT));
+    this.addCanvas("tree", renderPixelSprite(TREE));
     this.addCanvas("gladius", renderPixelSprite(GLADIUS));
     this.addCanvas("raygun", renderPixelSprite(RAYGUN));
     this.addCanvas("pistol", renderPixelSprite(PISTOL));

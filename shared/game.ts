@@ -82,7 +82,15 @@ export type HeroId =
   | "raptor"
   | "zenitsu"
   | "pawn"
-  | "queen";
+  | "queen"
+  | "warrior"
+  | "archer"
+  | "ninja"
+  | "paladin"
+  | "druid"
+  | "monk"
+  | "robot"
+  | "golem";
 export type AttackStyle = "punch" | "sword" | "rifle" | "lightning" | "magic" | "flame";
 export type SkillKind =
   | "smash"
@@ -152,6 +160,22 @@ export type SkillKind =
   | "thunderdash" // a lightning dash that cuts the lane; if it hits, it can be used once more within 2s
   | "seventh" // a lightning dash cutting a wide lane, which keeps crackling with lightning for a while
   | "whip" // a black whip locks on to the nearest target in range and ties its legs (it cannot walk)
+  | "chargeslash" // hold to charge, let go for a wide sword cleave (bigger and harder the longer it charged)
+  | "chargeshot" // hold until fully charged, then let go: one heavy arrow that pierces and stuns
+  | "reflect" // for a moment, shots that hit him fly back at whoever fired them
+  | "sprint" // runs faster for a while
+  | "shadowstep" // dash ahead leaving a shadow; use again within the window to flash back to it
+  | "shuriken" // throwing stars in a fan straight ahead
+  | "shield" // a shield of light: he and nearby allies take no damage for a moment
+  | "shieldcharge" // hold to charge, let go to rush ahead shield first; a full charge stuns
+  | "tree" // plants a tree that never goes away and heals him while he stands near it
+  | "leafstorm" // a storm of leaves that hits harder for every tree he has planted
+  | "empower" // the next basic attack hits much harder and stuns
+  | "leap" // jumps onto the aimed spot, crushing and stunning everything around the landing
+  | "boost" // one more shot per basic attack (stacks)
+  | "bluelaser" // one blue laser blast straight ahead
+  | "harden" // takes less damage (stacks)
+  | "barrage" // a flurry of punches ahead: stuns foes pinned against a wall, knocks back the rest
   | "charge"; // hold to charge (walking slower), let go to smash: the longer the charge, the harder and longer it hits
 
 export interface SkillDef {
@@ -165,6 +189,7 @@ export interface SkillDef {
   count?: number; // how many missiles or summons
   pet?: HeroId; // for "summon": which helper comes out (damage = its share of the summoner's max HP)
   max?: number; // for "summon": most of these helpers out at once (the oldest leaves); default `count`
+  chargeTime?: number; // for charged skills: seconds to a full charge (default CHARGE_FULL)
 }
 
 export interface HeroDef {
@@ -196,6 +221,8 @@ export interface HeroDef {
   summon?: boolean;
   /** A summon that never moves and fires at anything within `range` (THE QUEEN). */
   turret?: boolean;
+  /** Stacks kept in `mode`, shown under the skill cooldowns: their name and how many at most. */
+  stacks?: { label: string; max?: number };
   /** An alien form of this hero (ALIEN TRANSFORM): not on the hero select screen; turns back when the time runs out. */
   formOf?: HeroId;
   /** Melee knockback, times a normal one. */
@@ -904,6 +931,167 @@ export const HEROES: Record<HeroId, HeroDef> = {
     pierce: 0,
     skill: { kind: "passive", name: "", cooldown: 1, damage: 0, radius: 0 },
   },
+  warrior: {
+    name: "Warrior",
+    role: "Knight",
+    blurb: "Sturdy swordsman. CLEAVE: hold to charge, let go for a wide sword cleave that grows with the charge. PARRY (E): for a moment, shots that hit him fly back at whoever fired them.",
+    stars: 3,
+    maxHp: 150,
+    speed: 100,
+    attack: "sword",
+    attackCooldown: 0.55,
+    damage: 30,
+    range: 26,
+    arc: 1.6,
+    aoe: 0,
+    shotSpeed: 0,
+    pierce: 0,
+    // CLEAVE: a `width`-radian sword arc `radius` long; a full charge hits up to x4 and reaches further.
+    skill: { kind: "chargeslash", name: "CLEAVE", cooldown: 6, damage: 40, radius: 46, width: 2.6 },
+    // PARRY: `duration` seconds of reflecting shots, which fly back `damage` times as hard.
+    skill2: { kind: "reflect", name: "PARRY", cooldown: 7, damage: 1.5, radius: 0, duration: 1 },
+  },
+  archer: {
+    name: "Archer",
+    role: "Bow ranger",
+    blurb: "Shoots arrows from afar. POWER SHOT: hold until fully charged, then let go for one heavy arrow that pierces and stuns. SWIFT (E): runs 50% faster for 4s.",
+    stars: 4,
+    maxHp: 95,
+    speed: 110,
+    attack: "magic",
+    attackCooldown: 0.5,
+    damage: 22,
+    range: 260,
+    arc: 0,
+    aoe: 0,
+    shotSpeed: 420,
+    pierce: 0,
+    shot: "arrow",
+    // POWER SHOT: fires only at full charge (`chargeTime` s); flies `radius`, stuns `duration` s.
+    skill: { kind: "chargeshot", name: "POWER SHOT", cooldown: 5, damage: 80, radius: 380, duration: 1.2, chargeTime: 1.2 },
+    skill2: { kind: "sprint", name: "SWIFT", cooldown: 10, damage: 0, radius: 0, duration: 4, width: 1.5 },
+  },
+  ninja: {
+    name: "Ninja",
+    role: "Shadow assassin",
+    blurb: "Quick dagger cuts. SHADOW STEP: dashes ahead, cutting the way and leaving a shadow behind; use it again within 3s to flash back to the shadow. SHURIKEN (E): five throwing stars in a fan straight ahead.",
+    stars: 3,
+    maxHp: 100,
+    speed: 120,
+    attack: "sword",
+    attackCooldown: 0.4,
+    damage: 20,
+    range: 22,
+    arc: 1.4,
+    aoe: 0,
+    shotSpeed: 0,
+    pierce: 0,
+    // SHADOW STEP: a `radius` dash cutting a `width` lane; the shadow waits `duration` seconds.
+    skill: { kind: "shadowstep", name: "SHADOW STEP", cooldown: 6, damage: 30, radius: 130, width: 24, duration: 3 },
+    skill2: { kind: "shuriken", name: "SHURIKEN", cooldown: 5, damage: 20, radius: 240, count: 5, width: 0.2 },
+  },
+  paladin: {
+    name: "Paladin",
+    role: "Holy knight",
+    blurb: "Very tough. HOLY SHIELD: a shield of light; he and allies nearby take no damage for 2.5s. SHIELD BASH (E): hold to charge, let go to rush ahead shield first; a full charge stuns for 2s (low damage).",
+    stars: 4,
+    maxHp: 280,
+    speed: 95,
+    attack: "sword",
+    attackCooldown: 0.7,
+    damage: 26,
+    range: 24,
+    arc: 1.6,
+    aoe: 0,
+    shotSpeed: 0,
+    pierce: 0,
+    skill: { kind: "shield", name: "HOLY SHIELD", cooldown: 14, damage: 0, radius: 110, duration: 2.5 },
+    // SHIELD BASH: rushes up to `radius` (by charge); a full charge stuns `duration` seconds.
+    skill2: { kind: "shieldcharge", name: "SHIELD BASH", cooldown: 8, damage: 20, radius: 150, width: 30, duration: 2, chargeTime: 1.5 },
+  },
+  druid: {
+    name: "Druid",
+    role: "Forest keeper",
+    blurb: "Leaf magic. GROW TREE: plants a tree that can't be destroyed and never goes away; standing near his trees heals him 3% HP a second for each. LEAF STORM (E): a storm of leaves that hits harder for every tree he has planted.",
+    stars: 4,
+    maxHp: 110,
+    speed: 105,
+    attack: "magic",
+    attackCooldown: 0.6,
+    damage: 20,
+    range: 220,
+    arc: 0,
+    aoe: 0,
+    shotSpeed: 300,
+    pierce: 0,
+    shot: "leaf",
+    stacks: { label: "TREES" },
+    // GROW TREE: planted `width` ahead; heals `damage` of max HP a second within `radius`.
+    skill: { kind: "tree", name: "GROW TREE", cooldown: 5, damage: 0.03, radius: 100, width: 40 },
+    // LEAF STORM: `damage`, plus `width` more of it for every tree.
+    skill2: { kind: "leafstorm", name: "LEAF STORM", cooldown: 8, damage: 30, radius: 300, width: 0.35 },
+  },
+  monk: {
+    name: "Monk",
+    role: "Martial artist",
+    blurb: "Fast palm strikes. FOCUS: the next basic attack hits 3x as hard and stuns for 1.2s. SKY LEAP (E): jumps onto the aimed spot, crushing and stunning everything around the landing.",
+    stars: 4,
+    maxHp: 130,
+    speed: 110,
+    attack: "punch",
+    attackCooldown: 0.4,
+    damage: 22,
+    range: 20,
+    arc: 1.5,
+    aoe: 0,
+    shotSpeed: 0,
+    pierce: 0,
+    // FOCUS: next hit `damage` times as hard, stunning `duration` seconds.
+    skill: { kind: "empower", name: "FOCUS", cooldown: 6, damage: 3, radius: 0, duration: 1.2 },
+    // SKY LEAP: lands up to `width` away; hits everything within `radius`, stunning `duration` seconds.
+    skill2: { kind: "leap", name: "SKY LEAP", cooldown: 9, damage: 50, radius: 55, width: 170, duration: 1 },
+  },
+  robot: {
+    name: "Robot",
+    role: "Battle bot",
+    blurb: "Slow blue blaster shots, one at a time. BOOSTING: one more shot per attack, up to 3 times (4 shots at once). PLASMA LASER (E): one blue laser blast straight ahead.",
+    stars: 4,
+    maxHp: 120,
+    speed: 100,
+    attack: "magic",
+    attackCooldown: 0.8,
+    damage: 24,
+    range: 260,
+    arc: 0,
+    aoe: 0,
+    shotSpeed: 200,
+    pierce: 0,
+    shot: "bluebolt",
+    stacks: { label: "BOOST", max: 3 },
+    skill: { kind: "boost", name: "BOOSTING", cooldown: 12, damage: 0, radius: 0, count: 3 },
+    skill2: { kind: "bluelaser", name: "PLASMA LASER", cooldown: 9, damage: 110, radius: 320, width: 14 },
+  },
+  golem: {
+    name: "Stone Titan",
+    role: "Living rock",
+    blurb: "Huge HP, heavy punches. HARDEN: takes 5% less damage, stacking up to 10 times. ROCK BARRAGE (E): a flurry of punches ahead; foes pinned against a wall are stunned, the rest are knocked back.",
+    stars: 4,
+    maxHp: 300,
+    speed: 85,
+    attack: "punch",
+    attackCooldown: 0.8,
+    damage: 34,
+    range: 24,
+    arc: 1.6,
+    aoe: 0,
+    shotSpeed: 0,
+    pierce: 0,
+    stacks: { label: "ARMOR", max: 10 },
+    // HARDEN: `damage` less damage taken per stack, up to `count` stacks.
+    skill: { kind: "harden", name: "HARDEN", cooldown: 3, damage: 0.05, radius: 0, count: 10 },
+    // ROCK BARRAGE: `count` punches down a `radius` x `width` lane over `duration`*0.5 s; pinned foes are stunned `duration` s.
+    skill2: { kind: "barrage", name: "ROCK BARRAGE", cooldown: 9, damage: 14, radius: 50, width: 40, count: 6, duration: 1.5 },
+  },
   pawn: {
     name: "Pawn",
     role: "Summon",
@@ -1102,8 +1290,8 @@ for (const def of Object.values(HEROES)) {
  */
 const PVP_RANKING: HeroId[] = [
   "trainer", "howl", "healer", "superman", "agamemnon", "rudeus", "isekai", "ricardo", "saitama",
-  "thorfinn", "hanuman", "doraemon", "joyboy", "zenitsu", "steve", "lawliet", "taekwondo", "vampire", "gojo", "rider",
-  "simo", "rick", "okita", "deku", "killua", "omni", "theworld", "sakamoto", "starplatinum", "loki",
+  "thorfinn", "hanuman", "doraemon", "joyboy", "warrior", "zenitsu", "steve", "lawliet", "ninja", "taekwondo", "vampire", "gojo", "rider",
+  "paladin", "golem", "robot", "simo", "monk", "rick", "okita", "archer", "druid", "deku", "killua", "omni", "theworld", "sakamoto", "starplatinum", "loki",
   "titan", "kid", "swordgod", "yaotsu", "badigadi",
 ];
 /** Heroes taken out of the game (user request 2026-10-04): not on any hero select; their code is kept. */
@@ -1153,12 +1341,22 @@ export const DAMAGE_BALANCE: Partial<Record<HeroId, number>> = {
   badigadi: 0.32,
   yaotsu: 0.5,
   swordgod: 1.15,
+  // The eight heroes of 2026-10-05, tuned alone (everyone else untouched).
+  warrior: 2.0,
+  archer: 3.4,
+  ninja: 4.7,
+  paladin: 1.57,
+  druid: 4.0,
+  monk: 4.5,
+  robot: 2.65,
+  golem: 1.57,
 };
 
 /** Hero classes (user request 2026-10-05), shown and filterable on the hero select. */
-export type HeroClass = "fighter" | "mage" | "carry" | "support" | "summoner" | "assassin";
+export type HeroClass = "fighter" | "tank" | "mage" | "carry" | "support" | "summoner" | "assassin";
 export const HERO_CLASSES: { id: HeroClass; name: string; color: string }[] = [
   { id: "fighter", name: "FIGHTER", color: "#ff7a3a" },
+  { id: "tank", name: "TANK", color: "#ffd23f" },
   { id: "mage", name: "MAGE", color: "#9a7aff" },
   { id: "carry", name: "CARRY", color: "#ff3a5a" },
   { id: "support", name: "SUPPORT", color: "#5aff9a" },
@@ -1169,13 +1367,15 @@ const CLASS_OF: Partial<Record<HeroId, HeroClass>> = {
   // Fighters: up close, hard to kill or hard-hitting brawlers.
   ricardo: "fighter", rider: "fighter", titan: "fighter", joyboy: "fighter", taekwondo: "fighter", superman: "fighter",
   saitama: "fighter", deku: "fighter", hanuman: "fighter", theworld: "fighter", starplatinum: "fighter", steve: "fighter",
-  omni: "fighter", badigadi: "fighter",
+  omni: "fighter", badigadi: "fighter", warrior: "fighter", monk: "fighter",
+  // Tanks: huge HP, protect and hold the line.
+  paladin: "tank", golem: "tank",
   // Mages: spells and areas from a distance.
-  rudeus: "mage", gojo: "mage", howl: "mage", rick: "mage", yaotsu: "mage",
+  rudeus: "mage", gojo: "mage", howl: "mage", rick: "mage", yaotsu: "mage", druid: "mage",
   // Carries: steady, heavy damage that grows a fight in their favour.
-  simo: "carry", sakamoto: "carry", isekai: "carry", swordgod: "carry",
+  simo: "carry", sakamoto: "carry", isekai: "carry", swordgod: "carry", archer: "carry", robot: "carry",
   // Assassins: fast, fragile, dart in and burst one target down.
-  killua: "assassin", okita: "assassin", zenitsu: "assassin", vampire: "assassin", thorfinn: "assassin", kid: "assassin",
+  killua: "assassin", okita: "assassin", zenitsu: "assassin", vampire: "assassin", thorfinn: "assassin", kid: "assassin", ninja: "assassin",
   // Supports: heal, lock down or weaken enemies.
   healer: "support", doraemon: "support",
   // Summoners: fight through the helpers and copies they call out.
@@ -1349,8 +1549,18 @@ export const CHARGE_FULL = 2.5;
 export const CHARGE_SLOW = 0.4;
 
 /** How much a MAX SMASH charged for `held` seconds hits (x1 at once, up to x4 at full charge). */
-export function chargePower(held: number): number {
-  return 1 + 3 * Math.min(1, Math.max(0, held) / CHARGE_FULL);
+export function chargePower(held: number, full = CHARGE_FULL): number {
+  return 1 + 3 * Math.min(1, Math.max(0, held) / full);
+}
+
+/** Skills that are held to charge and go off when let go. */
+const CHARGE_KINDS: SkillKind[] = ["charge", "chargeslash", "chargeshot", "shieldcharge"];
+export function isChargeSkill(skill?: SkillDef): boolean {
+  return !!skill && CHARGE_KINDS.includes(skill.kind);
+}
+/** Seconds a charged skill takes to charge fully. */
+export function chargeTimeOf(skill: SkillDef): number {
+  return skill.chargeTime ?? CHARGE_FULL;
 }
 
 /** How long (and wide) the MAX SMASH lane is at that power: up to 1.8x. */
@@ -1368,7 +1578,7 @@ export interface PlayerInput {
   dash: boolean;
   skill: boolean;
   skill2?: boolean;
-  /** MAX SMASH: seconds the second skill was held (charged) before it was let go. */
+  /** Charged skills (either slot): seconds the skill was held (charged) before it was let go. */
   charge2?: number;
   /** Where the client has moved its own hero. The server follows it, within the hero's speed. */
   x?: number;
@@ -1438,7 +1648,7 @@ export const BURN_SLOW = 0.55;
 export function heroSpeed(p: { hero: string; big: number; active2?: number; slow?: number; root?: number }): number {
   if ((p.root ?? 0) > 0) return 0; // SHADOW WHIP: legs tied
   const hero = heroOf(p.hero);
-  const bike = (p.active2 ?? 0) > 0 && hero.skill2?.kind === "bike" ? hero.skill2.width ?? 2 : 1;
+  const bike = (p.active2 ?? 0) > 0 && (hero.skill2?.kind === "bike" || hero.skill2?.kind === "sprint") ? hero.skill2.width ?? 2 : 1;
   const base = hero.ram ? hero.speed * MOVE_SCALE : HERO_WALK; // the Speed Raptor keeps its own speed
   return base * (p.big > 0 ? BIG_SLOW : 1) * ((p.slow ?? 0) > 0 ? BURN_SLOW : 1) * bike;
 }

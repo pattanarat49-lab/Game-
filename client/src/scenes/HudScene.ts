@@ -80,7 +80,7 @@ export class HudScene extends Phaser.Scene {
       // Lasting effects count for the skill that made them (a latch can be the Giant Shifter's wire, a barrier the doves).
       const active1 = Math.max(me.titan, hero.skill.kind === "immortal" ? me.barrier : 0, me.revive, hero.skill.kind === "latch" ? me.latch : 0, hero.formOf ? 0 : me.buff ?? 0);
       const active2 = Math.max(me.beam, hero.skill2?.kind === "doves" ? me.barrier : 0, me.active2 ?? 0);
-      const skill = hero.skill.kind === "thunderdash" && me.mode === 1 ? "AGAIN! (chain)" : hero.skill.kind === "swap" ? `NOW ${me.mode === 1 ? "GUN" : "KNIFE"}` : hero.skill.kind === "passive" ? "PASSIVE" : active1 > 0 ? `ACTIVE ${active1.toFixed(1)}s` : me.skillCooldown > 0 ? `${me.skillCooldown.toFixed(1)}s` : "READY";
+      const skill = hero.skill.kind === "thunderdash" && me.mode === 1 ? "AGAIN! (chain)" : hero.skill.kind === "shadowstep" && me.mode === 1 ? "BACK! (shadow)" : hero.skill.kind === "empower" && me.mode === 1 ? "READY (next hit)" : hero.skill.kind === "swap" ? `NOW ${me.mode === 1 ? "GUN" : "KNIFE"}` : hero.skill.kind === "passive" ? "PASSIVE" : active1 > 0 ? `ACTIVE ${active1.toFixed(1)}s` : me.skillCooldown > 0 ? `${me.skillCooldown.toFixed(1)}s` : "READY";
       const lines = [`DASH   ${dash}`, `${hero.skill.name.padEnd(6)} ${skill}`];
       // ALIEN TRANSFORM: how long until the alien turns back into the kid.
       const formLeft = hero.formOf ? `ALIEN  BACK IN ${(me.buff ?? 0).toFixed(1)}s` : "";
@@ -89,6 +89,9 @@ export class HudScene extends Phaser.Scene {
       const skill2Ready = hero.skill2 ? 1 - me.skill2Cooldown / hero.skill2.cooldown : 1;
       if (hero.skill2) lines.push(`${hero.skill2.name.padEnd(6)} ${hero.skill2.kind === "yoyo" ? `NOW ${me.mode === 1 ? "YOYO" : "BOLT"}` : active2 > 0 ? `ACTIVE ${active2.toFixed(1)}s` : me.skill2Cooldown > 0 ? `${me.skill2Cooldown.toFixed(1)}s` : "READY"}`);
       if ((me.power ?? 1) > 1) lines.push(`DMG x${me.power}  (CRAFTED)`);
+      // Heroes that build stacks (BOOST, ARMOR, TREES) show them right under the cooldown bars.
+      const stackRow = hero.stacks ? lines.length : -1;
+      if (hero.stacks) lines.push(`${hero.stacks.label.padEnd(6)} ${hero.stacks.max ? `${me.mode}/${hero.stacks.max}` : `x${me.mode}`}`);
       this.skills.setText(lines.join("\n"));
       const barX = Math.max(220, 20 + this.skills.width + 12);
       this.drawCooldown(barX, 68, 1 - me.dashCooldown / DASH_COOLDOWN);
@@ -97,6 +100,7 @@ export class HudScene extends Phaser.Scene {
       else this.drawCooldown(barX, 84, 1 - me.skillCooldown / hero.skill.cooldown);
       if (hero.formOf && hero.skill.kind !== "passive") this.drawCooldown(barX, 100, (me.buff ?? 0) / formTime);
       if (hero.skill2) this.drawCooldown(barX, 100, skill2Ready);
+      if (hero.stacks && stackRow >= 0) this.drawStacks(barX, 68 + 16 * stackRow, me.mode ?? 0, hero.stacks.max);
       this.touch?.setLabels(hero.skill.kind === "passive" ? "ALIEN" : hero.skill.name, hero.skill2?.name ?? "");
       this.touch?.draw(1 - me.skillCooldown / hero.skill.cooldown, 1 - me.dashCooldown / DASH_COOLDOWN, skill2Ready);
     }
@@ -203,6 +207,17 @@ export class HudScene extends Phaser.Scene {
       this.bars.fillRect(this.scale.width - 12, 32 + i * 16, 6, 8);
       i++;
     });
+  }
+
+  /** One pip per stack (up to the cap), or a pip per tree for the uncapped Druid. */
+  private drawStacks(x: number, y: number, n: number, max?: number) {
+    const slots = max ?? Math.max(n, 1);
+    const shown = Math.min(slots, 12);
+    const w = Math.min(10, Math.floor((60 - (shown - 1) * 2) / shown));
+    for (let i = 0; i < shown; i++) {
+      this.bars.fillStyle(0x000000, 0.6).fillRect(x + i * (w + 2), y - 1, w, 8);
+      if (i < n) this.bars.fillStyle(0x6ad8ff, 1).fillRect(x + i * (w + 2) + 1, y, w - 2, 6);
+    }
   }
 
   private drawCooldown(x: number, y: number, ready: number) {
