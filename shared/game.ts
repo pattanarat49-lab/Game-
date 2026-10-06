@@ -459,7 +459,7 @@ const BASE_HEROES: Record<BaseHeroId, HeroDef> = {
   healer: {
     name: "Holy Healer",
     role: "Support",
-    blurb: "Holy bolts from afar. HEAL restores 50% HP to every ally nearby. HEAL TOTEM (E): a totem on the ground heals allies near it 5% HP every 0.5s for 5s.",
+    blurb: "Holy bolts from afar. HEAL restores 20% HP to every ally nearby. HEAL TOTEM (E): a totem on the ground heals allies near it 2% HP every 0.5s for 5s.",
     stars: 3,
     maxHp: 110,
     speed: 105,
@@ -634,7 +634,7 @@ const BASE_HEROES: Record<BaseHeroId, HeroDef> = {
   yaotsu: {
     name: "Glitch God",
     role: "Indignia God",
-    blurb: "2x HP. CREATOR builds a whole city: enemies inside lose 2% HP/s, he heals 2%/s. REALITY CHANGE turns every enemy into an ordinary human for 3s.",
+    blurb: "2x HP. CREATOR builds a whole city: enemies inside lose 2% HP/s, he heals 0.8%/s. REALITY CHANGE turns every enemy into an ordinary human for 3s.",
     stars: 4,
     maxHp: 200,
     speed: 210,
@@ -653,7 +653,7 @@ const BASE_HEROES: Record<BaseHeroId, HeroDef> = {
   loki: {
     name: "Trickster",
     role: "Trickster god",
-    blurb: "Magic shots. ILLUSION raises a golden city for 10s (enemies inside lose 7% HP/s). CLONE makes a copy that fights, and nobody can tell which one is real.",
+    blurb: "Magic shots. ILLUSION raises a golden city for 10s (enemies inside lose a share of their HP every second). CLONE makes a copy that fights, and nobody can tell which one is real.",
     stars: 5,
     maxHp: 120,
     speed: 110,
@@ -771,7 +771,7 @@ const BASE_HEROES: Record<BaseHeroId, HeroDef> = {
   kid: {
     name: "Phantom Thief",
     role: "Magician",
-    blurb: "Card-gun shots. DRAW CARD throws a random card 1-9: it takes 10-90% of the target's max HP (1-9% on bosses). THE MAGICIAN (E): vanishes into a flock of doves for 2s and takes no damage.",
+    blurb: "Card-gun shots. DRAW CARD throws a random card 1-9: the higher the number, the more of the target's max HP it takes. THE MAGICIAN (E): vanishes into a flock of doves for 2s and takes no damage.",
     stars: 4,
     maxHp: 115,
     speed: 143,
@@ -811,7 +811,7 @@ const BASE_HEROES: Record<BaseHeroId, HeroDef> = {
   badigadi: {
     name: "Demon Lord",
     role: "Four-armed demon",
-    blurb: "3x HP. Slow, crushing four-armed blows hit a wide area. IMMORTAL: a barrier blocks all damage for 3s and heals 10% HP/s. GRAB SLAM (E): darts in, grabs the nearest target in front, leaps and slams it down, stunning for 2s.",
+    blurb: "3x HP. Slow, crushing four-armed blows hit a wide area. IMMORTAL: a barrier blocks all damage for 3s and heals 4% HP/s. GRAB SLAM (E): darts in, grabs the nearest target in front, leaps and slams it down, stunning for 2s.",
     stars: 3,
     maxHp: 360,
     speed: 132,
@@ -1101,7 +1101,7 @@ const BASE_HEROES: Record<BaseHeroId, HeroDef> = {
   druid: {
     name: "Druid",
     role: "Forest keeper",
-    blurb: "Leaf magic. GROW TREE: plants a tree that can't be destroyed and never goes away; standing near his trees heals him 3% HP a second for each. LEAF STORM (E): a storm of leaves that hits harder for every tree he has planted.",
+    blurb: "Leaf magic. GROW TREE: plants a tree that can't be destroyed and never goes away; standing near his trees heals him 1.2% HP a second for each. LEAF STORM (E): a storm of leaves that hits harder for every tree he has planted.",
     stars: 3,
     maxHp: 110,
     speed: 105,
@@ -1205,7 +1205,7 @@ const BASE_HEROES: Record<BaseHeroId, HeroDef> = {
   reaper: {
     name: "Reaper",
     role: "Soul collector",
-    blurb: "Wide scythe cuts. SOUL REAP: a full spin; every foe hit gives a soul (up to 5) and heals him 6%. DEATH'S DOOR (E): blinks behind the nearest foe and cuts, 40% harder per soul (souls are used up) and double on a foe under 35% HP.",
+    blurb: "Wide scythe cuts. SOUL REAP: a full spin; every foe hit gives a soul (up to 5) and heals him 2.4%. DEATH'S DOOR (E): blinks behind the nearest foe and cuts, 40% harder per soul (souls are used up) and double on a foe under 35% HP.",
     stars: 3,
     maxHp: 110,
     speed: 105,
@@ -1225,7 +1225,7 @@ const BASE_HEROES: Record<BaseHeroId, HeroDef> = {
   mossgolem: {
     name: "Moss Golem",
     role: "Ancient guardian",
-    blurb: "Huge HP, mossy fists. ROOT SNARE: roots burst out all around him, tying every foe's legs for 2s. GAIA SHELL (E): moss covers him for 5s; he takes half damage and heals 3% HP a second.",
+    blurb: "Huge HP, mossy fists. ROOT SNARE: roots burst out all around him, tying every foe's legs for 2s. GAIA SHELL (E): moss covers him for 5s; he takes half damage and heals 1.2% HP a second.",
     stars: 3,
     maxHp: 300,
     speed: 85,
@@ -1479,7 +1479,7 @@ const BASE_HEROES: Record<BaseHeroId, HeroDef> = {
   omni: {
     name: "Omni Kid",
     role: "Alien shifter",
-    blurb: "A kid with an alien watch. ALIEN TRANSFORM: hold and aim at the alien you want on the wheel, release to turn into it for 10s (no skills while an alien, except Echo Mite's MITOSIS): Blaze Alien (flamethrower that burns and slows), Quad Brute (huge HP, crushing punches that knock far), Echo Mite (long-range sonic blasts; MITOSIS splits every copy in two, sharing HP) or Speed Raptor (10x speed, running into foes hurts them). Turning back restores the HP he had before the transform. SNACK (E): eat to heal 10% HP.",
+    blurb: "A kid with an alien watch. ALIEN TRANSFORM: hold and aim at the alien you want on the wheel, release to turn into it for 10s (no skills while an alien, except Echo Mite's MITOSIS): Blaze Alien (flamethrower that burns and slows), Quad Brute (huge HP, crushing punches that knock far), Echo Mite (long-range sonic blasts; MITOSIS splits every copy in two, sharing HP) or Speed Raptor (10x speed, running into foes hurts them). Turning back restores the HP he had before the transform. SNACK (E): eat to heal 4% HP.",
     stars: 4,
     maxHp: 110,
     speed: 112,
@@ -2122,4 +2122,6 @@ export const PVP_DAMAGE_SCALE = 0.6; // player-vs-player hits are softened so fi
  * hero-against-hero mode (user request 2026-10-06: Classic matches ended too fast). Monsters are not affected.
  */
 export const HERO_HIT_SCALE = 0.4;
+/** Everything a hero deals, to monsters and heroes alike: the PvP softening times HERO_HIT_SCALE (user request 2026-10-06). */
+export const HERO_DAMAGE_SCALE = PVP_DAMAGE_SCALE * HERO_HIT_SCALE;
 export const PVP_COUNTDOWN = 3;

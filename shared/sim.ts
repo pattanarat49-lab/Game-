@@ -80,6 +80,7 @@ import {
   areaOf,
   CLASSIC_LIVES,
   HERO_HIT_SCALE,
+  HERO_DAMAGE_SCALE,
   CLASSIC_RESPAWN,
   CLASSIC_TEAM_SIZE,
 } from "./game";
@@ -3294,7 +3295,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
           });
           s.players.forEach((v, vid) => {
             if (!v.dead && this.isFoe(brain.owner, vid) && this.bodyDist(v, z.x, z.y) <= z.radius) {
-              this.damagePlayer(vid, v.maxHp * share, true, brain.owner);
+              this.damagePlayer(vid, v.maxHp * share * PVP_DAMAGE_SCALE, true, brain.owner);
             }
           });
         }
@@ -3438,9 +3439,9 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
     return this.ring && this.state.phase === "fight";
   }
 
-  /** Heal a hero; between heroes healing is scaled down with damage (HERO_HIT_SCALE) so it keeps pace. */
+  /** Heal a hero; healing is scaled down with damage (HERO_HIT_SCALE) in every mode so it keeps pace. */
   private healBy(q: P, amount: number) {
-    q.hp = Math.min(q.maxHp, q.hp + amount * (this.ring ? HERO_HIT_SCALE : 1));
+    q.hp = Math.min(q.maxHp, q.hp + amount * HERO_HIT_SCALE);
   }
 
   private damagePlayer(id: string, amount: number, ignoreIframes = false, attacker?: string, raw = false) {
@@ -3650,8 +3651,10 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
     const e = this.state.enemies.get(eid);
     if (!e) return;
     const killer = this.state.players.get(this.rootOf(owner));
-    this.leech(owner, Math.min(Math.max(0, e.hp), damage * this.dmgMul(owner)));
-    e.hp -= damage * this.dmgMul(owner);
+    // Heroes hit monsters exactly as softly as they hit each other (HERO_DAMAGE_SCALE).
+    const dealt = damage * this.dmgMul(owner) * (killer ? HERO_DAMAGE_SCALE : 1);
+    this.leech(owner, Math.min(Math.max(0, e.hp), dealt));
+    e.hp -= dealt;
     e.hitFlash = 0.1;
     if (e.hp <= 0) {
       const brain = this.enemyBrains.get(eid);

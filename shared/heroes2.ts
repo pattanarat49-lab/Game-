@@ -167,11 +167,11 @@ const ROSTER = {
       { do: "field", at: 140, radius: 60, life: 3, tick: 0.4, look: "web", color: "60d040", dmg: 6, root: 0.6 },
     ]]),
   chopper: hero("support", "Reindeer Doctor", "Tiny doctor", 100, punch(22), "Hoof punches.",
-    ["RUMBLE BALL", 12, "turns huge: 40% less damage taken and 30% harder hits for 5s, and heals 15%.", [
+    ["RUMBLE BALL", 12, "turns huge: 40% less damage taken and 30% harder hits for 5s, and heals 6%.", [
       { do: "buff", dur: 5, armor: 0.6, dmg: 1.3, color: "ff80b0" },
       { do: "heal", pct: 0.15, color: "ff80b0" },
     ]],
-    ["CHERRY CURE", 11, "heals himself and allies nearby 20%, and cherry petals keep healing for 3s.", [
+    ["CHERRY CURE", 11, "heals himself and allies nearby 8%, and cherry petals keep healing for 3s.", [
       { do: "heal", pct: 0.2, radius: 120, color: "ff80c0" },
       { do: "field", at: "self", radius: 90, life: 3, tick: 0.5, look: "petals", color: "ff80c0", heal: 0.03 },
     ]]),
@@ -230,7 +230,7 @@ const ROSTER = {
       { do: "cone", times: 3, gap: 0.25, range: 140, arc: 0.8, color: "ff7020", dmg: 25 },
     ]]),
   bigmom: hero("tank", "Soul Empress", "Sweet-toothed empress", 160, punch(34, 0.55), "Heavy slaps.",
-    ["SOUL STEAL", 9, "pulls at the souls ahead, hurting and slowing them, and heals herself 6%.", [
+    ["SOUL STEAL", 9, "pulls at the souls ahead, hurting and slowing them, and heals herself 2.4%.", [
       { do: "cone", range: 130, arc: 1.2, color: "ff70c0", dmg: 30, slow: 2 },
       { do: "heal", pct: 0.06, color: "ff70c0" },
     ]],
@@ -355,7 +355,7 @@ const ROSTER = {
     ["BLOOD FLAME", 9, "her blood bursts into pink flames around her for 3s.", [
       { do: "field", at: "self", follow: true, radius: 55, life: 3, tick: 0.5, look: "flames", color: "ff3a8a", dmg: 12 },
     ]],
-    ["DEMON FORM", 14, "grows into her demon form: heals 4% a second, hits 20% harder, runs 15% faster for 5s.", [
+    ["DEMON FORM", 14, "grows into her demon form: heals 1.6% a second, hits 20% harder, runs 15% faster for 5s.", [
       { do: "buff", dur: 5, regen: 0.04, dmg: 1.2, speed: 1.15, color: "ff6aa0" },
     ]]),
   rengoku: hero("carry", "Flame Pillar", "Flame hashira", 105, blade(30, 0.5), "Flame-blade cuts.",
@@ -373,7 +373,7 @@ const ROSTER = {
       { do: "buff", dur: 0.6, invuln: true, color: "ff8040" },
       { do: "drop", at: "self", delay: 0.6, radius: 110, look: "pillar", color: "ff8040", dmg: 90, knock: 3 },
     ]],
-    ["BATTLE PLAN", 10, "spots the nearest foe's weak point (slowed 3s) and patches up himself and allies nearby 10%.", [
+    ["BATTLE PLAN", 10, "spots the nearest foe's weak point (slowed 3s) and patches up himself and allies nearby 4%.", [
       { do: "lock", range: 300, look: "eye", color: "ffe060", dmg: 10, slow: 3 },
       { do: "heal", pct: 0.1, radius: 120, color: "ffe060" },
     ]]),
@@ -409,11 +409,11 @@ const ROSTER = {
       { do: "lock", range: 200, look: "bolt", color: "80ff80", dmg: 90 },
     ]]),
   marco: hero("support", "Phoenix", "Blue-flame phoenix", 105, kick(26), "Talon kicks.",
-    ["REBIRTH FLAME", 13, "blue flames heal him 25%, then 3% a second for 4s.", [
+    ["REBIRTH FLAME", 13, "blue flames heal him 10%, then 1.2% a second for 4s.", [
       { do: "heal", pct: 0.25, color: "40c8ff" },
       { do: "buff", dur: 4, regen: 0.03, color: "40c8ff" },
     ], 0.6],
-    ["PHOENIX TALON", 7, "swoops through the lane, healing 5% as he goes.", [
+    ["PHOENIX TALON", 7, "swoops through the lane, healing 2% as he goes.", [
       { do: "dash", len: 180, width: 30, color: "40c8ff", dmg: 50 },
       { do: "heal", pct: 0.05, color: "40c8ff" },
     ]]),
@@ -482,7 +482,7 @@ const ROSTER = {
     ["CHAIN JAIL", 9, "a chain binds the nearest foe: it can't walk for 2.5s.", [
       { do: "lock", range: 220, look: "chain", color: "c0c0d0", dmg: 20, root: 2.5 },
     ]],
-    ["HOLY CHAIN", 12, "heals 20% and blocks all damage for 1s.", [
+    ["HOLY CHAIN", 12, "heals 8% and blocks all damage for 1s.", [
       { do: "heal", pct: 0.2, color: "80ffc0" },
       { do: "shield", dur: 1, color: "80ffc0" },
     ], 0.6]),
@@ -490,7 +490,7 @@ const ROSTER = {
     ["WARP PUNCH", 6, "punches into a portal: a fist hits the nearest foe out of nowhere.", [
       { do: "drop", at: "target", delay: 0.3, radius: 35, look: "fist", color: "80ff80", dmg: 55, stun: 0.5 },
     ]],
-    ["FIRST AID", 11, "heals him and allies nearby 18%, then 2% a second for 4s.", [
+    ["FIRST AID", 11, "heals him and allies nearby 7.2%, then 0.8% a second for 4s.", [
       { do: "heal", pct: 0.18, radius: 120, color: "80ff80" },
       { do: "buff", dur: 4, regen: 0.02, color: "80ff80" },
     ], 0.7]),
@@ -512,7 +512,7 @@ const ROSTER = {
     ["SHOCK IMAGE", 9, "shows everyone around their worst memories: stunned 1s.", [
       { do: "ring", radius: 90, look: "shock", color: "80ff80", dmg: 15, stun: 1 },
     ]],
-    ["UNDYING", 14, "heals 10%, then 6% a second for 4s.", [
+    ["UNDYING", 14, "heals 4%, then 2.4% a second for 4s.", [
       { do: "heal", pct: 0.1, color: "80ff80" },
       { do: "buff", dur: 4, regen: 0.06, color: "80ff80" },
     ], 0.6]),
@@ -574,7 +574,7 @@ const ROSTER = {
     ["BLOOD HAMMER", 7, "a giant blood hammer slams down ahead, stunning.", [
       { do: "drop", at: 70, delay: 0.3, radius: 55, look: "fist", color: "c01020", dmg: 75, stun: 0.5 },
     ]],
-    ["BLOOD SPEARS", 8, "five blood spears fly out, and she drinks back 5% HP.", [
+    ["BLOOD SPEARS", 8, "five blood spears fly out, and she drinks back 2% HP.", [
       { do: "shots", n: 5, spread: 0.7, speed: 380, range: 220, shape: "spike", size: 4, color: "c01020", dmg: 22 },
       { do: "heal", pct: 0.05, color: "c01020" },
     ]]),
@@ -627,7 +627,7 @@ const ROSTER = {
     ["BOKUTO BASH", 6, "a crushing wooden-sword hit that stuns.", [
       { do: "lane", len: 80, width: 50, look: "slash", color: "e0e0e0", dmg: 60, stun: 0.7 },
     ]],
-    ["SUGAR RUSH", 12, "eats something sweet: heals 20% and runs 30% faster for 3s.", [
+    ["SUGAR RUSH", 12, "eats something sweet: heals 8% and runs 30% faster for 3s.", [
       { do: "heal", pct: 0.2, color: "ffe0f0" },
       { do: "buff", dur: 3, speed: 1.3, color: "ffe0f0" },
     ]]),
@@ -640,7 +640,7 @@ const ROSTER = {
       { do: "cone", range: 60, arc: 1.4, color: "ff6040", dmg: 50, knock: 3 },
     ]]),
   hijikata: hero("carry", "Demon Vice", "Vice commander", 100, blade(30, 0.5), "Katana cuts.",
-    ["MAYO SHIELD", 12, "blocks all damage for 1.5s and heals 10%.", [
+    ["MAYO SHIELD", 12, "blocks all damage for 1.5s and heals 4%.", [
       { do: "shield", dur: 1.5, color: "fff0a0" },
       { do: "heal", pct: 0.1, color: "fff0a0" },
     ], 0.6],
@@ -660,12 +660,12 @@ const ROSTER = {
     ["SALT SPLASH", 7, "throws salt ahead: hurts and slows.", [
       { do: "cone", range: 100, arc: 0.9, color: "ffffff", dmg: 30, slow: 2 },
     ]],
-    ["SPECIAL MASSAGE", 13, "heals himself and allies nearby 20% and shields them for 0.8s.", [
+    ["SPECIAL MASSAGE", 13, "heals himself and allies nearby 8% and shields them for 0.8s.", [
       { do: "heal", pct: 0.2, radius: 120, color: "80ffc0" },
       { do: "shield", dur: 0.8, radius: 120, color: "80ffc0" },
     ], 0.6]),
   rimuru: hero("mage", "Slime Lord", "Reborn slime", 105, shoot(orb("60c0ff", 4), 22), "Water bullets.",
-    ["PREDATOR", 9, "a mouth on the aimed spot swallows foes in for 2s, and he heals 8%.", [
+    ["PREDATOR", 9, "a mouth on the aimed spot swallows foes in for 2s, and he heals 3.2%.", [
       { do: "field", at: 110, radius: 60, life: 2, tick: 0.25, look: "dark", color: "3060c0", dmg: 8, knock: -0.6 },
       { do: "heal", pct: 0.08, color: "60c0ff" },
     ]],
@@ -695,7 +695,7 @@ const ROSTER = {
       { do: "dash", len: 140, width: 34, color: "6020a0", dmg: 55, stun: 0.5 },
     ]]),
   subaru: hero("support", "Loop Boy", "Returns by death", 95, punch(22), "Punches.",
-    ["REWIND", 15, "rewinds his luck: heals 35% and can't be hurt for 0.5s.", [
+    ["REWIND", 15, "rewinds his luck: heals 14% and can't be hurt for 0.5s.", [
       { do: "heal", pct: 0.35, color: "8080ff" },
       { do: "buff", dur: 0.5, invuln: true, color: "8080ff" },
     ], 0.4],
@@ -746,7 +746,7 @@ const ROSTER = {
     ["PSYCHIC HANDS", 8, "giant ghost hands drag the nearest foe to her.", [
       { do: "lock", range: 240, look: "grab", color: "ffa0d0", dmg: 20, drag: true },
     ]],
-    ["SPIRIT BARRIER", 12, "a barrier blocks all damage for 1.5s for her and allies nearby, and heals them 10%.", [
+    ["SPIRIT BARRIER", 12, "a barrier blocks all damage for 1.5s for her and allies nearby, and heals them 4%.", [
       { do: "shield", dur: 1.5, radius: 120, color: "ffa0d0" },
       { do: "heal", pct: 0.1, radius: 120, color: "ffa0d0" },
     ]]),
@@ -774,7 +774,7 @@ const ROSTER = {
       { do: "buff", dur: 3, armor: 0.5, color: "c08040" },
     ]]),
   anya: hero("support", "Mind Reader", "Telepath girl", 110, punch(26, 0.4), "Little punches.",
-    ["WAKU WAKU", 12, "cheers everyone nearby: heals 15% and 30% faster for 3s.", [
+    ["WAKU WAKU", 12, "cheers everyone nearby: heals 6% and 30% faster for 3s.", [
       { do: "heal", pct: 0.15, radius: 120, color: "ff9ac0" },
       { do: "buff", dur: 3, speed: 1.3, color: "ff9ac0" },
     ]],
@@ -805,7 +805,7 @@ const ROSTER = {
       { do: "lane", times: 2, gap: 0.25, len: 300, width: 6, look: "beam", color: "ff40ff", dmg: 40 },
     ]]),
   cell: hero("fighter", "Perfect Bio", "Perfect being", 115, punch(30), "Punches.",
-    ["ABSORB", 9, "stabs the nearest foe with his tail and drinks 10% HP.", [
+    ["ABSORB", 9, "stabs the nearest foe with his tail and drinks 4% HP.", [
       { do: "lock", range: 160, look: "grab", color: "80c040", dmg: 45 },
       { do: "heal", pct: 0.1, color: "80c040" },
     ]],
@@ -851,7 +851,7 @@ const ROSTER = {
       { do: "ring", radius: 40, look: "burst", color: "ffe040", dmg: 35 },
       { do: "blink", wait: 0.35, to: "start", range: 0, color: "ffe040" },
     ]],
-    ["TENTACLE CARE", 9, "three wide tentacle slaps, then patches himself up 8%.", [
+    ["TENTACLE CARE", 9, "three wide tentacle slaps, then patches himself up 3.2%.", [
       { do: "cone", times: 3, gap: 0.12, range: 70, arc: 2.2, color: "ffe040", dmg: 18 },
       { do: "heal", pct: 0.08, color: "ffe040" },
     ]]),
@@ -860,7 +860,7 @@ const ROSTER = {
     ["MASENKO", 6, "a yellow energy beam from both hands.", [
       { do: "lane", len: 230, width: 22, look: "beam", color: "ffe060", dmg: 70 },
     ]],
-    ["BEAST AWAKENING", 14, "his hidden power bursts out: 40% harder hits and 2% heal a second for 4s.", [
+    ["BEAST AWAKENING", 14, "his hidden power bursts out: 40% harder hits and 0.8% heal a second for 4s.", [
       { do: "ring", radius: 60, look: "shock", color: "c0c0ff", dmg: 20 },
       { do: "buff", dur: 4, dmg: 1.4, regen: 0.02, color: "c0c0ff" },
     ]]),
@@ -869,7 +869,7 @@ const ROSTER = {
       { do: "ring", radius: 25, look: "shock", color: "ffe040" },
       { do: "lane", wait: 0.8, len: 300, width: 10, look: "bolt", color: "ffe040", dmg: 120 },
     ]],
-    ["REGENERATION", 14, "regrows his wounds: heals 30%.", [
+    ["REGENERATION", 14, "regrows his wounds: heals 12%.", [
       { do: "heal", pct: 0.3, color: "50c050" },
     ], 0.5]),
   garou: hero("fighter", "Hero Hunter", "Monster martial artist", 105, punch(30, 0.4), "Fast punches.",
@@ -884,7 +884,7 @@ const ROSTER = {
     ["CHERRY IMPACT", 8, "smashes the ground: everything around flies away.", [
       { do: "drop", at: "self", delay: 0.2, radius: 80, look: "fist", color: "ff80b0", dmg: 60, knock: 2.5 },
     ]],
-    ["MEDICAL PALM", 11, "heals herself and allies nearby 22%.", [
+    ["MEDICAL PALM", 11, "heals herself and allies nearby 8.8%.", [
       { do: "heal", pct: 0.22, radius: 110, color: "80ffa0" },
     ], 0.7]),
   jiraiya: hero("mage", "Toad Sage", "Legendary sage", 105, shoot(orb("ff8040"), 22), "Fire shots.",
@@ -930,7 +930,7 @@ const ROSTER = {
     ["DESTRUCTIVE DEATH", 6, "air punches fly out ahead.", [
       { do: "shots", n: 6, spread: 0.8, speed: 450, range: 160, shape: "orb", size: 4, color: "40a0ff", dmg: 15 },
     ]],
-    ["COMPASS NEEDLE", 13, "his fighting spirit compass: 3% heal a second and 25% faster blows for 5s.", [
+    ["COMPASS NEEDLE", 13, "his fighting spirit compass: 1.2% heal a second and 25% faster blows for 5s.", [
       { do: "ring", radius: 50, look: "shock", color: "60c0ff" },
       { do: "buff", dur: 5, regen: 0.03, atk: 0.75, color: "60c0ff" },
     ]]),
@@ -975,7 +975,7 @@ const ROSTER = {
       { do: "blink", to: "aim", range: 180, color: "202030" },
       { do: "ring", radius: 50, look: "burst", color: "202030", dmg: 35 },
     ]],
-    ["APPLE BINGE", 12, "eats apples: heals 20% and hits 30% harder for 3s.", [
+    ["APPLE BINGE", 12, "eats apples: heals 8% and hits 30% harder for 3s.", [
       { do: "heal", pct: 0.2, color: "ff2030" },
       { do: "buff", dur: 3, dmg: 1.3, color: "ff2030" },
     ]]),

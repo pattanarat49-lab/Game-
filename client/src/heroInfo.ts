@@ -1,4 +1,4 @@
-import { HEROES, HERO_CLASSES, HeroDef, SkillDef, heroClass, heroRatings } from "../../shared/game";
+import { DAMAGE_BALANCE, ENEMIES, FxStep, HERO_DAMAGE_SCALE, HERO_HIT_SCALE, HEROES, HERO_CLASSES, HeroDef, HeroId, SkillDef, heroClass, heroRatings } from "../../shared/game";
 import { heroPortrait } from "./heroArt";
 
 // A details popup for one hero: what its basic attack and both skills do (user request 2026-10-06).
@@ -29,13 +29,148 @@ function splitBlurb(hero: HeroDef): { basic: string; q: string; e: string } {
   return out;
 }
 
+
+// ------------------------------------------------------------------ the numbers
+
+/** A number for the popup: whole when big, one decimal when small. */
+const num = (v: number) => (Math.abs(v) >= 10 ? String(Math.round(v)) : String(Math.round(v * 10) / 10));
+
+/**
+ * The real numbers behind a skill, as they hit in game: damage after the hero's balance and HERO_DAMAGE_SCALE,
+ * % heals after HERO_HIT_SCALE (the same in every mode).
+ */
+function skillNumbers(id: string, hero: HeroDef, sk: SkillDef): string {
+  const bal = DAMAGE_BALANCE[id as HeroId] ?? 1;
+  const D = (v: number) => num(v * bal * HERO_DAMAGE_SCALE);
+  const H = (share: number) => `${num(share * 100 * HERO_HIT_SCALE)}%`;
+  const s = (v: number | undefined, d: number) => `${num(v ?? d)}s`;
+  const dmg = `Damage ${D(sk.damage)}`;
+  const n = sk.count;
+  switch (sk.kind) {
+    case "combo":
+      return comboNumbers(sk.steps ?? [], D, H);
+    case "smash": case "leap": case "palm": case "anvil": case "grab": case "dashkick": case "jab": case "kick": case "roar":
+      return `${dmg} · Stun ${s(sk.duration, 1)}`;
+    case "cross": case "storm": case "wave": case "fireball": case "domain": case "rush": case "bluelaser": case "lancecharge":
+    case "spinkick": case "purple": case "rubberpunch": case "yoyo":
+      return sk.kind === "rubberpunch" ? `${dmg} · Stun 1s` : sk.kind === "yoyo" ? `Yoyo damage ${D(sk.damage)} per hit` : dmg;
+    case "truck": return `${dmg} · Lands after ${s(sk.duration, 2)}`;
+    case "omnitrix": return `Alien for ${s(sk.duration, 10)}`;
+    case "eat": return `Heals ${H(sk.damage)} HP`;
+    case "diamond": return `Sword for ${s(sk.duration, 10)} · Damage ${D(hero.sword?.damage ?? 0)} per swing`;
+    case "build": return `TNT blast damage ${D(sk.damage)}`;
+    case "eyebeam": return `Damage ${D(sk.damage)} per second · Lasts ${s(sk.duration, 2.5)}`;
+    case "burst": return `3 shots · Damage ${D(sk.damage)} each`;
+    case "onepunch": return "Knocks out in one hit";
+    case "heal": return `Heals ${H(sk.damage)} HP`;
+    case "slashes": return `8 cuts · Damage ${D(sk.damage)} each`;
+    case "timestop": return `Lasts ${s(sk.duration, 4)}`;
+    case "hurricane": return `Damage ${D(sk.damage)} every 0.35s · Lasts ${s(sk.duration, 3.5)}`;
+    case "asgard": return `Foes lose ${num(sk.damage * 100 * bal * HERO_DAMAGE_SCALE)}% of max HP a second · Lasts ${s(sk.duration, 10)}`;
+    case "clone": return `Lasts ${s(sk.duration, 20)} · Up to 2`;
+    case "swap": return `Gun damage ${D(hero.gun?.damage ?? 0)} per shot`;
+    case "thunderdash": return `${dmg} · ${s(sk.duration, 2)} to dash again`;
+    case "seventh": return `${dmg} · Then ${D(sk.damage * 0.2)} every 0.5s for ${s(sk.duration, 3)}`;
+    case "chargeslash": case "charge": return `Damage ${D(sk.damage)} to ${D(sk.damage * 4)} (full charge)`;
+    case "chargeshot": return `${dmg} · Stun ${s(sk.duration, 1)}`;
+    case "reflect": return `Lasts ${s(sk.duration, 1)} · Shots fly back x${num(sk.damage)}`;
+    case "sprint": return `+${num(((sk.width ?? 1.5) - 1) * 100)}% speed · Lasts ${s(sk.duration, 4)}`;
+    case "shadowstep": return `${dmg} · ${s(sk.duration, 3)} to flash back`;
+    case "shuriken": case "knives": case "sparks": case "starfinger": case "missiles":
+      return `${n ?? 1} shots · Damage ${D(sk.damage)} each`;
+    case "shield": return `No damage for ${s(sk.duration, 2.5)}`;
+    case "shieldcharge": return `${dmg} · Full charge stuns ${s(sk.duration, 2)}`;
+    case "tree": return `Heals ${H(sk.damage)} HP a second per tree`;
+    case "leafstorm": return `${dmg} · +${num((sk.width ?? 0.35) * 100)}% per tree`;
+    case "empower": return `Next hit x${num(sk.damage)} · Stun ${s(sk.duration, 1.2)}`;
+    case "boost": return `Up to +${n ?? 3} shots`;
+    case "harden": return `-${num(sk.damage * 100)}% damage taken per stack · Up to ${n ?? 10}`;
+    case "petrify": return `Stun ${s(sk.duration, 3)}`;
+    case "error": return `Damage ${D(sk.damage)} per jump · Lasts ${s(sk.duration, 5)}`;
+    case "reap": return `${dmg} · Heals ${H(sk.width ?? 0.06)} per foe hit · Up to ${n ?? 5} souls`;
+    case "deathdoor": return `${dmg} · +${num((sk.width ?? 0.4) * 100)}% per soul · x2 under 35% HP`;
+    case "roots": case "whip": return `${dmg} · Root ${s(sk.duration, 2)}`;
+    case "gaia": return `Half damage taken · Heals ${H(sk.damage)} HP a second · Lasts ${s(sk.duration, 5)}`;
+    case "rage": return `x${num(sk.damage)} damage, faster swings · Takes +15% damage · Lasts ${s(sk.duration, 6)}`;
+    case "axethrow": return `Damage ${D(sk.damage)} going out and coming back`;
+    case "jackbox": return `${dmg} · Stun ${s(sk.duration, 1)} · Up to ${sk.max ?? 3}`;
+    case "switch": return `Confetti bomb damage ${D(sk.damage)}`;
+    case "wall": return `${n ?? 5} rocks · ${ENEMIES.rockwall.hp} HP each · Lasts ${s(sk.duration, 6)}`;
+    case "quake": return `Damage ${D(sk.damage)} every 0.4s · Slow · Lasts ${s(sk.duration, 2)}`;
+    case "meteor": return `${dmg} · Burns ${s(sk.duration, 3)}`;
+    case "flamedash": return `${dmg} · Fire ${D(sk.damage * 0.4)} every 0.5s for ${s(sk.duration, 3)}`;
+    case "iceprison": return `${dmg} · Frozen ${s(sk.duration, 1.8)}`;
+    case "blizzard": return `Damage ${D(sk.damage)} every 0.5s · Slow · Lasts ${s(sk.duration, 4)}`;
+    case "dive": return `${dmg} · Stun 1s · In the air ${s(sk.duration, 1)}`;
+    case "cyclone": return `${n ?? 3} spins · Damage ${D(sk.damage)} each`;
+    case "barrage": return `${n ?? 6} punches · Damage ${D(sk.damage)} each`;
+    case "titan": return `Giant for ${s(sk.duration, 10)} · Damage ${D(sk.damage)} per hit`;
+    case "gatling": return `${Math.round((sk.duration ?? 1) / 0.1)} hits · Damage ${D(sk.damage)} each`;
+    case "portal": return `Portals last ${s(sk.duration, 20)}`;
+    case "biglight": return `Bigger x1.8, half speed · Lasts ${s(sk.duration, 5)}`;
+    case "grapple": return `Range ${sk.radius}`;
+    case "trojan": return `${dmg} · Bursts after ${s(sk.duration, 10)}`;
+    case "sticky": return `${dmg} · Blows up after ${s(sk.duration, 0.8)}`;
+    case "totem": return `Heals ${H(sk.damage)} HP every 0.5s · Lasts ${s(sk.duration, 5)}`;
+    case "invis": case "doves": return `Lasts ${s(sk.duration, 2)}`;
+    case "bat": return `Heals ${num(sk.damage * 100)}% of damage dealt · Lasts ${s(sk.duration, 6)}`;
+    case "bike": return `x${num(sk.width ?? 2.2)} speed · Ram damage ${D(sk.damage)}, stun 1s · Lasts ${s(sk.duration, 4)}`;
+    case "excalibur": return `${n ?? 4} swords · Damage ${D(sk.damage)} per cut · Lasts ${s(sk.duration, 6)}`;
+    case "sacrifice": return `Both lose ${num(sk.damage * 100)}% of max HP`;
+    case "frost": return `${dmg} · Frozen ${s(sk.duration, 3)}`;
+    case "castle": return `${dmg} · Stun ${s(sk.duration, 1)}`;
+    case "summon": return `${n && n > 1 ? `${n} pets` : "Pet"} with ${num(sk.damage * 100)}% of his HP${sk.duration ? ` · Lasts ${s(sk.duration, 0)}` : ""}${sk.max && sk.max > 1 ? ` · Up to ${sk.max}` : ""}`;
+    case "card": return `Card 1-9 takes ${num(sk.damage * 100 * bal * HERO_DAMAGE_SCALE)}%-${num(sk.damage * 900 * bal * HERO_DAMAGE_SCALE)}% of max HP`;
+    case "revive": return `Lasts ${s(sk.duration, 5)}`;
+    case "immortal": return `No damage for ${s(sk.duration, 3)} · Heals ${H(sk.damage)} HP a second`;
+    case "latch": return `Drains ${D(sk.damage)} a second · Lasts ${s(sk.duration, 3)}`;
+    case "mitosis": return `Up to ${n ?? 16} copies`;
+    default:
+      return sk.damage >= 1 ? dmg : "";
+  }
+}
+
+function comboNumbers(steps: FxStep[], D: (v: number) => string, H: (v: number) => string): string {
+  const out: string[] = [];
+  for (const st of steps) {
+    const times = st.times && st.times > 1 ? ` x${st.times}` : "";
+    if (st.do === "buff") {
+      const b: string[] = [];
+      const pct = (v: number) => `${v > 0 ? "+" : ""}${num(v * 100)}%`;
+      if (st.dmg) b.push(`${pct(st.dmg - 1)} damage`);
+      if (st.speed) b.push(`${pct(st.speed - 1)} speed`);
+      if (st.atk) b.push(`${pct(1 / st.atk - 1)} attack speed`);
+      if (st.armor) b.push(`${pct(st.armor - 1)} damage taken`);
+      if (st.leech) b.push(`heals ${num(st.leech * 100)}% of damage dealt`);
+      if (st.regen) b.push(`heals ${H(st.regen)} a second`);
+      if (st.invuln) b.push("can't be hurt");
+      out.push(`${b.join(", ")} for ${num(st.dur)}s`);
+    } else if (st.do === "heal") out.push(`Heals ${H(st.pct)} HP`);
+    else if (st.do === "shield") out.push(`No damage for ${num(st.dur)}s`);
+    else if (st.do === "blink") continue;
+    else {
+      const b: string[] = [];
+      if (st.dmg) b.push(st.do === "shots" ? (st.n > 1 ? `${st.n} shots, damage ${D(st.dmg)} each` : `damage ${D(st.dmg)}`) : st.do === "field" ? `damage ${D(st.dmg)} every ${num(st.tick)}s` : `damage ${D(st.dmg)}`);
+      else if (st.do === "shots" && st.n > 1) b.push(`${st.n} shots`);
+      if (st.stun) b.push(`stun ${num(st.stun)}s`);
+      if (st.root) b.push(`root ${num(st.root)}s`);
+      if (st.slow) b.push(`slow ${num(st.slow)}s`);
+      if (st.do === "field" && st.heal) b.push(`heals ${H(st.heal)} every ${num(st.tick)}s`);
+      if (st.do === "field") b.push(`lasts ${num(st.life)}s`);
+      if (b.length) out.push(b.join(", ") + times);
+    }
+  }
+  return out.map((t) => t[0].toUpperCase() + t.slice(1)).join(" · ");
+}
+
 const esc = (t: string) => t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
-function skillBlock(key: string, sk: SkillDef | undefined, text: string) {
+function skillBlock(id: string, hero: HeroDef, key: string, sk: SkillDef | undefined, text: string) {
   if (!sk) return "";
+  const nums = skillNumbers(id, hero, sk);
   const t = sk.desc ?? text;
   const cap = t ? t[0].toUpperCase() + t.slice(1) : "";
-  return `<div class="hi-skill"><div class="hi-key">${key}</div><div><div class="hi-sname">${esc(sk.name)} <span class="hi-cd">CD ${sk.cooldown}s</span></div><div class="hi-text">${esc(cap) || "-"}</div></div></div>`;
+  return `<div class="hi-skill"><div class="hi-key">${key}</div><div><div class="hi-sname">${esc(sk.name)} <span class="hi-cd">CD ${sk.cooldown}s</span></div><div class="hi-text">${esc(cap) || "-"}</div>${nums ? `<div class="hi-num">${esc(nums)}</div>` : ""}</div></div>`;
 }
 
 let styled = false;
@@ -59,7 +194,7 @@ function addStyles() {
   .hi-sname { color: #ffd23f; }
   .hi-cd { color: #a0a0b0; font-size: 9px; margin-left: 6px; }
   .hi-text { color: #e8dde2; }
-  .hi-note { color: #a0a0b0; font-size: 8px; margin-top: 10px; }
+  .hi-num { color: #7fe0ff; margin-top: 2px; }
   .hi-close { position: absolute; top: 8px; right: 8px; background: #3a2418; color: #fff; border: 2px solid #ffd23f; font-family: inherit; font-size: 10px; padding: 4px 8px; cursor: pointer; }
   `;
   document.head.append(st);
@@ -92,10 +227,10 @@ export function showHeroInfo(id: string) {
     </div>
     <div class="hi-sec">BASIC ATTACK</div>
     <div class="hi-text">${esc(ATTACK_NAME[hero.attack] ?? hero.attack)}${ranged ? "" : hero.lineAttack ? " (straight kick)" : ""}. ${esc(parts.basic)}</div>
+    <div class="hi-num">Damage ${num(hero.damage * (DAMAGE_BALANCE[id as HeroId] ?? 1) * HERO_DAMAGE_SCALE)} per hit · ${num(1 / hero.attackCooldown)} hits a second</div>
     <div class="hi-sec">SKILLS</div>
-    ${skillBlock("Q", hero.skill, parts.q)}
-    ${skillBlock("E", hero.skill2, parts.e)}
-    <div class="hi-note">Against other heroes (PvP, Duel, Squad, Classic) damage and % heals are much lower than against monsters.</div>`;
+    ${skillBlock(id, hero, "Q", hero.skill, parts.q)}
+    ${skillBlock(id, hero, "E", hero.skill2, parts.e)}`;
   box.querySelector(".hi-pic")!.append(heroPortrait(id));
   back.append(box);
   const close = () => back.remove();
