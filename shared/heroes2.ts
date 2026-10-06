@@ -75,6 +75,9 @@ function hero(cls: HeroClass, name: string, role: string, maxHp: number, basic: 
   };
 }
 
+/** Queen's Bond's CURSED QUEEN: calls out the big curse (HP = this share of his max HP) for `duration`. */
+const RIKA_SKILL: SkillDef = { kind: "summon", name: "CURSED QUEEN", cooldown: 16, damage: 1, radius: 0, count: 1, duration: 10, pet: "rika" as SkillDef["pet"], desc: "calls out his giant curse queen for 10s: she follows him and smashes his foes with huge claws that knock them back." };
+
 const ROSTER = {
   // ---------------------------------------------------------------- sheet 1
   nagi: hero("carry", "Ball Prodigy", "Striker", 95, shoot("ball", 22, 0.55, 220), "Kicks footballs.",
@@ -467,7 +470,7 @@ const ROSTER = {
       { do: "ring", radius: 60, look: "shock", color: "ffd040" },
       { do: "buff", dur: 4, dmg: 1.5, speed: 1.2, armor: 0.8, color: "ffd040" },
     ]]),
-  hisoka: hero("assassin", "Bungee Clown", "Magician", 95, shoot(star("ff60c0"), 22), "Throwing cards.",
+  hisoka: hero("assassin", "Bungee Clown", "Magician", 95, blade(26, 0.4, 28, 1.8), "Card-edge slashes up close.",
     ["ELASTIC LOVE", 7, "sticky gum snaps the nearest foe to him and stuns it.", [
       { do: "lock", range: 240, look: "chain", color: "ff60c0", dmg: 25, stun: 0.4, knock: -2 },
     ]],
@@ -953,13 +956,13 @@ const ROSTER = {
       { do: "buff", dur: 4, speed: 1.4, dmg: 1.2, color: "404040" },
     ]]),
   yuta: hero("carry", "Queen's Bond", "Special grade", 100, blade(28, 0.5), "Katana cuts.",
-    ["CURSED QUEEN", 8, "his curse queen's hand smashes the nearest foe away.", [
-      { do: "drop", at: "target", delay: 0.5, radius: 55, look: "fist", color: "e0e0f0", dmg: 70, knock: 2 },
+    ["CURSED QUEEN", 16, "calls out his giant curse queen for 10s: she follows him and smashes his foes with huge claws that knock them back.", [
+      { do: "ring", radius: 50, look: "shock", color: "e0e0f0" },
     ]],
     ["PURE LOVE", 14, "gathers love, then a huge beam of cursed energy.", [
       { do: "ring", radius: 35, look: "shock", color: "b0a0ff" },
       { do: "lane", wait: 0.6, len: 280, width: 40, look: "beam", color: "b0a0ff", dmg: 110 },
-    ]]),
+    ]], { skill: RIKA_SKILL }),
   maki: hero("fighter", "Cursed Tool Master", "Weapon expert", 105, blade(30, 0.45, 40, 1.4), "Polearm swings.",
     ["PLAYFUL CLOUD", 8, "three wide staff swings.", [
       { do: "cone", times: 3, gap: 0.15, range: 70, arc: 2.4, color: "c0c0a0", dmg: 25, knock: 1 },
@@ -1032,7 +1035,7 @@ const TUNED: Record<string, [bal: number, win: number, stars: number]> = {
   hancock: [2.03, 51.5, 4],
   hijikata: [2.21, 50.5, 4],
   hinata: [4.83, 50.0, 4],
-  hisoka: [3.69, 50.0, 4],
+  hisoka: [3.42, 51.0, 4],
   ichigo: [1.63, 49.5, 3],
   inosuke: [2.66, 49.0, 3],
   itachi: [3.0, 48.5, 3],
@@ -1101,7 +1104,7 @@ const TUNED: Record<string, [bal: number, win: number, stars: number]> = {
   yami: [1.85, 49.5, 3],
   yuji: [3.73, 49.0, 3],
   yuno: [2.94, 52.0, 4],
-  yuta: [2.69, 50.0, 4],
+  yuta: [1.78, 51.0, 4],
   zoro: [2.12, 50.5, 4],
 };
 
@@ -1110,8 +1113,32 @@ for (const [id, e] of Object.entries(ROSTER)) {
   if (t) [e.bal, e.win, e.def.stars] = t;
 }
 
-export type NewHeroId = keyof typeof ROSTER;
-export const NEW_HEROES: Record<NewHeroId, Entry> = ROSTER;
+/** Helpers the new heroes call out (not pickable). */
+const SUMMONS = {
+  // CURSED QUEEN: Queen's Bond's giant curse; HP is a share of his max HP (the skill's damage).
+  rika: {
+    name: "Cursed Queen",
+    role: "Summon",
+    blurb: "",
+    stars: 1,
+    summon: true,
+    maxHp: 1,
+    speed: 105,
+    attack: "punch",
+    attackCooldown: 0.8,
+    damage: 45,
+    range: 34,
+    arc: 2.2,
+    aoe: 0,
+    shotSpeed: 0,
+    pierce: 0,
+    knock: 2,
+    skill: { kind: "passive", name: "", cooldown: 1, damage: 0, radius: 0 },
+  },
+} satisfies Record<string, HeroDef>;
+
+export type NewHeroId = keyof typeof ROSTER | keyof typeof SUMMONS;
+export const NEW_HEROES: Record<keyof typeof ROSTER, Entry> = ROSTER;
 export function newHeroDefs(): Record<NewHeroId, HeroDef> {
-  return Object.fromEntries(Object.entries(ROSTER).map(([id, e]) => [id, e.def])) as Record<NewHeroId, HeroDef>;
+  return { ...Object.fromEntries(Object.entries(ROSTER).map(([id, e]) => [id, e.def])), ...SUMMONS } as Record<NewHeroId, HeroDef>;
 }
