@@ -8,7 +8,8 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="theme-color" content="#120b0f" />
     <link rel="manifest" href="/manifest.webmanifest" />
-    <link rel="apple-touch-icon" href="/icon.png" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="icon" type="image/png" href="/favicon.png" />
     <title>Untitled Versus</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet" />
@@ -352,6 +353,13 @@
           transform: rotate(90deg);
         }
       }
+      #cover {
+        display: block;
+        margin: 0 auto -4px;
+        width: 110px;
+        height: 110px;
+        image-rendering: auto;
+      }
       #error {
         color: #ff6a5a;
         min-height: 1em;
@@ -361,6 +369,7 @@
   <body>
     <div id="game"></div>
     <div id="menu">
+      <img id="cover" alt="" width="110" height="110" />
       <h1>UNTITLED VERSUS</h1>
       <p id="intro">The multiverse is collapsing. Pick a stage and a hero.</p>
       <p class="step">CHOOSE A STAGE</p>

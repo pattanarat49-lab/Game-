@@ -1,10 +1,13 @@
 {
-  "name": "Riftborn",
-  "short_name": "Riftborn",
+  "name": "Untitled Versus",
+  "short_name": "Untitled Versus",
   "start_url": "/",
   "display": "fullscreen",
   "orientation": "landscape",
   "background_color": "#120b0f",
   "theme_color": "#120b0f",
-  "icons": [{ "src": "/icon.png", "sizes": "192x192", "type": "image/png" }]
+  "icons": [
+    { "src": "/icon.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
 }

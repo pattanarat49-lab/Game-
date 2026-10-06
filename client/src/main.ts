@@ -7,6 +7,9 @@ import { HEROES, HERO_CLASSES, HERO_IDS, HeroId, STAGES, STAGE_IDS, StageId, her
 import { GODZILLA, KINGKONG, SWORD_GOD, HERO_SPRITES, WARDEN, renderPixelSprite } from "./art";
 import { heroPortrait } from "./heroArt";
 import { showHeroInfo } from "./heroInfo";
+import { COVER_PNG } from "./cover.data";
+
+(document.getElementById("cover") as HTMLImageElement | null)?.setAttribute("src", COVER_PNG);
 
 const menu = document.getElementById("menu")!;
 const form = document.getElementById("join-form") as HTMLFormElement;
