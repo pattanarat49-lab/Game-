@@ -65,7 +65,7 @@ import { TutorialView } from "../tutorial";
 import { isTouchDevice } from "../touch";
 import { DUNGEON, OPEN_WORLD } from "../../../shared/world";
 import { BLOCK } from "../../../shared/maps";
-import { attackArtLayout, attackFrame, facingOf, frontOnly, hasHeroArt, heroArtLayout, SWING_TIME, WALK_FRAMES, WALK_FRAME_TIME, WALK_HEROES, walkHop } from "../heroArt";
+import { attackArtLayout, attackFrame, facingOf, frontOnly, hasHeroArt, heroArtLayout, SWING_TIME, WALK_FRAMES, WALK_FRAME_TIME, WALK_HEROES, walkContact, walkOriginY } from "../heroArt";
 
 interface PlayerView {
   body: Phaser.GameObjects.Image;
@@ -94,6 +94,7 @@ interface PlayerView {
   walkY?: number;
   walkT?: number; // time spent walking (picks the walk frame)
   walkStill?: number; // time standing still since the last step
+  walkFrame?: number; // the walk pose shown last frame (a new contact pose kicks up dust)
   swing?: number; // seconds left of a hand-made basic-attack swing animation
 }
 
@@ -260,6 +261,7 @@ export class GameScene extends Phaser.Scene {
   private lavaDrawnRadius = -1;
   private lavaFrame = 0;
   private sparks!: Phaser.GameObjects.Particles.ParticleEmitter;
+  private walkShadows?: Phaser.GameObjects.Graphics; // ground shadows under walking heroes (they hop)
   private keys!: Record<string, Phaser.Input.Keyboard.Key>;
   private predicted = { x: CENTER_X, y: CENTER_Y };
   private warp = -1;
@@ -340,6 +342,7 @@ export class GameScene extends Phaser.Scene {
     this.sparks.setDepth(50);
     this.fx = this.add.graphics().setDepth(950);
     this.aimGuide = this.add.graphics().setDepth(-1);
+    this.walkShadows = this.add.graphics().setDepth(-0.5);
     this.formIcons = [];
     this.beams = this.add.graphics().setDepth(940);
     this.zoneFloor = this.add.graphics().setDepth(-3);
@@ -480,6 +483,7 @@ export class GameScene extends Phaser.Scene {
     const dt = Math.min(deltaMs, 100) / 1000;
     const state = room.state;
     if (room instanceof LocalRoom) room.step(dt);
+    this.walkShadows?.clear();
     if (this.classicGround) {
       // The map picked on the select screen.
       const key = this.classicTexture(state.map ?? 0);
@@ -887,6 +891,7 @@ export class GameScene extends Phaser.Scene {
       } else if ((view.walkStill = (view.walkStill ?? 0) + dt) > 0.1) view.walkT = 0; // a missed frame is not a stop
       const walking = art && !swing && WALK_HEROES.has(shown) && (view.walkT ?? 0) > 0;
       const walkFrame = walking ? Math.floor((view.walkT ?? 0) / WALK_FRAME_TIME) % WALK_FRAMES : 0;
+      if (!walking) view.walkFrame = undefined;
       const texture = swing ? swing.texture : walking ? `hero_${shown}_walk_${walkFrame}` : art ? `${look}_${facingOf(aim, shown)}` : look;
       if (art) body.setFlipX(swing ? swing.flip : frontOnly(shown) && Math.cos(aim) < 0);
       if (disguised) view.weapon?.setVisible(false);
@@ -894,12 +899,30 @@ export class GameScene extends Phaser.Scene {
       body.setScale(k * artScale * (titanNow && !humanized ? 2.6 : humanized ? 1 : SUMMON_SCALE[p.hero] ?? 1));
       if (body.texture.key !== texture) {
         body.setTexture(texture);
-        body.setOrigin(0.5, layout ? layout.originY : 0.85);
+        body.setOrigin(0.5, walking ? walkOriginY(shown) : layout ? layout.originY : 0.85);
       }
       if (walking) {
-        // A low hop on each step: up one picture pixel while a foot is in the air.
-        body.y -= walkHop(walkFrame) * k * artScale;
+        // A low hop with every step. Each step is two poses: the foot lands (contact), then the other knee
+        // passes. The hero lands at the start of the contact pose, squashes a little, springs off the
+        // ground late in it and is highest in the middle of the passing pose. The shadow stays on the ground.
+        const px = k * artScale; // screen pixels per picture pixel
+        const phase = ((view.walkT ?? 0) / (2 * WALK_FRAME_TIME)) % 1;
+        const air = phase < 0.4 ? 0 : Math.sin((Math.PI * (phase - 0.4)) / 0.6);
+        const land = phase < 0.2 ? 1 - phase / 0.2 : 0;
+        const feetY = body.y;
+        body.y -= air * 2 * px;
+        body.setScale(body.scaleX * (1 + 0.06 * land - 0.02 * air), body.scaleY * (1 - 0.08 * land + 0.04 * air));
         body.setRotation(0);
+        if (body.alpha > 0.5) {
+          const sw = body.width * Math.abs(body.scaleX) * 0.32 * (1 - 0.15 * air);
+          this.walkShadows?.fillStyle(0x000000, 0.22 - 0.06 * air).fillEllipse(body.x, feetY - px, sw * 2, sw * 0.55);
+        }
+        // A puff of dust where the foot lands.
+        if (walkFrame !== view.walkFrame && walkContact(walkFrame) && body.alpha > 0.5) {
+          const side = (walkFrame === 0 ? -1 : 1) * (body.flipX ? -1 : 1);
+          this.walkDust(body.x + side * 4 * px, feetY - px, px);
+        }
+        view.walkFrame = walkFrame;
       } else if (art) {
         // Walking: a little step bounce and sway while the hero moves.
         const step = this.time.now / 85;
@@ -2149,6 +2172,14 @@ export class GameScene extends Phaser.Scene {
   }
 
   /** The normal dash: a burst left where the dash began, its point along `angle` and its trail behind. */
+  /** A small puff of dust kicked up by a foot landing. */
+  private walkDust(x: number, y: number, px: number) {
+    for (const dx of [-1, 1]) {
+      const puff = this.add.circle(x + dx * px, y, px * 1.2, 0xe8e0d0, 0.7).setDepth(y - 0.2);
+      this.tweens.add({ targets: puff, x: puff.x + dx * px * 3, y: y - px * 2, scale: 1.8, alpha: 0, duration: 320, ease: "Quad.easeOut", onComplete: () => puff.destroy() });
+    }
+  }
+
   private playDashBurst(x: number, y: number, angle: number) {
     // The frames point left with the burst's front at (5, 38); turn them half round to point along the dash.
     this.playFrames("dashburst", 11, 45, x, y, angle + Math.PI, 5 / 100, 38 / 75, 0.55, Math.cos(angle) > 0);
