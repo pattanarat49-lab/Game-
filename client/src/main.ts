@@ -308,44 +308,55 @@ function localStorageSet(key: string, value: string) {
   }
 }
 
-// ---- Accounts: sign up / sign in with a username and a password (online builds only). ----
+// ---- Accounts (online builds): sign in before the menu, or create a new account. ----
 const accountBar = document.getElementById("account-bar")!;
 const accountModal = document.getElementById("account-modal")!;
 const accountForm = document.getElementById("account-form") as HTMLFormElement;
 const accUser = document.getElementById("acc-user") as HTMLInputElement;
 const accPass = document.getElementById("acc-pass") as HTMLInputElement;
+const accPass2 = document.getElementById("acc-pass2") as HTMLInputElement;
 const accError = document.getElementById("acc-error")!;
+const accGo = document.getElementById("acc-go")!;
+let signupMode = false;
 
-function drawAccountBar() {
+function setSignupMode(on: boolean) {
+  signupMode = on;
+  accountForm.classList.toggle("signup", on);
+  document.getElementById("acc-title")!.textContent = on ? "CREATE NEW ACCOUNT" : "SIGN IN";
+  accGo.textContent = on ? "CREATE ACCOUNT & PLAY" : "SIGN IN";
+  accPass2.style.display = on ? "" : "none";
+  accPass.autocomplete = on ? "new-password" : "current-password";
+  document.getElementById("acc-switch-text")!.textContent = on ? "Already have an account?" : "No account yet?";
+  document.getElementById("acc-switch")!.textContent = on ? "BACK TO SIGN IN" : "CREATE NEW ACCOUNT";
+  accError.textContent = "";
+  accPass2.value = "";
+}
+
+/** Signed out: the sign-in screen covers the menu. Signed in: the menu, with the name and LOG OUT. */
+function drawAccount() {
   const a = currentAccount();
+  accountModal.classList.toggle("hidden", !!a);
   accountBar.innerHTML = "";
-  if (a) {
-    accountBar.append("Signed in as ");
-    const b = document.createElement("b");
-    b.textContent = a.username;
-    accountBar.append(b);
-    const out = document.createElement("button");
-    out.type = "button";
-    out.id = "acc-logout";
-    out.textContent = "LOG OUT";
-    out.addEventListener("click", () => void signOut());
-    accountBar.append(out);
-  } else {
-    accountBar.append("Playing as a guest");
-    const open = document.createElement("button");
-    open.type = "button";
-    open.id = "acc-open";
-    open.className = "main";
-    open.textContent = "SIGN IN / SIGN UP";
-    open.addEventListener("click", () => {
-      accError.textContent = "";
-      accountModal.classList.remove("hidden");
-      accUser.focus();
-    });
-    accountBar.append(open);
-  }
-  // Signed in, the account's name is the player's name.
   nameInput.style.display = a ? "none" : "";
+  if (!a) {
+    setTimeout(() => accUser.focus(), 0);
+    return;
+  }
+  accountBar.append("Signed in as ");
+  const b = document.createElement("b");
+  b.textContent = a.username;
+  accountBar.append(b);
+  const out = document.createElement("button");
+  out.type = "button";
+  out.id = "acc-logout";
+  out.textContent = "LOG OUT";
+  out.addEventListener("click", () => {
+    accUser.value = a.username;
+    accPass.value = "";
+    setSignupMode(false);
+    void signOut();
+  });
+  accountBar.append(out);
 }
 
 /** The account's saved picks become the menu's picks. */
@@ -370,33 +381,38 @@ function applyPrefs() {
 
 if (soloOnly) {
   accountBar.remove(); // the solo build has no server to keep accounts on
+  accountModal.remove();
 } else {
-  drawAccountBar();
+  (document.getElementById("acc-cover") as HTMLImageElement).src = COVER_PNG;
+  setSignupMode(false);
+  drawAccount();
   onAccountChange(() => {
-    drawAccountBar();
+    drawAccount();
     applyPrefs();
   });
   void restoreSession();
-  document.getElementById("acc-close")!.addEventListener("click", () => accountModal.classList.add("hidden"));
-  accountModal.addEventListener("click", (e) => e.target === accountModal && accountModal.classList.add("hidden"));
+  document.getElementById("acc-switch")!.addEventListener("click", () => setSignupMode(!signupMode));
   accountForm.addEventListener("submit", async (event) => {
     event.preventDefault();
-    const signup = ((event as SubmitEvent).submitter as HTMLButtonElement | null)?.id === "acc-signup";
     const user = accUser.value.trim();
     const pass = accPass.value;
     if (!user || !pass) {
       accError.textContent = "Type a username and a password";
       return;
     }
-    accError.textContent = signup ? "Creating account..." : "Signing in...";
+    if (signupMode && pass !== accPass2.value) {
+      accError.textContent = "The passwords don't match";
+      return;
+    }
+    accError.textContent = signupMode ? "Creating account..." : "Signing in...";
     try {
       // A new account starts with this device's record and picks.
-      if (signup) await signUp(user, pass, { stats: deviceStats(), prefs: { hero: selectedHero, stage: selectedStage, bot: selectedBot } });
+      if (signupMode) await signUp(user, pass, { stats: deviceStats(), prefs: { hero: selectedHero, stage: selectedStage, bot: selectedBot } });
       else await signIn(user, pass);
-      accPass.value = "";
-      accountModal.classList.add("hidden");
+      accPass.value = accPass2.value = "";
+      accError.textContent = "";
     } catch (e) {
-      accError.textContent = (e as Error).message === "Failed to fetch" ? "Can't reach the server" : (e as Error).message;
+      accError.textContent = (e as Error).message === "Failed to fetch" ? "Can't reach the server. Try again in a moment." : (e as Error).message;
     }
   });
 }
