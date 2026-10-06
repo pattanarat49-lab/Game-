@@ -5,7 +5,7 @@ import { SERVER_PORT } from "../../shared/game";
 
 export interface AccountData {
   stats?: unknown;
-  prefs?: { hero?: string; stage?: string; bot?: string };
+  prefs?: { hero?: string; stage?: string; bot?: string; fav?: string };
   tutorial?: boolean; // the tutorial was played (or skipped)
   owned?: string[]; // heroes unlocked (the server's to change)
   spins?: number; // slot spins waiting (the server's to change)

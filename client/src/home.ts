@@ -1,0 +1,321 @@
+// The home screen (2026-10-06): the user's sky-island picture with the favourite hero on a pedestal,
+// the profile box, and OPEN WORLD / START GAME / CHARACTER. START GAME opens the mode list (every mode
+// then picks heroes on the PvP-style select screen); CHARACTER opens the hero gallery by class, where
+// one hero can be made the favourite.
+
+import { HEROES, HERO_CLASSES, HERO_IDS, HeroId, StageId, heroClass } from "../../shared/game";
+import { heroPortrait, paintPortrait } from "./heroArt";
+import { showHeroInfo } from "./heroInfo";
+
+export interface HomeActions {
+  online: boolean; // false in the solo build: no online modes, no account
+  name(): string;
+  fav(): HeroId;
+  setFav(id: HeroId): void;
+  locked(id: string): boolean;
+  owned(): number; // heroes the player has (all of them when nothing is locked)
+  spins(): number;
+  openSlot(): void;
+  openWorld(): void;
+  play(stage: StageId, solo: boolean, code: string): void;
+  logout?(): void;
+  rename?(): void;
+}
+
+const W = 1850;
+const H = 850;
+
+const CSS = `
+#home-stage { position: absolute; left: 0; top: 0; width: ${W}px; height: ${H}px; transform-origin: 0 0; }
+#home-stage > img.bg { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; image-rendering: auto; }
+#menu { padding: 0 !important; overflow: hidden !important; background: #6ab4e8 !important; display: block !important; }
+#menu.hidden { display: none !important; }
+#menu::before { content: ""; position: absolute; inset: -20px; background: url(/home-bg.jpg) center / cover; filter: blur(12px); }
+.hm-hit { position: absolute; border-radius: 14px; cursor: pointer; background: transparent; border: 0; padding: 0; transition: box-shadow .15s, transform .1s; }
+.hm-hit:hover { box-shadow: 0 0 0 4px rgba(255, 230, 120, 0.7), 0 0 30px rgba(255, 220, 100, 0.6); }
+.hm-hit:active { transform: scale(0.97); }
+#hm-pic { position: absolute; left: 60px; top: 26px; width: 90px; height: 86px; display: flex; align-items: flex-end; justify-content: center; overflow: hidden;
+  background: radial-gradient(circle at 50% 40%, #f0a040, #b8401e 70%); }
+#hm-pic canvas { height: 118%; image-rendering: pixelated; margin-bottom: -4px; }
+#hm-name { position: absolute; left: 172px; top: 48px; width: 225px; font-size: 22px; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: left; text-shadow: 0 3px 0 #000; }
+#hm-profile { left: 42px; top: 18px; width: 408px; height: 110px; }
+#hm-spin { position: absolute; left: 60px; top: 136px; font: inherit; font-size: 18px; padding: 10px 16px; color: #1a1220; background: #ffd23f; border: 4px solid #8a5a12; border-radius: 8px; cursor: pointer;
+  box-shadow: 0 5px 0 #8a5a12; animation: hm-glow 1s ease-in-out infinite alternate; }
+@keyframes hm-glow { to { box-shadow: 0 5px 0 #8a5a12, 0 0 24px #ffe066; } }
+#hm-drop { position: absolute; left: 160px; top: 132px; display: none; flex-direction: column; gap: 8px; padding: 12px; background: #141a30; border: 4px solid #4a5a8a; border-radius: 8px; z-index: 2; }
+#hm-drop.show { display: flex; }
+#hm-drop button { font: inherit; font-size: 16px; padding: 12px 18px; color: #fff; background: #2a3458; border: 3px solid #5a6aa0; border-radius: 6px; cursor: pointer; text-align: left; }
+#hm-drop button:hover { background: #3a4878; }
+#hm-ped { position: absolute; left: 832px; top: 520px; width: 164px; height: 46px; border-radius: 50%;
+  background: radial-gradient(ellipse at 50% 40%, #e8e2d0 0 40%, #b8b0a0 55%, #7a7468 70%, #5a5448 100%);
+  box-shadow: 0 6px 0 #4a443a, 0 0 0 4px #c9932e, 0 0 30px 6px rgba(255, 220, 120, 0.55); }
+#hm-ped::after { content: ""; position: absolute; inset: 8px 22px; border-radius: 50%; border: 3px solid rgba(255, 210, 90, 0.8); }
+#hm-hero { position: absolute; left: 834px; top: 352px; width: 160px; height: 180px; display: flex; align-items: flex-end; justify-content: center; pointer-events: none;
+  animation: hm-bob 2.4s ease-in-out infinite; }
+#hm-hero canvas { height: 100%; image-rendering: pixelated; filter: drop-shadow(0 4px 0 rgba(0,0,0,0.25)); }
+@keyframes hm-bob { 50% { transform: translateY(-6px); } }
+#hm-heroname { position: absolute; left: 712px; top: 572px; width: 400px; text-align: center; font-size: 20px; color: #fff; text-shadow: 0 2px 0 #000, 0 0 6px #000; pointer-events: none; }
+#home-error { position: absolute; left: 0; right: 0; bottom: 30px; text-align: center; color: #ff6a5a; font-size: 18px; text-shadow: 0 2px 0 #000; pointer-events: none; }
+
+.hm-screen { position: fixed; inset: 0; z-index: 15; display: flex; flex-direction: column; align-items: center; overflow-y: auto; padding: 14px; box-sizing: border-box; gap: 12px;
+  background: linear-gradient(rgba(10, 16, 40, 0.86), rgba(10, 16, 40, 0.94)), url(/home-bg.jpg) center / cover; color: #fff; font-family: "Press Start 2P", monospace; }
+.hm-top { width: min(100%, 1100px); display: flex; align-items: center; gap: 10px; }
+.hm-top h2 { flex: 1; margin: 0; font-size: clamp(14px, 2.6vw, 24px); color: #ffd23f; font-weight: normal; text-shadow: 0 3px 0 #8a5a12; text-align: center; }
+.hm-back { font: inherit; font-size: 11px; padding: 9px 12px; color: #fff; background: #2a3458; border: 3px solid #5a6aa0; border-radius: 6px; cursor: pointer; }
+.hm-gold { font: inherit; font-size: 11px; padding: 9px 12px; color: #1a1220; background: #ffd23f; border: 3px solid #8a5a12; border-radius: 6px; cursor: pointer; }
+.hm-modes { width: min(100%, 1100px); display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 12px; }
+.hm-mode { background: #141a30; border: 4px solid #4a5a8a; border-radius: 10px; padding: 14px; display: flex; flex-direction: column; gap: 10px; text-align: left; }
+.hm-mode h3 { margin: 0; font-size: 14px; color: #ffd23f; font-weight: normal; }
+.hm-mode p { margin: 0; font-size: 9px; line-height: 1.7; color: #c8cce0; flex: 1; }
+.hm-mode .tag { font-size: 8px; color: #8ad8ff; }
+.hm-mode .btns { display: flex; gap: 8px; flex-wrap: wrap; }
+.hm-mode button { flex: 1; font: inherit; font-size: 11px; padding: 11px 8px; border-radius: 6px; cursor: pointer; color: #fff; }
+.hm-mode button.solo { background: #2fae6a; border: 3px solid #1d7a48; }
+.hm-mode button.online { background: #3a6ad8; border: 3px solid #1b3a9a; }
+.hm-room { display: flex; gap: 8px; align-items: center; font-size: 9px; color: #c8cce0; }
+.hm-room input { font: inherit; font-size: 11px; width: 130px; padding: 8px; background: #0a0f22; color: #fff; border: 2px solid #4a5a8a; border-radius: 4px; }
+.hm-tabs { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; }
+.hm-tabs button { font: inherit; font-size: 9px; padding: 7px 10px; color: #fff; background: #1a2240; border: 2px solid var(--c, #5a6aa0); border-radius: 4px; cursor: pointer; }
+.hm-tabs button.on { background: var(--c, #5a6aa0); color: #10142a; }
+.hm-grid { width: min(100%, 1100px); display: grid; grid-template-columns: repeat(auto-fill, minmax(86px, 1fr)); gap: 8px; }
+.hm-card { position: relative; background: #141a30; border: 3px solid #2e3a60; border-radius: 8px; padding: 6px 4px 5px; cursor: pointer; color: #fff; font: inherit; }
+.hm-card:hover { border-color: #8ab4ff; }
+.hm-card canvas { width: 72%; image-rendering: pixelated; display: block; margin: 0 auto 4px; }
+.hm-card .n { font-size: 7px; line-height: 1.4; min-height: 2.8em; }
+.hm-card .c { position: absolute; left: 4px; top: 4px; width: 8px; height: 8px; border-radius: 2px; }
+.hm-card.locked canvas { filter: grayscale(1) brightness(0.45); }
+.hm-card.locked::after { content: "LOCKED"; position: absolute; left: 50%; top: 38%; transform: translate(-50%, -50%); font-size: 7px; color: #ffd23f; background: rgba(0,0,0,0.75); padding: 2px 4px; }
+.hm-card.fav { border-color: #e8487a; box-shadow: 0 0 10px rgba(232, 72, 122, 0.6); }
+.hm-card.fav::before { content: "\\2665"; position: absolute; right: 5px; top: 2px; color: #ff5a8a; font-size: 12px; }
+.hm-count { font-size: 9px; color: #c8cce0; }
+`;
+
+export class Home {
+  private stage: HTMLDivElement;
+  private pic: HTMLDivElement;
+  private nameEl: HTMLDivElement;
+  private heroEl: HTMLDivElement;
+  private heroName: HTMLDivElement;
+  private spinBtn: HTMLButtonElement;
+  private drop: HTMLDivElement;
+  readonly error: HTMLDivElement;
+  private shownFav = "";
+
+  constructor(private root: HTMLElement, private act: HomeActions) {
+    if (!document.getElementById("home-css")) {
+      const style = document.createElement("style");
+      style.id = "home-css";
+      style.textContent = CSS;
+      document.head.append(style);
+    }
+    root.innerHTML = "";
+    const stage = document.createElement("div");
+    stage.id = "home-stage";
+    stage.innerHTML = `
+      <img class="bg" src="/home-bg.jpg" alt="" />
+      <div id="hm-ped"></div>
+      <div id="hm-hero"></div>
+      <div id="hm-heroname"></div>
+      <div id="hm-pic"></div>
+      <div id="hm-name"></div>
+      <button type="button" class="hm-hit" id="hm-profile" aria-label="Profile"></button>
+      <button type="button" class="hm-hit" id="hm-world" aria-label="Open World" style="left:455px;top:637px;width:238px;height:125px"></button>
+      <button type="button" class="hm-hit" id="hm-start" aria-label="Start game" style="left:712px;top:632px;width:425px;height:125px"></button>
+      <button type="button" class="hm-hit" id="hm-char" aria-label="Characters" style="left:1158px;top:637px;width:240px;height:125px"></button>
+      <button type="button" id="hm-spin"></button>
+      <div id="hm-drop"></div>
+      <div id="home-error"></div>`;
+    root.append(stage);
+    this.stage = stage;
+    this.pic = stage.querySelector("#hm-pic")!;
+    this.nameEl = stage.querySelector("#hm-name")!;
+    this.heroEl = stage.querySelector("#hm-hero")!;
+    this.heroName = stage.querySelector("#hm-heroname")!;
+    this.spinBtn = stage.querySelector("#hm-spin")!;
+    this.drop = stage.querySelector("#hm-drop")!;
+    this.error = stage.querySelector("#home-error")!;
+
+    stage.querySelector("#hm-world")!.addEventListener("click", () => act.openWorld());
+    stage.querySelector("#hm-start")!.addEventListener("click", () => this.showModes());
+    stage.querySelector("#hm-char")!.addEventListener("click", () => this.showCharacters());
+    this.spinBtn.addEventListener("click", () => act.openSlot());
+    stage.querySelector("#hm-profile")!.addEventListener("click", (e) => {
+      e.stopPropagation();
+      this.drop.classList.toggle("show");
+    });
+    root.addEventListener("click", () => this.drop.classList.remove("show"));
+
+    const fit = () => {
+      const w = innerWidth;
+      const h = innerHeight;
+      // Fill the screen, but keep the profile box and the three buttons in view.
+      const s = Math.min(Math.max(w / W, h / H), w / 1390, h / 770);
+      const vw = w / s;
+      const vh = h / s;
+      let left = (W - vw) / 2;
+      if (vw < W) left = Math.min(Math.max(Math.min(left, 36), 1408 - vw, 0), W - vw);
+      let up = (H - vh) / 2;
+      if (vh < H) up = Math.min(Math.max(Math.min(up, 12), 772 - vh, 0), H - vh);
+      stage.style.transform = `scale(${s}) translate(${-left}px, ${-up}px)`;
+    };
+    fit();
+    addEventListener("resize", fit);
+    this.refresh();
+  }
+
+  /** Name, favourite hero, spins: redrawn whenever they may have changed. */
+  refresh() {
+    this.nameEl.textContent = this.act.name();
+    const fav = this.act.fav();
+    if (fav !== this.shownFav) {
+      this.shownFav = fav;
+      this.pic.innerHTML = "";
+      this.pic.append(heroPortrait(fav));
+      const big = document.createElement("canvas");
+      paintPortrait(big, fav);
+      this.heroEl.innerHTML = "";
+      this.heroEl.append(big);
+      this.heroName.textContent = HEROES[fav]?.name ?? "";
+    }
+    const spins = this.act.spins();
+    this.spinBtn.style.display = this.act.online && spins > 0 ? "" : "none";
+    this.spinBtn.textContent = `SPIN x${spins}`;
+    // The profile menu.
+    this.drop.innerHTML = "";
+    const item = (label: string, f: () => void) => {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.textContent = label;
+      b.addEventListener("click", () => {
+        this.drop.classList.remove("show");
+        f();
+      });
+      this.drop.append(b);
+    };
+    if (this.act.online) item(`HERO SLOT (${spins} spin${spins === 1 ? "" : "s"})`, () => this.act.openSlot());
+    if (this.act.rename) item("CHANGE NAME", () => this.act.rename!());
+    if (this.act.logout) item("LOG OUT", () => this.act.logout!());
+  }
+
+  private screen(title: string): { el: HTMLDivElement; close: () => void } {
+    const el = document.createElement("div");
+    el.className = "hm-screen";
+    el.innerHTML = `<div class="hm-top"><button type="button" class="hm-back">&#9664; BACK</button><h2>${title}</h2></div>`;
+    const close = () => el.remove();
+    el.querySelector(".hm-back")!.addEventListener("click", close);
+    document.body.append(el);
+    return { el, close };
+  }
+
+  /** START GAME: pick a mode (then heroes are picked on the select screen in the game). */
+  showModes() {
+    const { el, close } = this.screen("CHOOSE A MODE");
+    const online = this.act.online;
+    const modes: { title: string; tag: string; text: string; solo?: StageId; online?: StageId }[] = [
+      { title: "PvP ARENA", tag: "1 VS 1 · ONLINE", text: "Fight another player in the boxing ring. First to 3 knockouts wins.", online: "pvp" },
+      { title: "BOT DUEL", tag: "1 VS BOT", text: "Fight a bot 1 on 1. Pick its hero and how hard it is. First to 3 knockouts wins.", solo: "pve" },
+      { title: "PvE SQUAD", tag: "UP TO 4 PLAYERS VS BOT", text: "Team up with friends against one strong bot. Pick its hero and difficulty.", solo: "pve", online: "pve" },
+      { title: "CLASSIC 3v3", tag: "RED VS BLUE", text: "3 heroes a side on maps with walls, tall grass and water. Bots fill empty slots. 3 lives each.", solo: "classic", online: "classic" },
+    ];
+    const grid = document.createElement("div");
+    grid.className = "hm-modes";
+    for (const m of modes) {
+      if (!online && !m.solo) continue;
+      if (!online && m.title === "PvE SQUAD") continue; // the same as Bot Duel without other players
+      const card = document.createElement("div");
+      card.className = "hm-mode";
+      card.innerHTML = `<h3>${m.title}</h3><div class="tag">${m.tag}</div><p>${m.text}</p><div class="btns"></div>`;
+      const btns = card.querySelector(".btns")!;
+      const add = (label: string, cls: string, f: () => void) => {
+        const b = document.createElement("button");
+        b.type = "button";
+        b.className = cls;
+        b.textContent = label;
+        b.addEventListener("click", () => {
+          close();
+          f();
+        });
+        btns.append(b);
+      };
+      if (m.solo) add(m.online ? "SOLO" : "PLAY", "solo", () => this.act.play(m.solo!, true, ""));
+      if (m.online && online) add(m.solo ? "ONLINE" : "PLAY ONLINE", "online", () => this.act.play(m.online!, false, room.value.trim().slice(0, 8).toUpperCase()));
+      grid.append(card);
+    }
+    el.append(grid);
+    const roomRow = document.createElement("div");
+    roomRow.className = "hm-room";
+    roomRow.innerHTML = `ROOM NO. <input maxlength="8" placeholder="(optional)" autocomplete="off" /> <span>Same number = same room with friends</span>`;
+    const room = roomRow.querySelector("input")!;
+    if (online) el.append(roomRow);
+  }
+
+  /** CHARACTER: every hero by class; tap one for the details and to make it the favourite. */
+  showCharacters() {
+    const { el } = this.screen("CHARACTERS");
+    const top = el.querySelector(".hm-top")!;
+    if (this.act.online) {
+      const spin = document.createElement("button");
+      spin.type = "button";
+      spin.className = "hm-gold";
+      spin.textContent = `SPIN (${this.act.spins()})`;
+      spin.addEventListener("click", () => this.act.openSlot());
+      top.append(spin);
+    }
+    const count = document.createElement("div");
+    count.className = "hm-count";
+    count.textContent = `${this.act.owned()} / ${HERO_IDS.length} heroes unlocked · tap a hero to read about it and set your favourite`;
+    el.append(count);
+    const tabs = document.createElement("div");
+    tabs.className = "hm-tabs";
+    const grid = document.createElement("div");
+    grid.className = "hm-grid";
+    const cards = new Map<HeroId, HTMLButtonElement>();
+    const draw = () => {
+      const fav = this.act.fav();
+      for (const [id, c] of cards) {
+        c.classList.toggle("locked", this.act.locked(id));
+        c.classList.toggle("fav", id === fav);
+      }
+    };
+    for (const id of HERO_IDS) {
+      const cls = HERO_CLASSES.find((c) => c.id === heroClass(id))!;
+      const c = document.createElement("button");
+      c.type = "button";
+      c.className = "hm-card";
+      c.dataset.cls = cls.id;
+      c.append(heroPortrait(id));
+      c.insertAdjacentHTML("beforeend", `<span class="c" style="background:${cls.color}"></span><div class="n">${HEROES[id].name}</div>`);
+      c.addEventListener("click", () => {
+        const locked = this.act.locked(id);
+        const isFav = id === this.act.fav();
+        showHeroInfo(id, {
+          label: isFav ? "♥ YOUR FAVOURITE" : "♥ SET AS FAVOURITE",
+          on: isFav,
+          note: locked ? "Locked: win games and spin the Hero Slot to unlock it." : isFav ? "Stands on the pedestal and is your profile picture." : undefined,
+          click: locked || isFav ? undefined : () => {
+            this.act.setFav(id);
+            draw();
+            this.refresh();
+          },
+        });
+      });
+      grid.append(c);
+      cards.set(id, c);
+    }
+    const tabList = [{ id: "all", name: "ALL", color: "#ffd23f" }, ...HERO_CLASSES];
+    for (const t of tabList) {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.textContent = t.name.toUpperCase();
+      b.style.setProperty("--c", t.color);
+      if (t.id === "all") b.classList.add("on");
+      b.addEventListener("click", () => {
+        tabs.querySelectorAll("button").forEach((x) => x.classList.toggle("on", x === b));
+        for (const c of cards.values()) c.style.display = t.id === "all" || c.dataset.cls === t.id ? "" : "none";
+      });
+      tabs.append(b);
+    }
+    el.append(tabs, grid);
+    draw();
+  }
+}

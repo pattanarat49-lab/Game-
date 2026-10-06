@@ -217,13 +217,25 @@ function addStyles() {
   .hi-cd { color: #a0a0b0; font-size: 9px; margin-left: 6px; }
   .hi-text { color: #e8dde2; }
   .hi-num { color: #7fe0ff; margin-top: 2px; }
+  .hi-act { display: block; width: 100%; margin-top: 12px; padding: 10px; font-family: inherit; font-size: 11px; cursor: pointer; color: #fff; background: #e8487a; border: 2px solid #a82a52; border-radius: 4px; }
+  .hi-act.on { background: #ffd23f; color: #1a1220; border-color: #b8901a; }
+  .hi-act:disabled { background: #3a2e46; border-color: #4a3e56; color: #9a8aa8; cursor: default; }
+  .hi-note { margin-top: 6px; font-size: 8px; color: #c9b8c0; text-align: center; }
   .hi-close { position: absolute; top: 8px; right: 8px; background: #3a2418; color: #fff; border: 2px solid #ffd23f; font-family: inherit; font-size: 10px; padding: 4px 8px; cursor: pointer; }
   `;
   document.head.append(st);
 }
 
 /** Opens the details popup for a hero (tap outside or CLOSE to close it). */
-export function showHeroInfo(id: string) {
+/** An extra button under the details (the Character screen's FAVORITE). */
+export interface HeroInfoAction {
+  label: string;
+  on?: boolean; // shown as already done (gold)
+  note?: string; // why it can't be pressed
+  click?: () => void;
+}
+
+export function showHeroInfo(id: string, action?: HeroInfoAction) {
   const hero = HEROES[id as keyof typeof HEROES];
   if (!hero) return;
   addStyles();
@@ -256,6 +268,19 @@ export function showHeroInfo(id: string) {
   box.querySelector(".hi-pic")!.append(heroPortrait(id));
   back.append(box);
   const close = () => back.remove();
+  if (action) {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = `hi-act${action.on ? " on" : ""}`;
+    b.textContent = action.label;
+    b.disabled = !action.click;
+    box.append(b);
+    if (action.note) box.insertAdjacentHTML("beforeend", `<div class="hi-note">${esc(action.note)}</div>`);
+    b.addEventListener("click", () => {
+      action.click?.();
+      close();
+    });
+  }
   back.addEventListener("click", (ev) => {
     if (ev.target === back) close();
   });

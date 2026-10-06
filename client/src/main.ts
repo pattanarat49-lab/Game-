@@ -3,186 +3,65 @@ import { BootScene } from "./scenes/BootScene";
 import { GameScene } from "./scenes/GameScene";
 import { HudScene } from "./scenes/HudScene";
 import { isTouchDevice } from "./touch";
-import { HEROES, HERO_CLASSES, HERO_IDS, HeroId, STAGES, STAGE_IDS, StageId, heroClass, heroRatings } from "../../shared/game";
-import { GODZILLA, KINGKONG, SWORD_GOD, HERO_SPRITES, WARDEN, renderPixelSprite } from "./art";
-import { heroPortrait } from "./heroArt";
-import { showHeroInfo } from "./heroInfo";
-import { COVER_PNG } from "./cover.data";
+import { HERO_IDS, HeroId, StageId } from "../../shared/game";
 import { accountData, currentAccount, onAccountChange, restoreSession, saveAccountData, signIn, signOut, signUp } from "./account";
 import { deviceStats } from "./stats";
 import { accountLoaded, heroLocked, ownedHeroes, pickStarters, spinSlot, spinsLeft, starterOffer } from "./account";
 import { showSlot, showStarterPicker } from "./unlocks";
-
-(document.getElementById("cover") as HTMLImageElement | null)?.setAttribute("src", COVER_PNG);
+import { Home } from "./home";
 
 const menu = document.getElementById("menu")!;
-const form = document.getElementById("join-form") as HTMLFormElement;
-const nameInput = document.getElementById("name") as HTMLInputElement;
-const errorText = document.getElementById("error")!;
-const roomInput = document.getElementById("room-code") as HTMLInputElement;
 const backButton = document.getElementById("back-btn")!;
-
-nameInput.value = localStorageGet("riftborn-name") ?? `Rift${Math.floor(100 + Math.random() * 900)}`;
+const soloOnly = import.meta.env.VITE_SOLO_ONLY === "1";
 
 let game: Phaser.Game | undefined;
-let selectedHero: HeroId = (localStorageGet("riftborn-hero") as HeroId) ?? "superman";
-if (!HERO_IDS.includes(selectedHero)) selectedHero = "superman";
-let selectedBot: HeroId = (localStorageGet("riftborn-bot") as HeroId) ?? "superman";
-if (!HERO_IDS.includes(selectedBot)) selectedBot = "superman";
-let selectedStage: StageId = (localStorageGet("riftborn-stage") as StageId) ?? "classic";
-if (!STAGE_IDS.includes(selectedStage)) selectedStage = "classic";
-buildStagePicker();
-buildHeroPicker();
+let soloName = localStorageGet("riftborn-name") ?? `Rift${Math.floor(100 + Math.random() * 900)}`;
 
-/** Two heroes facing each other, for the PvP Arena card. */
-function versus(): HTMLCanvasElement {
-  const canvas = document.createElement("canvas");
-  canvas.width = 40;
-  canvas.height = 18;
-  const ctx = canvas.getContext("2d")!;
-  ctx.drawImage(renderPixelSprite(HERO_SPRITES.isekai), 0, 0);
-  ctx.save();
-  ctx.scale(-1, 1);
-  ctx.drawImage(renderPixelSprite(HERO_SPRITES.killua), -40, 0);
-  ctx.restore();
-  return canvas;
+/** The favourite hero: on the home pedestal, the profile picture, and the hero you start with. */
+function favHero(): HeroId {
+  const owned = ownedHeroes();
+  const saved = (currentAccount() ? accountData().prefs?.fav ?? accountData().prefs?.hero : undefined) ?? localStorageGet("uv-fav") ?? localStorageGet("riftborn-hero");
+  if (saved && HERO_IDS.includes(saved as HeroId) && !heroLocked(saved)) return saved as HeroId;
+  const first = owned?.find((id) => HERO_IDS.includes(id as HeroId));
+  return (first as HeroId) ?? "superman";
 }
 
-/** Stage cards: a tiny preview of the floor with that stage's boss on it. */
-function buildStagePicker() {
-  const container = document.getElementById("stages")!;
-  const previews: Partial<Record<StageId, { floor: string[]; boss: HTMLCanvasElement }>> = {
-    lava: { floor: ["#2b2026", "#e5501b", "#ff8a1f"], boss: renderPixelSprite(WARDEN) },
-    jungle: { floor: ["#3e4a36", "#43503a", "#5aa23a"], boss: renderPixelSprite(KINGKONG) },
-    dojo: { floor: ["#8a5a32", "#9a6a40", "#4a2e18"], boss: renderPixelSprite(SWORD_GOD) },
-    boss: { floor: ["#2a2f36", "#31373f", "#4a5562"], boss: renderPixelSprite(GODZILLA) },
-    pvp: { floor: ["#3f5fa8", "#d42020", "#4a6ab4"], boss: versus() },
-    duel: { floor: ["#3f5fa8", "#2a6ad8", "#4a6ab4"], boss: versus() },
-    pve: { floor: ["#3f5fa8", "#2fae6a", "#4a6ab4"], boss: versus() },
-    classic: { floor: ["#b0604c", "#d055c0", "#c9965f"], boss: versus() },
-  };
-  for (const id of STAGE_IDS) {
-    const stage = STAGES[id];
-    const card = document.createElement("button");
-    card.type = "button";
-    card.className = "stage";
-    card.id = `stage-${id}`;
-    card.setAttribute("aria-pressed", String(id === selectedStage));
-    card.innerHTML = `<span class="name">${stage.name}</span><span class="blurb">${stage.blurb}</span>`;
-
-    const preview = document.createElement("canvas");
-    preview.width = 48;
-    preview.height = 32;
-    const ctx = preview.getContext("2d")!;
-    const { floor, boss } = previews[id]!;
-    for (let y = 0; y < 32; y += 4) {
-      for (let x = 0; x < 48; x += 4) {
-        // Lava creeps in from the edges; the boss room is plain concrete.
-        // The ring stages show the mat with ropes round the edge.
-        const edge = (id === "lava" || id === "pvp" || id === "duel" || id === "pve" || id === "classic") && (x < 8 || x > 36 || y < 4 || y > 24);
-        ctx.fillStyle = edge ? floor[1 + ((x + y) % 8 === 0 ? 1 : 0)] : floor[(x * 7 + y * 3) % 3 === 0 && id !== "lava" ? 1 : 0];
-        ctx.fillRect(x, y, 4, 4);
+const home = new Home(menu, {
+  online: !soloOnly,
+  name: () => currentAccount()?.username ?? soloName,
+  fav: favHero,
+  setFav: (id) => {
+    localStorageSet("uv-fav", id);
+    saveAccountData({ prefs: { fav: id, hero: id } });
+  },
+  locked: (id) => heroLocked(id),
+  owned: () => ownedHeroes()?.length ?? HERO_IDS.length,
+  spins: () => spinsLeft(),
+  openSlot: () => {
+    showSlot(spinsLeft, spinSlot, () => ownedHeroes() ?? []);
+    // Redraw the home screen once the slot closes (a new hero, fewer spins).
+    const watch = setInterval(() => {
+      if (!document.getElementById("hero-slot")) {
+        clearInterval(watch);
+        home.refresh();
       }
-    }
-    ctx.drawImage(boss, (48 - boss.width) / 2, 30 - boss.height);
-    card.prepend(preview);
-
-    card.addEventListener("click", () => {
-      selectedStage = id;
-      localStorageSet("riftborn-stage", id);
-      container.querySelectorAll(".stage").forEach((c) => c.setAttribute("aria-pressed", String(c === card)));
-      botPick.style.display = id === "duel" ? "block" : "none";
-    });
-    container.append(card);
-  }
-  // Bot Duel: which hero the bot plays.
-  const botPick = document.createElement("label");
-  botPick.id = "bot-pick";
-  botPick.style.cssText = `display:${selectedStage === "duel" ? "block" : "none"};margin:8px 0;font-size:12px`;
-  botPick.textContent = "Bot plays: ";
-  const select = document.createElement("select");
-  select.id = "bot-hero";
-  select.style.cssText = "font:inherit;padding:4px;background:#241a20;color:#fff;border:2px solid #6b5842";
-  for (const id of HERO_IDS) select.add(new Option(HEROES[id].name, id, false, id === selectedBot));
-  select.addEventListener("change", () => {
-    selectedBot = select.value as HeroId;
-    localStorageSet("riftborn-bot", selectedBot);
-  });
-  botPick.append(select);
-  container.after(botPick);
-}
-
-/** The character select cards, built from the hero list in shared/game.ts. */
-function buildHeroPicker() {
-  const container = document.getElementById("heroes")!;
-  // Class filter: ALL, or one class at a time.
-  const tabs = document.createElement("div");
-  tabs.id = "hero-classes";
-  const show = (cls: string) => {
-    tabs.querySelectorAll("button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.cls === cls)));
-    container.querySelectorAll<HTMLElement>(".hero").forEach((c) => (c.hidden = cls !== "all" && c.dataset.cls !== cls));
-  };
-  for (const c of [{ id: "all", name: "ALL", color: "#ffd23f" }, ...HERO_CLASSES]) {
-    const b = document.createElement("button");
-    b.type = "button";
-    b.dataset.cls = c.id;
-    b.id = `class-${c.id}`;
-    b.textContent = c.name;
-    b.style.setProperty("--c", c.color);
-    b.addEventListener("click", () => show(c.id));
-    tabs.append(b);
-  }
-  container.before(tabs);
-  const bars = (value: number) => `<div class="bar"><span style="width:${Math.round(Math.min(1, value) * 100)}%"></span></div>`;
-  for (const id of HERO_IDS) {
-    const hero = HEROES[id];
-    const card = document.createElement("button");
-    card.type = "button";
-    card.className = "hero";
-    card.id = `hero-${id}`;
-    card.setAttribute("aria-pressed", String(id === selectedHero));
-    const rate = heroRatings(id);
-    const cls = HERO_CLASSES.find((c) => c.id === heroClass(id))!;
-    card.dataset.cls = cls.id;
-    card.innerHTML = `
-      <span class="name">${hero.name}</span>
-      ${
-        hero.stars > 5
-          ? `<span class="stars special" title="${hero.stars} stars, special">${"★".repeat(hero.stars)} SPECIAL</span>`
-          : `<span class="stars" title="${hero.stars} of 5 stars">${"★".repeat(hero.stars)}<span class="dim">${"★".repeat(5 - hero.stars)}</span></span>`
+    }, 300);
+  },
+  openWorld: () => void startGame("world", soloOnly, ""),
+  play: (stage, solo, code) => void startGame(stage, solo, code),
+  logout: soloOnly ? undefined : () => logOut(),
+  rename: soloOnly
+    ? () => {
+        const n = prompt("Your name", soloName)?.trim().slice(0, 16);
+        if (n) {
+          soloName = n;
+          localStorageSet("riftborn-name", n);
+          home.refresh();
+        }
       }
-      <span class="role"><b class="cls" style="--c:${cls.color}">${cls.name}</b> ${hero.role}</span>
-      <span class="role">Skill: ${hero.skill.name}${hero.skill2 ? ` + ${hero.skill2.name}` : ""}</span>
-      <div class="stats">
-        <span>HP ${rate.hp}</span>${bars(rate.hp / 10)}
-        <span>DAMAGE ${rate.damage}</span>${bars(rate.damage / 10)}
-        <span>ATK SPEED ${rate.speed}</span>${bars(rate.speed / 10)}
-        <span>RANGE ${rate.range}</span>${bars(rate.range / 10)}
-      </div>
-      <span class="blurb">${hero.blurb}</span>`;
-    card.prepend(heroPortrait(id));
-    if (hero.stars > 5) card.classList.add("special");
-    card.addEventListener("click", () => {
-      showHeroInfo(id);
-      if (heroLocked(id)) {
-        errorText.textContent = `${hero.name} is locked. Win games to earn spins and unlock heroes!`;
-        return;
-      }
-      errorText.textContent = "";
-      selectedHero = id;
-      localStorageSet("riftborn-hero", id);
-      container.querySelectorAll(".hero").forEach((c) => c.setAttribute("aria-pressed", String(c === card)));
-    });
-    container.append(card);
-  }
-  show("all");
-}
-
-const soloOnly = import.meta.env.VITE_SOLO_ONLY === "1";
-if (soloOnly) {
-  document.getElementById("join-online")?.remove();
-  roomInput.remove(); // room numbers are for online play
-}
+    : undefined,
+});
+const errorText = home.error;
 
 /** BACK: leave the room (or the solo game) and return to the menu. */
 function backToMenu() {
@@ -199,36 +78,16 @@ function backToMenu() {
   backButton.classList.add("hidden");
   errorText.textContent = "";
   menu.classList.remove("hidden");
+  home.refresh();
   if (document.fullscreenElement) document.exitFullscreen?.().catch(() => undefined);
 }
 backButton.addEventListener("click", backToMenu);
-
-form.addEventListener("submit", async (event) => {
-  event.preventDefault();
-  const submitter = (event as SubmitEvent).submitter as HTMLButtonElement | null;
-  const solo = soloOnly || submitter?.id === "join-solo";
-  if (solo && selectedStage === "pvp") {
-    errorText.textContent = soloOnly
-      ? "PvP needs other players. Play it online at riftborn-s7tf.onrender.com"
-      : "PvP needs other players. Press PLAY ONLINE.";
-    return;
-  }
-  if (!solo && selectedStage === "duel") {
-    errorText.textContent = "Bot Duel is played solo. Press PLAY SOLO.";
-    return;
-  }
-  await startGame(selectedStage, solo, solo ? "" : roomInput.value.trim().slice(0, 8).toUpperCase());
-});
-
-// OPEN WORLD: everyone online meets in one big village (solo build: walk it alone and take the dungeon portal).
-document.getElementById("open-world")?.addEventListener("click", () => startGame("world", soloOnly, ""));
 
 /** Start (or move to) a game: a stage, solo or online, and a room number ("" = any open room). */
 async function startGame(stage: StageId, solo: boolean, code: string) {
   const signedIn = currentAccount();
   const account = solo ? undefined : signedIn;
-  const name = signedIn?.username ?? (nameInput.value.trim().slice(0, 16) || "Player");
-  if (!signedIn) localStorageSet("riftborn-name", name);
+  const name = signedIn?.username ?? soloName;
   errorText.textContent = "";
   menu.classList.add("hidden");
   const touch = isTouchDevice();
@@ -264,9 +123,8 @@ async function startGame(stage: StageId, solo: boolean, code: string) {
   game.registry.set("playerName", name);
   game.registry.set("token", account?.token ?? "");
   game.registry.set("solo", solo);
-  game.registry.set("hero", selectedHero);
+  game.registry.set("hero", favHero());
   game.registry.set("stage", stage);
-  game.registry.set("botHero", selectedBot);
   // Same mode + same room number = same room; no number = any open room of that mode.
   game.registry.set("roomCode", code);
   backButton.classList.remove("hidden");
@@ -312,10 +170,6 @@ function localStorageGet(key: string): string | null {
 }
 
 function localStorageSet(key: string, value: string) {
-  // Signed in: the last picks are saved with the account too.
-  if (key === "riftborn-hero") saveAccountData({ prefs: { hero: value } });
-  if (key === "riftborn-stage") saveAccountData({ prefs: { stage: value } });
-  if (key === "riftborn-bot") saveAccountData({ prefs: { bot: value } });
   try {
     localStorage.setItem(key, value);
   } catch {
@@ -324,7 +178,6 @@ function localStorageSet(key: string, value: string) {
 }
 
 // ---- Accounts (online builds): sign in before the menu, or create a new account. ----
-const accountBar = document.getElementById("account-bar")!;
 const accountModal = document.getElementById("account-modal")!;
 const accountForm = document.getElementById("account-form") as HTMLFormElement;
 const accUser = document.getElementById("acc-user") as HTMLInputElement;
@@ -351,53 +204,25 @@ function setSignupMode(on: boolean) {
   fitLogin();
 }
 
-/** Signed out: the sign-in screen covers the menu. Signed in: the menu, with the name and LOG OUT. */
+/** Signed out: the login screen covers the home screen. */
 function drawAccount() {
   const a = currentAccount();
   accountModal.classList.toggle("hidden", !!a);
-  accountBar.innerHTML = "";
-  nameInput.style.display = a ? "none" : "";
+  home.refresh();
   if (!a) {
     fitLogin(); // sized now that the panel is on screen
     setTimeout(() => accUser.focus(), 0);
     return;
   }
-  accountBar.append("Logged in as ");
-  const b = document.createElement("b");
-  b.textContent = a.username;
-  accountBar.append(b);
-  // The hero slot: spins earned by winning unlock new heroes.
-  const spin = document.createElement("button");
-  spin.type = "button";
-  spin.id = "acc-spin";
-  spin.className = spinsLeft() > 0 ? "main glow" : "";
-  spin.textContent = `SPIN (${spinsLeft()})`;
-  spin.addEventListener("click", () => showSlot(spinsLeft, spinSlot, () => ownedHeroes() ?? []));
-  accountBar.append(spin);
-  const out = document.createElement("button");
-  out.type = "button";
-  out.id = "acc-logout";
-  out.textContent = "LOG OUT";
-  out.addEventListener("click", () => {
-    newPlayerFlow = false;
-    accUser.value = a.username;
-    accPass.value = "";
-    setSignupMode(false);
-    void signOut();
-  });
-  accountBar.append(out);
-  refreshLocks();
   void welcomeNewPlayer();
 }
 
-/** Locked heroes are greyed out on the menu; the picked hero is always one the player has. */
-function refreshLocks() {
-  document.querySelectorAll<HTMLElement>("#heroes .hero").forEach((c) => c.classList.toggle("locked", heroLocked(c.id.slice(5))));
-  const owned = ownedHeroes();
-  if (owned?.length && !owned.includes(selectedHero) && HERO_IDS.includes(owned[0] as HeroId)) {
-    selectedHero = owned[0] as HeroId;
-    document.querySelectorAll("#heroes .hero").forEach((c) => c.setAttribute("aria-pressed", String(c.id === `hero-${selectedHero}`)));
-  }
+function logOut() {
+  newPlayerFlow = false;
+  accUser.value = currentAccount()?.username ?? "";
+  accPass.value = "";
+  setSignupMode(false);
+  void signOut();
 }
 
 /** A new player: pick 3 starters out of 10, then the tutorial (once). */
@@ -420,32 +245,11 @@ async function welcomeNewPlayer() {
 }
 
 function startTutorial() {
-  refreshLocks();
   void startGame("tutorial", true, "");
 }
 
-/** The account's saved picks become the menu's picks. */
-function applyPrefs() {
-  const p = accountData().prefs ?? {};
-  if (p.hero && HERO_IDS.includes(p.hero as HeroId)) {
-    selectedHero = p.hero as HeroId;
-    document.querySelectorAll("#heroes .hero").forEach((c) => c.setAttribute("aria-pressed", String(c.id === `hero-${selectedHero}`)));
-  }
-  if (p.stage && STAGE_IDS.includes(p.stage as StageId)) {
-    selectedStage = p.stage as StageId;
-    document.querySelectorAll("#stages .stage").forEach((c) => c.setAttribute("aria-pressed", String(c.id === `stage-${selectedStage}`)));
-    const bot = document.getElementById("bot-pick");
-    if (bot) bot.style.display = selectedStage === "duel" ? "block" : "none";
-  }
-  if (p.bot && HERO_IDS.includes(p.bot as HeroId)) {
-    selectedBot = p.bot as HeroId;
-    const sel = document.getElementById("bot-hero") as HTMLSelectElement | null;
-    if (sel) sel.value = selectedBot;
-  }
-}
-
 if (soloOnly) {
-  accountBar.remove(); // the solo build has no server to keep accounts on (nor the login screen's video)
+  // The solo build has no server to keep accounts on (nor the login screen's video).
   accountModal.remove();
   // First visit: the tutorial (every hero is open in the solo build).
   if (!localStorageGet("uv-tutorial")) startTutorial();
@@ -453,10 +257,7 @@ if (soloOnly) {
   setupLoginScene();
   setSignupMode(false);
   drawAccount();
-  onAccountChange(() => {
-    drawAccount();
-    applyPrefs();
-  });
+  onAccountChange(() => drawAccount());
   void restoreSession();
   document.getElementById("acc-switch")!.addEventListener("click", () => setSignupMode(!signupMode));
   accountForm.addEventListener("submit", async (event) => {
@@ -474,7 +275,7 @@ if (soloOnly) {
     accError.textContent = signupMode ? "Creating account..." : "Logging in...";
     try {
       // A new account starts with this device's record and picks.
-      if (signupMode) await signUp(user, pass, { stats: deviceStats(), prefs: { hero: selectedHero, stage: selectedStage, bot: selectedBot } });
+      if (signupMode) await signUp(user, pass, { stats: deviceStats(), prefs: { fav: favHero() } });
       else await signIn(user, pass);
       accPass.value = accPass2.value = "";
       accError.textContent = "";
