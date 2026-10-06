@@ -450,6 +450,7 @@ export class GameScene extends Phaser.Scene {
 
   /** Charged skills (MAX SMASH, CLEAVE...): while the button is held (and ready) the charge builds up and the hero slows down. */
   private updateCharge(me: any, alive: boolean) {
+    if (!me) return; // online, our player arrives a moment after the room opens
     const now = performance.now();
     const slot = this.aimingSkill();
     const hero = heroOf(me.hero);
