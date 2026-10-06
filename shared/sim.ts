@@ -158,6 +158,8 @@ const MAX_BLOCKS = 6; // the Block Crafter's blocks on the map at once (the olde
 const TNT_RADIUS = 60;
 const TNT_KNOCK = 3.5; // times a normal knockback
 const TRUCK_RADIUS = 60;
+/** How tall a hero's hitbox is above its feet (world pixels; heroes are drawn about 33 tall). */
+const BODY_HEIGHT = 24;
 const EYEBEAM_TICK = 0.1; // seconds between HEAT VISION hits
 
 export interface SimPlayer {
@@ -782,6 +784,28 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
     return PLAYER_RADIUS * (v.big > 0 ? BIG_SCALE : 1);
   }
 
+  /**
+   * A hero is hit anywhere on its body, not just at its feet: the hitbox is a column from the feet
+   * (x, y) up to head height, as wide as the hero. This is the spot on it closest to (x, y).
+   */
+  private bodyPoint(v: P, x: number, y: number): { x: number; y: number } {
+    const top = v.y - BODY_HEIGHT * (v.big > 0 ? BIG_SCALE : 1);
+    return { x: v.x, y: Math.max(top, Math.min(v.y, y)) };
+  }
+
+  /** How far (x, y) is from a hero's body (0 at its middle, not just its feet). */
+  private bodyDist(v: P, x: number, y: number): number {
+    const at = this.bodyPoint(v, x, y);
+    return Math.hypot(at.x - x, at.y - y);
+  }
+
+  /** Does a shape test (taking a spot) touch the hero anywhere from feet to head? */
+  private onBody(v: P, test: (x: number, y: number) => boolean): boolean {
+    const h = BODY_HEIGHT * (v.big > 0 ? BIG_SCALE : 1);
+    for (let k = 0; k <= 2; k++) if (test(v.x, v.y - (h * k) / 2)) return true;
+    return false;
+  }
+
   /** BIG LIGHT: everything hostile in the flashlight's cone grows and slows down. */
   private bigLight(id: string, p: P, skill: SkillDef) {
     const half = skill.width ?? 0.6;
@@ -797,7 +821,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       if (!ENEMIES[e.kind as EnemyKind].block && inCone(e.x, e.y, this.er(e))) e.big = Math.max(e.big, t);
     });
     this.state.players.forEach((v, vid) => {
-      if (!v.dead && this.isFoe(id, vid) && inCone(v.x, v.y, PLAYER_RADIUS)) v.big = Math.max(v.big, t);
+      if (!v.dead && this.isFoe(id, vid) && this.onBody(v, (bx, by) => inCone(bx, by, PLAYER_RADIUS))) v.big = Math.max(v.big, t);
     });
   }
 
@@ -816,7 +840,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
     });
     if (!this.pvpLive()) return;
     this.state.players.forEach((v, vid) => {
-      if (hit.has(vid) || v.dead || !this.isFoe(brain.owner, vid) || Math.hypot(v.x - z.x, v.y - z.y) > z.radius + this.pr(v)) return;
+      if (hit.has(vid) || v.dead || !this.isFoe(brain.owner, vid) || this.bodyDist(v, z.x, z.y) > z.radius + this.pr(v)) return;
       hit.add(vid);
       this.damagePlayer(vid, brain.damage * PVP_DAMAGE_SCALE, true, brain.owner);
       if (!v.dead) v.stun = Math.max(v.stun, stun);
@@ -839,7 +863,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
     });
     if (!this.pvpLive()) return;
     this.state.players.forEach((v, vid) => {
-      if (hit.has(vid) || v.dead || !this.isFoe(brain.owner, vid) || Math.hypot(v.x - z.x, v.y - z.y) > z.radius) return;
+      if (hit.has(vid) || v.dead || !this.isFoe(brain.owner, vid) || this.bodyDist(v, z.x, z.y) > z.radius) return;
       hit.add(vid);
       this.damagePlayer(vid, brain.damage * PVP_DAMAGE_SCALE, true, brain.owner);
       if (v.dead) return;
@@ -883,7 +907,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       e.stun = Math.max(e.stun, BIKE_STUN);
     });
     this.state.players.forEach((v, vid) => {
-      if (v.dead || !this.isFoe(id, vid) || Math.hypot(v.x - p.x, v.y - p.y) > skill.radius + this.pr(v) || !this.canRehit(brain, `p:${vid}`, BIKE_REHIT)) return;
+      if (v.dead || !this.isFoe(id, vid) || this.bodyDist(v, p.x, p.y) > skill.radius + this.pr(v) || !this.canRehit(brain, `p:${vid}`, BIKE_REHIT)) return;
       this.damagePlayer(vid, skill.damage * PVP_DAMAGE_SCALE, true, id);
       this.stunKnockPlayer(vid, v.x - p.x, v.y - p.y, BIKE_STUN, BIKE_KNOCK);
     });
@@ -898,7 +922,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       if (!def.boss && this.state.enemies.has(eid)) this.knockEnemy(eid, e.x - p.x, e.y - p.y, 1);
     });
     this.state.players.forEach((v, vid) => {
-      if (v.dead || !this.isFoe(id, vid) || Math.hypot(v.x - p.x, v.y - p.y) > PLAYER_RADIUS + this.pr(v) + 4 || !this.canRehit(brain, `p:${vid}`, RAM_REHIT)) return;
+      if (v.dead || !this.isFoe(id, vid) || this.bodyDist(v, p.x, p.y) > PLAYER_RADIUS + this.pr(v) + 4 || !this.canRehit(brain, `p:${vid}`, RAM_REHIT)) return;
       this.damagePlayer(vid, damage * PVP_DAMAGE_SCALE, true, id);
       this.knockPlayer(vid, v.x - p.x, v.y - p.y, 1);
     });
@@ -918,7 +942,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
         this.damageEnemy(eid, skill.damage, id);
       });
       this.state.players.forEach((v, vid) => {
-        if (v.dead || !this.isFoe(id, vid) || Math.hypot(v.x - s.x, v.y - s.y) > ORBIT_REACH + this.pr(v) || !this.canRehit(brain, `p:${vid}`, ORBIT_REHIT)) return;
+        if (v.dead || !this.isFoe(id, vid) || this.bodyDist(v, s.x, s.y) > ORBIT_REACH + this.pr(v) || !this.canRehit(brain, `p:${vid}`, ORBIT_REHIT)) return;
         this.damagePlayer(vid, skill.damage * PVP_DAMAGE_SCALE, true, id);
       });
     }
@@ -1060,7 +1084,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
     });
     if (!this.pvpLive()) return;
     s.players.forEach((v, vid) => {
-      if (v.dead || !this.isFoe(owner, vid) || !inside(v.x, v.y, this.pr(v))) return;
+      if (v.dead || !this.isFoe(owner, vid) || !this.onBody(v, (bx, by) => inside(bx, by, this.pr(v)))) return;
       if (h.dmg) this.damagePlayer(vid, h.dmg * PVP_DAMAGE_SCALE, true, owner);
       if (v.dead) return;
       if (h.stun) v.stun = Math.max(v.stun, h.stun);
@@ -1238,7 +1262,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
     });
     if (this.pvpLive()) {
       this.state.players.forEach((v, vid) => {
-        if (!v.dead && this.isFoe(owner, vid) && Math.hypot(v.x - x, v.y - y) <= radius + this.pr(v)) n++;
+        if (!v.dead && this.isFoe(owner, vid) && this.bodyDist(v, x, y) <= radius + this.pr(v)) n++;
       });
     }
     return n;
@@ -1251,7 +1275,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       if (!def.block && !def.boss && Math.hypot(e.x - x, e.y - y) <= radius + this.er(e)) e.root = Math.max(e.root, seconds);
     });
     this.state.players.forEach((v, vid) => {
-      if (!v.dead && this.isFoe(owner, vid) && Math.hypot(v.x - x, v.y - y) <= radius + this.pr(v)) v.root = Math.max(v.root, seconds);
+      if (!v.dead && this.isFoe(owner, vid) && this.bodyDist(v, x, y) <= radius + this.pr(v)) v.root = Math.max(v.root, seconds);
     });
   }
 
@@ -1261,7 +1285,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       if (!ENEMIES[e.kind as EnemyKind].block && Math.hypot(e.x - x, e.y - y) <= radius + this.er(e)) e.slow = Math.max(e.slow, seconds);
     });
     this.state.players.forEach((v, vid) => {
-      if (!v.dead && this.isFoe(owner, vid) && Math.hypot(v.x - x, v.y - y) <= radius + this.pr(v)) v.slow = Math.max(v.slow, seconds);
+      if (!v.dead && this.isFoe(owner, vid) && this.bodyDist(v, x, y) <= radius + this.pr(v)) v.slow = Math.max(v.slow, seconds);
     });
   }
 
@@ -2065,7 +2089,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
           if (Math.hypot(e.x - p.x, e.y - p.y) <= skill.radius + ENEMIES[e.kind as EnemyKind].radius) this.damageEnemy(eid, skill.damage, id);
         });
         s.players.forEach((v, vid) => {
-          if (this.isFoe(id, vid) && Math.hypot(v.x - p.x, v.y - p.y) <= skill.radius + this.pr(v)) this.damagePlayer(vid, skill.damage * PVP_DAMAGE_SCALE, true, id);
+          if (this.isFoe(id, vid) && this.bodyDist(v, p.x, p.y) <= skill.radius + this.pr(v)) this.damagePlayer(vid, skill.damage * PVP_DAMAGE_SCALE, true, id);
         });
         this.addZone("domain", p.x, p.y, skill.radius, skill.duration ?? 1.5, { owner: id, every: Infinity, damage: 0 });
         break;
@@ -2780,7 +2804,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       if (!def.boss && Math.hypot(e.x - x, e.y - y) <= radius + this.er(e)) e.stun = Math.max(e.stun, seconds);
     });
     this.state.players.forEach((v, vid) => {
-      if (!v.dead && this.isFoe(owner, vid) && Math.hypot(v.x - x, v.y - y) <= radius + this.pr(v)) v.stun = Math.max(v.stun, seconds);
+      if (!v.dead && this.isFoe(owner, vid) && this.bodyDist(v, x, y) <= radius + this.pr(v)) v.stun = Math.max(v.stun, seconds);
     });
   }
 
@@ -2930,7 +2954,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
     });
     if (!this.pvpLive()) return;
     this.state.players.forEach((v, vid) => {
-      if (v.dead || !this.isFoe(id, vid) || !inLane(v.x, v.y, this.pr(v))) return;
+      if (v.dead || !this.isFoe(id, vid) || !this.onBody(v, (bx, by) => inLane(bx, by, this.pr(v)))) return;
       this.damagePlayer(vid, skill.damage * PVP_DAMAGE_SCALE, true, id);
       if (v.dead) return;
       if (pinned(v.x, v.y)) v.stun = Math.max(v.stun, skill.duration ?? 1.5);
@@ -2995,7 +3019,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       if (knock > 0 && !def.boss) this.knockEnemy(eid, cos, sin, knock); // sent flying along the line
     });
     this.state.players.forEach((v, vid) => {
-      if (v.dead || !this.isFoe(owner, vid) || !inLine(v.x, v.y, this.pr(v))) return;
+      if (v.dead || !this.isFoe(owner, vid) || !this.onBody(v, (bx, by) => inLine(bx, by, this.pr(v)))) return;
       hits++;
       this.damagePlayer(vid, damage * PVP_DAMAGE_SCALE, true, owner);
       if (stun > 0 && !v.dead) v.stun = Math.max(v.stun, stun);
@@ -3066,7 +3090,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       if (!ENEMIES[e.kind as EnemyKind].block && inCone(e.x, e.y, this.er(e))) e.slow = Math.max(e.slow, t);
     });
     this.state.players.forEach((v, vid) => {
-      if (!v.dead && this.isFoe(id, vid) && inCone(v.x, v.y, this.pr(v))) v.slow = Math.max(v.slow, t);
+      if (!v.dead && this.isFoe(id, vid) && this.onBody(v, (bx, by) => inCone(bx, by, this.pr(v)))) v.slow = Math.max(v.slow, t);
     });
   }
 
@@ -3269,7 +3293,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
             if (Math.hypot(e.x - z.x, e.y - z.y) <= z.radius) this.damageEnemy(eid, e.maxHp * share, brain.owner);
           });
           s.players.forEach((v, vid) => {
-            if (!v.dead && this.isFoe(brain.owner, vid) && Math.hypot(v.x - z.x, v.y - z.y) <= z.radius) {
+            if (!v.dead && this.isFoe(brain.owner, vid) && this.bodyDist(v, z.x, z.y) <= z.radius) {
               this.damagePlayer(vid, v.maxHp * share, true, brain.owner);
             }
           });
@@ -3321,8 +3345,9 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
     if (!this.pvpLive()) return;
     this.state.players.forEach((v, vid) => {
       if (!this.isFoe(owner, vid) || v.dead) return;
-      const dx = v.x - x;
-      const dy = v.y - y;
+      const at = this.bodyPoint(v, x, y);
+      const dx = at.x - x;
+      const dy = at.y - y;
       if (Math.hypot(dx, dy) > range + this.pr(v)) return;
       if (arc < Math.PI * 2) {
         let diff = Math.atan2(dy, dx) - aim;
@@ -4006,7 +4031,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
         }
         s.players.forEach((p, pid) => {
           if (!s.bullets.has(id) || p.dead || p.dashing || !b.hostile) return;
-          if (Math.hypot(p.x - b.x, p.y - b.y) < PLAYER_RADIUS + 2) {
+          if (this.bodyDist(p, b.x, b.y) < PLAYER_RADIUS + 2) {
             if (this.reflecting(p)) {
               this.reflectBullet(b, brain, pid);
               return;
@@ -4023,7 +4048,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       if (this.pvpLive()) {
         s.players.forEach((v, vid) => {
           if (!s.bullets.has(id) || !this.isFoe(brain.owner, vid) || v.dead || brain.hit.has(vid)) return;
-          if (Math.hypot(v.x - b.x, v.y - b.y) >= this.pr(v) + hitRadius) return;
+          if (this.bodyDist(v, b.x, b.y) >= this.pr(v) + hitRadius) return;
           if (this.reflecting(v) && !b.kind.startsWith("card")) {
             this.reflectBullet(b, brain, vid);
             return;
