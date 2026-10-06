@@ -737,12 +737,12 @@ export class GameScene extends Phaser.Scene {
         this.players.set(id, view);
       }
 
-      const isMe = id === this.room!.sessionId;
       const body = view.body;
-      // The Trickster looks like one of our own side to us (his rivals).
-      const disguised = p.hero === "loki" && p.disguise && this.rivalOfMe(state, id) ? state.players.get(p.disguise) : undefined;
+      // The Trickster looks like one of our own side to us (his rivals); his own player sees the disguise too, under his own name.
+      const isMe = id === this.room!.sessionId;
+      const disguised = p.hero === "loki" && p.disguise && (this.rivalOfMe(state, id) || (p.owner || id) === this.room!.sessionId) ? state.players.get(p.disguise) : undefined;
       const shown: string = disguised?.hero ?? p.hero;
-      const name: string = disguised?.name ?? p.name;
+      const name: string = disguised && !isMe ? disguised.name : p.name;
       if (view.label.text !== name) view.label.setText(name);
       if (isMe) body.setPosition(this.predicted.x, this.predicted.y);
       else {
@@ -871,7 +871,7 @@ export class GameScene extends Phaser.Scene {
       }
       const hiddenNow = unseen || bushed || (gone && !isMe);
       if (state.stage === "classic") {
-        const team = disguised ? disguised.team : p.owner ? state.players.get(p.owner)?.team : p.team;
+        const team = disguised && !isMe ? disguised.team : p.owner ? state.players.get(p.owner)?.team : p.team;
         const color = team === 1 ? "#ff8a94" : team === 2 ? "#8ac4ff" : "#ffffff";
         if (view.label.style.color !== color) view.label.setColor(color);
       }
@@ -939,8 +939,8 @@ export class GameScene extends Phaser.Scene {
             view.bar.lineStyle(3, 0xf0b88a, 1).lineBetween(body.x, body.y - 6 * k, fist.x, fist.y);
           });
         }
-        const team = state.stage === "classic" ? (disguised ? disguised.team : p.owner ? state.players.get(p.owner)?.team : p.team) : 0;
-        view.bar.fillStyle(team ? TEAM_MARKERS[team] : PLAYER_MARKERS[(disguised ?? p).color % 4], team ? 0.8 : 0.5).fillEllipse(body.x, body.y + 1, 14 * k, 5 * k);
+        const team = state.stage === "classic" ? (disguised && !isMe ? disguised.team : p.owner ? state.players.get(p.owner)?.team : p.team) : 0;
+        view.bar.fillStyle(team ? TEAM_MARKERS[team] : PLAYER_MARKERS[(disguised && !isMe ? disguised : p).color % 4], team ? 0.8 : 0.5).fillEllipse(body.x, body.y + 1, 14 * k, 5 * k);
         view.bar.fillStyle(0x000000, 0.7).fillRect(body.x - 12, body.y + 3 + 2 * k, 24, 2);
         view.bar.fillStyle(0x4cd964, 1).fillRect(body.x - 12, body.y + 3 + 2 * k, 24 * (p.hp / p.maxHp), 2);
         if (state.stage === "classic" && !p.owner) this.drawLives(view.bar, body.x, view.label.y - 11, p.lives ?? 0);
