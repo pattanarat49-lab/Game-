@@ -322,12 +322,12 @@ let signupMode = false;
 function setSignupMode(on: boolean) {
   signupMode = on;
   accountForm.classList.toggle("signup", on);
-  document.getElementById("acc-title")!.textContent = on ? "CREATE NEW ACCOUNT" : "SIGN IN";
-  accGo.textContent = on ? "CREATE ACCOUNT & PLAY" : "SIGN IN";
+  document.getElementById("acc-title")!.textContent = on ? "CREATE NEW ACCOUNT" : "LOGIN";
+  accGo.textContent = on ? "CREATE ACCOUNT & PLAY" : "LOGIN";
   accPass2.style.display = on ? "" : "none";
   accPass.autocomplete = on ? "new-password" : "current-password";
   document.getElementById("acc-switch-text")!.textContent = on ? "Already have an account?" : "No account yet?";
-  document.getElementById("acc-switch")!.textContent = on ? "BACK TO SIGN IN" : "CREATE NEW ACCOUNT";
+  document.getElementById("acc-switch")!.textContent = on ? "BACK TO LOGIN" : "CREATE NEW ACCOUNT";
   accError.textContent = "";
   accPass2.value = "";
 }
@@ -342,7 +342,7 @@ function drawAccount() {
     setTimeout(() => accUser.focus(), 0);
     return;
   }
-  accountBar.append("Signed in as ");
+  accountBar.append("Logged in as ");
   const b = document.createElement("b");
   b.textContent = a.username;
   accountBar.append(b);
@@ -404,7 +404,7 @@ if (soloOnly) {
       accError.textContent = "The passwords don't match";
       return;
     }
-    accError.textContent = signupMode ? "Creating account..." : "Signing in...";
+    accError.textContent = signupMode ? "Creating account..." : "Logging in...";
     try {
       // A new account starts with this device's record and picks.
       if (signupMode) await signUp(user, pass, { stats: deviceStats(), prefs: { hero: selectedHero, stage: selectedStage, bot: selectedBot } });
