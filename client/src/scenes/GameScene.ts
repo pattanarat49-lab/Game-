@@ -2451,14 +2451,17 @@ export class GameScene extends Phaser.Scene {
       const fade = Math.max(0, Math.min(1, age / 0.4, z.life / 0.6));
       if (drawFxZone(floor, sky, z, now)) return;
       if (z.kind === "domain") {
-        // Unlimited Void: the whole map becomes an endless starfield.
-        floor.fillStyle(0x07000f, 0.85 * fade).fillRect(0, 0, WORLD_W, WORLD_H);
-        for (let i = 0; i < 90; i++) {
+        // Unlimited Void: a circle of endless starfield opens around him.
+        const r = z.radius * Math.min(1, 0.3 + age * 2.5);
+        floor.fillStyle(0x07000f, 0.85 * fade).fillCircle(z.x, z.y, r);
+        for (let i = 0; i < 70; i++) {
           const twinkle = 0.4 + 0.6 * Math.abs(Math.sin(now / 300 + i));
-          floor.fillStyle(i % 3 ? 0xffffff : 0x9f7fff, fade * twinkle).fillRect((i * 137.5) % WORLD_W, (i * 271.3) % WORLD_H, 2, 2);
+          const a = i * 2.399;
+          const d = Math.sqrt(((i * 0.618) % 1)) * r;
+          floor.fillStyle(i % 3 ? 0xffffff : 0x9f7fff, fade * twinkle).fillRect(z.x + Math.cos(a) * d, z.y + Math.sin(a) * d, 2, 2);
         }
-        floor.lineStyle(3, 0x9f7fff, fade).strokeCircle(z.x, z.y, 40 + age * 420);
-        floor.lineStyle(1, 0xffffff, fade * 0.6).strokeCircle(z.x, z.y, 20 + age * 260);
+        floor.lineStyle(3, 0x9f7fff, fade).strokeCircle(z.x, z.y, r);
+        floor.lineStyle(1, 0xffffff, fade * 0.6).strokeCircle(z.x, z.y, Math.min(r, 20 + age * 260));
       } else if (z.kind === "hurricane") {
         floor.fillStyle(0x223040, 0.35 * fade).fillCircle(z.x, z.y, z.radius);
         floor.lineStyle(2, 0x9fd8ff, 0.5 * fade).strokeCircle(z.x, z.y, z.radius);

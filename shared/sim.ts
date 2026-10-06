@@ -2057,10 +2057,12 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
         brain.slashTimer = 0;
         break;
       case "domain":
-        // Unlimited Void: every enemy on the map is hit at once.
-        s.enemies.forEach((_e, eid) => this.damageEnemy(eid, skill.damage, id));
-        s.players.forEach((_v, vid) => {
-          if (this.isFoe(id, vid)) this.damagePlayer(vid, skill.damage * PVP_DAMAGE_SCALE, true, id);
+        // Unlimited Void: every enemy inside the void (a big circle around him) is hit at once.
+        s.enemies.forEach((e, eid) => {
+          if (Math.hypot(e.x - p.x, e.y - p.y) <= skill.radius + ENEMIES[e.kind as EnemyKind].radius) this.damageEnemy(eid, skill.damage, id);
+        });
+        s.players.forEach((v, vid) => {
+          if (this.isFoe(id, vid) && Math.hypot(v.x - p.x, v.y - p.y) <= skill.radius + this.pr(v)) this.damagePlayer(vid, skill.damage * PVP_DAMAGE_SCALE, true, id);
         });
         this.addZone("domain", p.x, p.y, skill.radius, skill.duration ?? 1.5, { owner: id, every: Infinity, damage: 0 });
         break;
@@ -4246,6 +4248,8 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
         return dist <= reach;
       case "seventh":
         return dist <= reach * 0.8;
+      case "domain":
+        return dist <= skill.radius * 0.85;
       case "whip":
         return dist <= skill.radius * 0.9;
       case "charge":

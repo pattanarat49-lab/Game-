@@ -118,7 +118,7 @@ export type SkillKind =
   | "heal" // heal every ally nearby
   | "line" // a wide straight blast
   | "slashes" // many quick slashes all around
-  | "domain" // hits every enemy on the map
+  | "domain" // hits every enemy inside a big circle around him
   | "timestop" // everything but the caster freezes
   | "hurricane" // a storm cloud that keeps striking an area
   | "asgard" // an illusion kingdom that drains enemies standing in it
@@ -518,7 +518,7 @@ const BASE_HEROES: Record<BaseHeroId, HeroDef> = {
   gojo: {
     name: "Void Sorcerer",
     role: "Sorcerer",
-    blurb: "Fights up close. VOID REALM hits every enemy on the whole map. PURPLE BEAM (E): one huge purple beam that hits everything in a long line for heavy damage.",
+    blurb: "Fights up close. VOID REALM opens a starry void around him that hits every enemy inside it. PURPLE BEAM (E): one huge purple beam that hits everything in a long line for heavy damage.",
     stars: 4,
     maxHp: 140,
     speed: 115,
@@ -530,7 +530,7 @@ const BASE_HEROES: Record<BaseHeroId, HeroDef> = {
     aoe: 0,
     shotSpeed: 0,
     pierce: 0,
-    skill: { kind: "domain", name: "VOID REALM", cooldown: 18, damage: 200, radius: 9999, duration: 1.6 },
+    skill: { kind: "domain", name: "VOID REALM", cooldown: 18, damage: 200, radius: 160, duration: 1.6 },
     skill2: { kind: "purple", name: "PURPLE BEAM", cooldown: 14, damage: 160, radius: 420, width: 40 },
   },
   starplatinum: {
@@ -1640,7 +1640,7 @@ export const DAMAGE_BALANCE: Partial<Record<HeroId, number>> = {
   steve: 2.49,
   taekwondo: 1.14,
   vampire: 1.09,
-  gojo: 1.52,
+  gojo: 1.63,
   rider: 1.02,
   simo: 0.46,
   rick: 1.91,
