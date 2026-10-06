@@ -1,7 +1,8 @@
 // A player's record (2026-10-06), shown to others in the Open World. Kept on the device, or on the
 // server when signed in to an account (account.ts).
 
-import { accountData, currentAccount, saveAccountData } from "./account";
+import { accountData, currentAccount, reportWin, saveAccountData } from "./account";
+import { toast } from "./toast";
 
 export interface Result {
   mode: string; // "PvP", "Bot Duel", "PvE Squad", "3v3", "Dungeon"
@@ -47,7 +48,11 @@ export function recordResult(r: Result) {
   if (r.won === false) s.losses++;
   if (r.mode === "Dungeon" && r.won) s.dungeons++;
   s.recent = [r, ...s.recent].slice(0, 8);
-  if (currentAccount()) return saveAccountData({ stats: s });
+  if (currentAccount()) {
+    // Every win earns a slot spin to unlock a new hero.
+    if (r.won === true) void reportWin().then((n) => n && toast("+1 SPIN! Unlock a new hero in the menu"));
+    return saveAccountData({ stats: s });
+  }
   try {
     localStorage.setItem(KEY, JSON.stringify(s));
   } catch {

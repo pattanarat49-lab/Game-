@@ -4,6 +4,7 @@
 // PvE Squad uses the same screen with four player slots (1P-4P), a small bot slot at the top centre
 // (tap it, then a hero, to choose who the bot plays) and the bot's difficulty under it.
 
+import { heroLocked } from "./account";
 import { BOT_LEVELS, HEROES, HERO_CLASSES, HERO_IDS, HeroId, heroClass, heroOf, heroRatings } from "../../shared/game";
 import { heroPortrait, paintPortrait } from "./heroArt";
 import { showHeroInfo } from "./heroInfo";
@@ -55,6 +56,8 @@ const CSS = `
 #lobby .tile .mark.p1 { left: 0; background: #3ad8ff; color: #04202e; }
 #lobby .tile .mark.p2 { right: 0; background: #ff3a4a; color: #2e040a; }
 #lobby .tile:disabled { cursor: default; }
+#lobby .tile.locked canvas { filter: grayscale(1) brightness(0.45); }
+#lobby .tile.locked::after { content: "LOCK"; position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); font-size: clamp(6px, 1.3vh, 8px); color: #ffd23f; background: rgba(0,0,0,0.7); padding: 2px 3px; }
 #lobby .bottom { display: flex; flex-direction: column; align-items: center; gap: 0.8vh; }
 #lobby .notice { font-size: clamp(8px, 2vh, 13px); color: #ff8a6a; min-height: 1em; text-align: center; }
 #lobby .readyBtn { font: inherit; font-size: clamp(12px, 3.4vh, 20px); padding: 1.2vh 4vw; border: 3px solid #1a0f14; border-radius: 6px;
@@ -205,7 +208,7 @@ export class Lobby {
         if (this.botMode) {
           this.actions.botHero?.(id);
           this.botMode = false;
-        } else this.pick(id);
+        } else if (!heroLocked(id)) this.pick(id); // a locked hero: just its details
         showHeroInfo(id);
       });
       grid.append(tile);
@@ -354,6 +357,7 @@ export class Lobby {
     this.fill(this.p1, me, "");
     this.fill(this.p2, foe, "Waiting for a challenger...");
     for (const [id, tile] of this.tiles) {
+      tile.classList.toggle("locked", !this.botMode && heroLocked(id));
       const mine = me?.hero === id;
       const theirs = foe?.hero === id;
       tile.classList.toggle("me", mine);
@@ -397,6 +401,7 @@ export class Lobby {
     slot.button.classList.toggle("on", this.botMode);
     this.levelButtons.forEach((b, i) => b.classList.toggle("on", i === (state.botLevel ?? 2)));
     for (const [id, tile] of this.tiles) {
+      tile.classList.toggle("locked", !this.botMode && heroLocked(id));
       const slotsHere = team.map(([, p], i) => (p.hero === id ? i : -1)).filter((i) => i >= 0);
       const bot = botHero === id;
       ["me", "foe", "p3", "p4"].forEach((c, i) => tile.classList.toggle(c, slotsHere.includes(i)));
@@ -440,6 +445,7 @@ export class Lobby {
     if (this.mapName) this.mapName.textContent = CLASSIC_MAPS[map]?.name ?? "";
     this.levelButtons.forEach((b, i) => b.classList.toggle("on", i === (state.botLevel ?? 2)));
     for (const [id, tile] of this.tiles) {
+      tile.classList.toggle("locked", !this.botMode && heroLocked(id));
       const mine = me?.hero === id;
       tile.classList.toggle("me", mine);
       tile.disabled = !!me?.ready;

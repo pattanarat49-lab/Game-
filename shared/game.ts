@@ -1802,7 +1802,7 @@ export const INTERMISSION_TIME = 6;
 
 export type EnemyKind =
   | "cinderling" | "brute" | "caster" | "warden" | "godzilla" | "monkey" | "bananamonkey" | "kingkong" | "swordsman" | "swordmaster" | "swordgod"
-  | "dirtblock" | "tntblock" | "craftblock" | "rockwall";
+  | "dirtblock" | "tntblock" | "craftblock" | "rockwall" | "dummy";
 
 export interface EnemyDef {
   hp: number;
@@ -1838,6 +1838,8 @@ export const ENEMIES: Record<EnemyKind, EnemyDef> = {
   dirtblock: { hp: 1, speed: 0, radius: 8, touchDamage: 0, score: 0, block: true },
   // STONE WALL: the Geomancer's rocks; they stop shots until broken.
   rockwall: { hp: 200, speed: 0, radius: 8, touchDamage: 0, score: 0, block: true },
+  // Tutorial: straw dummies that stand still and never hit back.
+  dummy: { hp: 300, speed: 0, radius: 11, touchDamage: 0, score: 0 },
   tntblock: { hp: 1, speed: 0, radius: 8, touchDamage: 0, score: 0, block: true },
   craftblock: { hp: 1, speed: 0, radius: 8, touchDamage: 0, score: 0, block: true },
   godzilla: { hp: 7000, speed: 24, radius: 22, touchDamage: 105, score: 2000, shootEvery: 3, shotDamage: ENEMY_SHOT_DAMAGE_BASE * 3, boss: true },
@@ -2114,7 +2116,7 @@ export function inLava(x: number, y: number, lavaRadius: number): boolean {
 }
 
 // Stages
-export type StageId = "lava" | "jungle" | "dojo" | "boss" | "pvp" | "duel" | "pve" | "classic" | "world" | "dungeon";
+export type StageId = "lava" | "jungle" | "dojo" | "boss" | "pvp" | "duel" | "pve" | "classic" | "world" | "dungeon" | "tutorial";
 
 export interface StageDef {
   name: string;
@@ -2130,6 +2132,7 @@ export const STAGES: Record<StageId, StageDef> = {
   duel: { name: "Bot Duel", blurb: "1v1 in the boxing ring against a bot playing the hero you pick. First to 3 KOs. Solo." },
   pve: { name: "PvE Squad", blurb: "1 to 4 players team up against one bot. Pick its hero and difficulty. First to 3 KOs. Solo or online." },
   world: { name: "Open World", blurb: "Meet everyone in a big meadow village: chat, look up players, ask for duels, and take the portal to the dungeon together." },
+  tutorial: { name: "Tutorial", blurb: "Learn to move, attack, use skills and dash on training dummies." },
   dungeon: { name: "Dungeon", blurb: "Rooms full of monsters and a boss at the end. Beat it and the way back opens." },
   classic: { name: "Classic 3v3", blurb: "Red vs Blue, 3 heroes a side, on 6 maps with walls, tall grass and water. Bots fill empty slots. 3 lives each; the last team standing wins. Solo or online." },
 };
@@ -2137,7 +2140,7 @@ export const STAGES: Record<StageId, StageDef> = {
 /** Stages taken out of the game (user request 2026-10-05: the Boss Room); their code is kept. */
 const REMOVED_STAGES: StageId[] = ["boss", "lava", "jungle", "dojo"];
 /** The Open World and its dungeon have their own button, not a stage card. */
-const OWN_BUTTON: StageId[] = ["world", "dungeon"];
+const OWN_BUTTON: StageId[] = ["world", "dungeon", "tutorial"];
 export const STAGE_IDS = (Object.keys(STAGES) as StageId[]).filter((id) => !REMOVED_STAGES.includes(id) && !OWN_BUTTON.includes(id));
 
 /** Wave stages: which enemies come in each wave. */

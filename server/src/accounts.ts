@@ -2,11 +2,12 @@
 // With DATABASE_URL set (a Postgres database) accounts last forever; without it they are kept in
 // data/accounts.json next to the server, which a free host wipes whenever it restarts.
 
-import { randomBytes, scrypt as scryptCb, timingSafeEqual } from "crypto";
+import { randomBytes, randomInt, scrypt as scryptCb, timingSafeEqual } from "crypto";
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "fs";
 import { dirname, resolve } from "path";
 import { promisify } from "util";
-import type { Express, Request } from "express";
+import type { Express, Request, Response } from "express";
+import { HERO_IDS } from "../../shared/game";
 import express from "express";
 import { Pool } from "pg";
 
@@ -136,7 +137,7 @@ console.log(`Accounts kept in ${process.env.DATABASE_URL ? "the database" : "dat
 
 const NAME_RE = /^[A-Za-z0-9_]{3,16}$/;
 const MAX_TOKENS = 5; // devices signed in at once
-const MAX_DATA = 6000;
+const MAX_DATA = 12000;
 
 async function hashPw(pw: string, salt: Buffer) {
   return scrypt(pw, salt, 32);
@@ -195,6 +196,105 @@ function failed(req: Request) {
 function bearer(req: Request): string {
   const h = req.headers.authorization ?? "";
   return h.startsWith("Bearer ") ? h.slice(7) : "";
+}
+
+// ---- Heroes: new players pick 3 starters out of 10 random ones; every win earns a spin that unlocks one more. ----
+interface Unlocks {
+  owned?: string[];
+  spins?: number;
+  offer?: string[];
+  lastWin?: number;
+}
+type Data = Record<string, unknown> & Unlocks;
+const STARTER_OFFER = 10;
+const STARTER_PICKS = 3;
+const WIN_GAP_MS = 40_000; // a game takes longer than this, so one spin per real win
+
+function readData(a: Account): Data {
+  try {
+    const d = JSON.parse(a.data);
+    return d && typeof d === "object" ? d : {};
+  } catch {
+    return {};
+  }
+}
+
+function serverPart(d: Data): Unlocks {
+  return { owned: d.owned ?? [], spins: d.spins ?? 0, offer: d.offer, lastWin: d.lastWin };
+}
+
+/** The heroes an account may play (undefined = it still has to pick its starters). */
+export function ownedHeroes(a: Account): string[] {
+  return (readData(a).owned ?? []).filter((h) => (HERO_IDS as string[]).includes(h));
+}
+
+function shuffled<T>(list: T[]): T[] {
+  const out = [...list];
+  for (let i = out.length - 1; i > 0; i--) {
+    const j = randomInt(i + 1);
+    [out[i], out[j]] = [out[j], out[i]];
+  }
+  return out;
+}
+
+async function withAccount(req: Request, res: Response, f: (a: Account, d: Data) => Promise<unknown> | unknown) {
+  const a = await accountForToken(bearer(req));
+  if (!a) return void res.status(401).json({ error: "Signed out" });
+  try {
+    const d = readData(a);
+    const out = await f(a, d);
+    if (res.headersSent) return;
+    a.data = JSON.stringify(d);
+    await store.save(a);
+    res.json({ ...(out as object), owned: ownedHeroes(a), spins: d.spins ?? 0 });
+  } catch (e) {
+    console.error("unlock failed", e);
+    if (!res.headersSent) res.status(500).json({ error: "Server error" });
+  }
+}
+
+function unlockRoutes(app: Express) {
+  // The 10 random heroes a new player picks 3 starters from (the same 10 until they pick).
+  app.post("/api/starters", (req, res) =>
+    withAccount(req, res, (_a, d) => {
+      if ((d.owned ?? []).length) return { offer: [] };
+      if (!d.offer?.every((h) => (HERO_IDS as string[]).includes(h))) d.offer = shuffled([...HERO_IDS]).slice(0, STARTER_OFFER);
+      return { offer: d.offer };
+    }),
+  );
+  app.post("/api/starters/pick", (req, res) =>
+    withAccount(req, res, (_a, d) => {
+      const picks = [...new Set((Array.isArray(req.body?.heroes) ? req.body.heroes : []).map(String))] as string[];
+      if ((d.owned ?? []).length) return void res.status(409).json({ error: "Starters already picked" });
+      if (picks.length !== STARTER_PICKS || !picks.every((h) => d.offer?.includes(h))) return void res.status(400).json({ error: `Pick ${STARTER_PICKS} of the heroes shown` });
+      d.owned = picks;
+      delete d.offer;
+      return {};
+    }),
+  );
+  // A win anywhere: one more spin.
+  app.post("/api/win", (req, res) =>
+    withAccount(req, res, (_a, d) => {
+      const now = Date.now();
+      if (now - (d.lastWin ?? 0) < WIN_GAP_MS) return { added: 0 };
+      d.lastWin = now;
+      d.spins = (d.spins ?? 0) + 1;
+      return { added: 1 };
+    }),
+  );
+  // Spend a spin: a random hero the player doesn't have yet.
+  app.post("/api/spin", (req, res) =>
+    withAccount(req, res, (a, d) => {
+      const owned = new Set(ownedHeroes(a));
+      const left = HERO_IDS.filter((h) => !owned.has(h));
+      if (!(d.spins ?? 0)) return void res.status(400).json({ error: "No spins left. Win a game to get one!" });
+      if (!left.length) return void res.status(400).json({ error: "You already have every hero!" });
+      const hero = left[randomInt(left.length)];
+      d.spins = (d.spins ?? 0) - 1;
+      d.owned = [...owned, hero];
+      return { hero };
+    }),
+  );
 }
 
 export function accountRoutes(app: Express) {
@@ -266,7 +366,8 @@ export function accountRoutes(app: Express) {
     const token = bearer(req);
     const a = await accountForToken(token);
     if (!a) return void res.status(401).json({ error: "Signed out" });
-    const data = JSON.stringify(req.body?.data ?? {});
+    // The heroes owned and the spins are the server's to change (see the unlock routes below).
+    const data = JSON.stringify({ ...(req.body?.data ?? {}), ...serverPart(readData(a)) });
     if (data.length > MAX_DATA) return void res.status(413).json({ error: "Too much data" });
     a.data = data;
     try {
@@ -277,6 +378,8 @@ export function accountRoutes(app: Express) {
       res.status(500).json({ error: "Server error" });
     }
   });
+
+  unlockRoutes(app);
 
   app.post("/api/logout", async (req, res) => {
     const token = bearer(req);

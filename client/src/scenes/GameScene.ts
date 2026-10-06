@@ -61,6 +61,8 @@ import { MAP_H, MAP_Y, classicMap, inBush, seesInto } from "../../../shared/maps
 import { RiftSim, TITAN_ATTACK_COOLDOWN } from "../../../shared/sim";
 import { WorldView } from "../worldView";
 import { recordResult, statsJson } from "../stats";
+import { TutorialView } from "../tutorial";
+import { isTouchDevice } from "../touch";
 import { DUNGEON, OPEN_WORLD } from "../../../shared/world";
 import { BLOCK } from "../../../shared/maps";
 import { attackArtLayout, attackFrame, facingOf, frontOnly, hasHeroArt, heroArtLayout, SWING_TIME } from "../heroArt";
@@ -233,6 +235,7 @@ const ENEMY_SCALE: Record<EnemyKind, number> = {
   tntblock: 1.3,
   craftblock: 1.3,
   rockwall: 1.3,
+  dummy: 2.2,
 };
 
 export function serverUrl(): string {
@@ -304,6 +307,8 @@ export class GameScene extends Phaser.Scene {
   /** The last phase seen, to note a match's result once (for the player's record). */
   private lastPhase = "";
   private dungeonCleared = false;
+  /** The tutorial's step-by-step panel. */
+  private tutorial?: TutorialView;
 
   constructor() {
     super("Game");
@@ -314,7 +319,7 @@ export class GameScene extends Phaser.Scene {
     const open = stage === "world" || stage === "dungeon";
     if (stage === "classic") this.classicGround = this.add.image(0, 0, this.classicTexture(0)).setOrigin(0).setDepth(-10);
     else if (!open) this.add.image(0, 0, `ground_${stage}`).setOrigin(0).setDepth(-10);
-    if (stage === "dojo") {
+    if (stage === "dojo" || stage === "tutorial") {
       // Straw training dummies stand where the other stages have pillars.
       for (const rock of ROCKS) this.add.image(rock.x, rock.y + rock.r * 0.4, "dummy").setOrigin(0.5, 1).setScale(rock.r / 8).setDepth(rock.y);
     }
@@ -362,6 +367,12 @@ export class GameScene extends Phaser.Scene {
       this.registry.set("room", this.room);
       if (stage === "pve" || stage === "classic") this.openLobby(stage);
       if (open) this.openWorld(stage, false);
+      if (stage === "tutorial") {
+        const tut = new TutorialView(this, this.room, isTouchDevice(), (skipped) => this.game.events.emit("tutorial-done", skipped));
+        this.tutorial = tut;
+        this.events.once(Phaser.Scenes.Events.DESTROY, () => tut.destroy());
+        this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => tut.destroy());
+      }
       this.scene.launch("Hud");
       return;
     }
@@ -499,6 +510,7 @@ export class GameScene extends Phaser.Scene {
     this.drawLava(state.lavaRadius);
     this.drawZones(state, dt);
     this.world?.update(state);
+    this.tutorial?.update(state);
     this.trackResult(state);
   }
 

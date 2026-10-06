@@ -220,6 +220,7 @@ export class BootScene extends Phaser.Scene {
     this.addCanvas("boulder", renderPixelSprite(BOULDER));
     this.addCanvas("ground_jungle", this.drawGround(JUNGLE_THEME));
     this.addCanvas("ground_dojo", this.drawDojo());
+    this.addCanvas("ground_tutorial", this.drawDojo());
     this.addCanvas("swordsman", renderPixelSprite(SWORDSMAN));
     this.addCanvas("swordmaster", renderPixelSprite(SWORDMASTER));
     this.addCanvas("swordgod", renderPixelSprite(SWORD_GOD));

@@ -10,6 +10,8 @@ import { showHeroInfo } from "./heroInfo";
 import { COVER_PNG } from "./cover.data";
 import { accountData, currentAccount, onAccountChange, restoreSession, saveAccountData, signIn, signOut, signUp } from "./account";
 import { deviceStats } from "./stats";
+import { accountLoaded, heroLocked, ownedHeroes, pickStarters, spinSlot, spinsLeft, starterOffer } from "./account";
+import { showSlot, showStarterPicker } from "./unlocks";
 
 (document.getElementById("cover") as HTMLImageElement | null)?.setAttribute("src", COVER_PNG);
 
@@ -161,10 +163,15 @@ function buildHeroPicker() {
     card.prepend(heroPortrait(id));
     if (hero.stars > 5) card.classList.add("special");
     card.addEventListener("click", () => {
+      showHeroInfo(id);
+      if (heroLocked(id)) {
+        errorText.textContent = `${hero.name} is locked. Win games to earn spins and unlock heroes!`;
+        return;
+      }
+      errorText.textContent = "";
       selectedHero = id;
       localStorageSet("riftborn-hero", id);
       container.querySelectorAll(".hero").forEach((c) => c.setAttribute("aria-pressed", String(c === card)));
-      showHeroInfo(id);
     });
     container.append(card);
   }
@@ -218,9 +225,10 @@ document.getElementById("open-world")?.addEventListener("click", () => startGame
 
 /** Start (or move to) a game: a stage, solo or online, and a room number ("" = any open room). */
 async function startGame(stage: StageId, solo: boolean, code: string) {
-  const account = solo ? undefined : currentAccount();
-  const name = account?.username ?? (nameInput.value.trim().slice(0, 16) || "Player");
-  if (!account) localStorageSet("riftborn-name", name);
+  const signedIn = currentAccount();
+  const account = solo ? undefined : signedIn;
+  const name = signedIn?.username ?? (nameInput.value.trim().slice(0, 16) || "Player");
+  if (!signedIn) localStorageSet("riftborn-name", name);
   errorText.textContent = "";
   menu.classList.add("hidden");
   const touch = isTouchDevice();
@@ -267,6 +275,13 @@ async function startGame(stage: StageId, solo: boolean, code: string) {
   game.events.on("switch-room", (to: { stage: StageId; code: string }) => {
     if (mine !== game) return;
     setTimeout(() => startGame(to.stage, solo, to.code), 0);
+  });
+  // Tutorial finished or skipped: never shown again, back to the menu.
+  game.events.on("tutorial-done", () => {
+    if (mine !== game) return;
+    if (currentAccount()) saveAccountData({ tutorial: true });
+    localStorageSet("uv-tutorial", "1");
+    setTimeout(backToMenu, 0);
   });
   game.events.on("connection-error", (err: Error) => {
     if (mine !== game || mine.registry.get("leaving")) return; // we pressed BACK
@@ -346,17 +361,62 @@ function drawAccount() {
   const b = document.createElement("b");
   b.textContent = a.username;
   accountBar.append(b);
+  // The hero slot: spins earned by winning unlock new heroes.
+  const spin = document.createElement("button");
+  spin.type = "button";
+  spin.id = "acc-spin";
+  spin.className = spinsLeft() > 0 ? "main glow" : "";
+  spin.textContent = `SPIN (${spinsLeft()})`;
+  spin.addEventListener("click", () => showSlot(spinsLeft, spinSlot, () => ownedHeroes() ?? []));
+  accountBar.append(spin);
   const out = document.createElement("button");
   out.type = "button";
   out.id = "acc-logout";
   out.textContent = "LOG OUT";
   out.addEventListener("click", () => {
+    newPlayerFlow = false;
     accUser.value = a.username;
     accPass.value = "";
     setSignupMode(false);
     void signOut();
   });
   accountBar.append(out);
+  refreshLocks();
+  void welcomeNewPlayer();
+}
+
+/** Locked heroes are greyed out on the menu; the picked hero is always one the player has. */
+function refreshLocks() {
+  document.querySelectorAll<HTMLElement>("#heroes .hero").forEach((c) => c.classList.toggle("locked", heroLocked(c.id.slice(5))));
+  const owned = ownedHeroes();
+  if (owned?.length && !owned.includes(selectedHero) && HERO_IDS.includes(owned[0] as HeroId)) {
+    selectedHero = owned[0] as HeroId;
+    document.querySelectorAll("#heroes .hero").forEach((c) => c.setAttribute("aria-pressed", String(c.id === `hero-${selectedHero}`)));
+  }
+}
+
+/** A new player: pick 3 starters out of 10, then the tutorial (once). */
+let newPlayerFlow = false;
+async function welcomeNewPlayer() {
+  if (newPlayerFlow || game || !accountLoaded()) return;
+  const owned = ownedHeroes() ?? [];
+  if (owned.length && accountData().tutorial) return;
+  newPlayerFlow = true;
+  try {
+    if (!owned.length) {
+      const offer = await starterOffer();
+      if (offer.length) await showStarterPicker(offer, (picks) => pickStarters(picks));
+    }
+    if (!accountData().tutorial && !game) startTutorial();
+  } catch (e) {
+    errorText.textContent = (e as Error).message === "Failed to fetch" ? "Can't reach the server." : (e as Error).message;
+    newPlayerFlow = false;
+  }
+}
+
+function startTutorial() {
+  refreshLocks();
+  void startGame("tutorial", true, "");
 }
 
 /** The account's saved picks become the menu's picks. */
@@ -382,6 +442,8 @@ function applyPrefs() {
 if (soloOnly) {
   accountBar.remove(); // the solo build has no server to keep accounts on
   accountModal.remove();
+  // First visit: the tutorial (every hero is open in the solo build).
+  if (!localStorageGet("uv-tutorial")) startTutorial();
 } else {
   (document.getElementById("acc-cover") as HTMLImageElement).src = COVER_PNG;
   setSignupMode(false);

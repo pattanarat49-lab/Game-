@@ -111,6 +111,10 @@ export class HudScene extends Phaser.Scene {
       // Open World: who is around, and the portal's countdown.
       this.waveText.setText(`OPEN WORLD  ${realPlayers(state)} ONLINE`);
       // The portal's countdown shows on its own panel.
+    } else if (state.stage === "tutorial") {
+      // The steps are on the tutorial panel (tutorial.ts).
+      this.waveText.setText("TUTORIAL");
+      if (me?.dead) banner = `YOU FELL\nBack in ${Math.ceil(me.respawnIn)}`;
     } else if (state.stage === "dungeon") {
       this.waveText.setText(`DUNGEON  MONSTERS ${state.enemies.size}`);
       state.enemies.forEach((e: any) => {

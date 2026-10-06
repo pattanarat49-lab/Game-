@@ -222,6 +222,8 @@
         outline: 3px solid #f07a22;
         outline-offset: 2px;
       }
+      .hero.locked { filter: grayscale(1) brightness(0.55); position: relative; }
+      .hero.locked::after { content: "LOCKED"; position: absolute; top: 6px; right: 6px; font-size: 8px; padding: 3px 5px; background: #120b0f; color: #ffd23f; border: 1px solid #ffd23f; border-radius: 2px; }
       .hero canvas {
         grid-row: span 4;
         width: 64px;
@@ -370,6 +372,8 @@
       #account-bar b { color: #7dff8a; font-weight: normal; }
       #account-bar button { font: inherit; font-size: 10px; padding: 6px 10px; margin-left: 6px; background: #3a2e46; color: #fff; border: 2px solid #6b5842; border-radius: 3px; cursor: pointer; }
       #account-bar button.main { background: #ffd23f; color: #1a1220; border-color: #b8901a; }
+      #account-bar button.glow { animation: glow 1s ease-in-out infinite alternate; }
+      @keyframes glow { to { box-shadow: 0 0 12px #ffd23f; } }
       #account-modal { position: fixed; inset: 0; z-index: 40; display: flex; align-items: safe center; justify-content: center; background: #120b0f; overflow-y: auto; }
       #acc-cover { display: block; margin: 0 auto; width: 84px; height: 84px; }
       #acc-go { font: inherit; font-size: 12px; padding: 11px; border-radius: 3px; cursor: pointer; background: #2fae6a; color: #fff; border: 2px solid #1d7a48; }

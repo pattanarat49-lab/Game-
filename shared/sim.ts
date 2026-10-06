@@ -172,6 +172,12 @@ const PIANO_NOTE_SPEED = 260;
 export function newRoomCode(): string {
   return `R${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
 }
+/** Tutorial: where the training dummies stand (right of the hero). */
+export const TUTORIAL_DUMMIES = [
+  { x: CENTER_X + 40, y: CENTER_Y - 60 },
+  { x: CENTER_X + 70, y: CENTER_Y },
+  { x: CENTER_X + 40, y: CENTER_Y + 60 },
+];
 const DUNGEON_AGGRO = 230; // how close a hero must come before a dungeon monster notices
 const MAX_LAG_COMP = 0.25; // seconds: the most an online hit is judged in the past
 const KUNAI_SPEED = 1100; // MARKED KUNAI throw speed (before the shot slow-down)
@@ -599,6 +605,39 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       state.lavaRadius = 5000;
       if (stage === "dungeon") this.fillDungeon();
     }
+    if (stage === "tutorial") {
+      state.phase = "fight";
+      state.lavaRadius = 5000;
+      for (const d of TUTORIAL_DUMMIES) this.spawnEnemyAt("dummy", d.x, d.y);
+    }
+  }
+
+  /** Tutorial: knocked-down dummies stand back up; the last step sends a few weak monsters. */
+  private updateTutorial(dt: number) {
+    let dummies = 0;
+    this.state.enemies.forEach((e) => {
+      if (e.kind === "dummy") dummies++;
+    });
+    if (dummies < TUTORIAL_DUMMIES.length) {
+      this.dummyTimer += dt;
+      if (this.dummyTimer >= 1.5) {
+        this.dummyTimer = 0;
+        for (const d of TUTORIAL_DUMMIES) {
+          let taken = false;
+          this.state.enemies.forEach((e) => {
+            if (e.kind === "dummy" && Math.hypot(e.x - d.x, e.y - d.y) < 20) taken = true;
+          });
+          if (!taken) this.spawnEnemyAt("dummy", d.x, d.y);
+        }
+      }
+    }
+  }
+  private dummyTimer = 0;
+
+  /** Tutorial's last step: monsters that fight back (weak ones). */
+  tutorialFight(count = 3) {
+    if (this.state.stage !== "tutorial") return;
+    for (let i = 0; i < count; i++) this.spawnEnemy("cinderling");
   }
 
   /** Room changes waiting to be sent out (the server tells each player's device where to go). */
@@ -1892,6 +1931,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
 
     if (s.stage === "boss") this.updateBossRoom(dt);
     else if (s.stage === "world") this.updateWorld(dt);
+    else if (s.stage === "tutorial") this.updateTutorial(dt);
     else if (s.stage === "dungeon") this.updateDungeon();
     else if (this.ring) this.updatePvp(dt);
     else if (s.phase === "intermission") {
@@ -4796,6 +4836,11 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
 
   private placeAtSpawn(p: P) {
     const s = this.state;
+    if (s.stage === "tutorial") {
+      [p.x, p.y] = [CENTER_X - 120, CENTER_Y];
+      p.warp = (p.warp + 1) % 256;
+      return;
+    }
     if (s.stage === "world" || s.stage === "dungeon") {
       const spot = s.stage === "world" ? OPEN_WORLD.spawn : DUNGEON.spawn;
       const a = Math.random() * Math.PI * 2;

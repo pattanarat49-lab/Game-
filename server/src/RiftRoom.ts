@@ -1,4 +1,4 @@
-import { accountForToken, accountStats } from "./accounts";
+import { accountForToken, accountStats, ownedHeroes } from "./accounts";
 import { Client, Room } from "colyseus";
 import { CLASSIC_TEAM_SIZE, MAX_PLAYERS, PlayerInput, stageOf } from "../../shared/game";
 import { RiftSim, TICK_MS, newRoomCode } from "../../shared/sim";
@@ -24,7 +24,12 @@ export class RiftRoom extends Room<RiftState> {
     this.onMessage("ping", (client, sent: number) => client.send("pong", sent));
     this.onMessage("input", (client, input: Partial<PlayerInput>) => this.sim.setInput(client.sessionId, input));
     // PvP player select (and the Open World portal's READY).
-    this.onMessage("pick", (client, hero: string) => this.sim.pickHero(client.sessionId, String(hero)));
+    this.onMessage("pick", (client, hero: string) => {
+      // Accounts play only the heroes they have unlocked.
+      const owned = this.owned.get(client.sessionId);
+      if (owned?.length && !owned.includes(String(hero))) return;
+      this.sim.pickHero(client.sessionId, String(hero));
+    });
     this.onMessage("ready", (client, ready: boolean) => this.sim.setReady(client.sessionId, !!ready));
     // PvE Squad player select: anyone picks the bot's hero and difficulty.
     this.onMessage("bothero", (_client, hero: string) => this.sim.setBot(String(hero)));
@@ -87,12 +92,20 @@ export class RiftRoom extends Room<RiftState> {
   async onJoin(client: Client, options: { name?: string; hero?: string; stats?: string; token?: string }) {
     // Signed in: play under the account's name with the record saved on the server.
     const account = await accountForToken(options?.token);
-    const player = this.sim.addPlayer(client.sessionId, account?.username ?? String(options?.name || "Player"), String(options?.hero || ""));
+    const owned = account ? ownedHeroes(account) : [];
+    if (owned.length) this.owned.set(client.sessionId, owned);
+    let hero = String(options?.hero || "");
+    if (owned.length && !owned.includes(hero)) hero = owned[0];
+    const player = this.sim.addPlayer(client.sessionId, account?.username ?? String(options?.name || "Player"), hero);
     player.stats = account ? accountStats(account) : String(options?.stats ?? "").slice(0, 800);
     console.log(`${player.name} (${player.hero}) entered ${this.state.stage} (${this.sim.realPlayerCount()})`);
   }
 
+  /** The heroes each signed-in player has unlocked. */
+  private owned = new Map<string, string[]>();
+
   onLeave(client: Client) {
+    this.owned.delete(client.sessionId);
     this.sim.removePlayer(client.sessionId);
     this.lastChat.delete(client.sessionId);
     this.duels.delete(client.sessionId);

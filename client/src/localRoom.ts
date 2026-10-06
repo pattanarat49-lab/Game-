@@ -114,6 +114,7 @@ export class LocalRoom {
     else if (type === "botlevel") this.sim.setBot(undefined, Number(data));
     else if (type === "team") this.sim.setTeam(this.sessionId, Number(data));
     else if (type === "map") this.sim.setMap(Number(data));
+    else if (type === "tutfight") this.sim.tutorialFight();
     else if (type === "chat") {
       const text = String(data ?? "").trim().slice(0, 120);
       if (text) this.handlers.get("chat")?.({ id: this.sessionId, name: this.state.players.get(this.sessionId)?.name ?? "", text });
