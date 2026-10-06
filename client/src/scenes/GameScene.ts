@@ -57,7 +57,7 @@ import { LocalRoom } from "../localRoom";
 import { drawFxAura, drawFxZone, fxBuffStep, fxGuide, fxShotTexture } from "../fx";
 import { Lobby } from "../lobby";
 import { drawClassicGround } from "../classicMap";
-import { MAP_H, MAP_Y, classicMap, inBush } from "../../../shared/maps";
+import { MAP_H, MAP_Y, classicMap, inBush, seesInto } from "../../../shared/maps";
 import { RiftSim, TITAN_ATTACK_COOLDOWN } from "../../../shared/sim";
 import { attackArtLayout, attackFrame, facingOf, frontOnly, hasHeroArt, heroArtLayout, SWING_TIME } from "../heroArt";
 
@@ -821,12 +821,16 @@ export class GameScene extends Phaser.Scene {
         body.setAlpha(isMe ? 0.3 : 0);
         view.weapon?.setVisible(isMe);
       }
-      // Classic 3v3: tall grass hides a rival completely; our own side shows faintly inside it.
+      // Classic 3v3: tall grass hides a rival completely, unless we stand in the same patch of grass
+      // (then it shows see-through); our own side shows faintly inside it.
       let bushed = false;
-      if (state.stage === "classic" && !p.dead && inBush(classicMap(state.map ?? 0), p.x, p.y)) {
+      const grassMap = state.stage === "classic" ? classicMap(state.map ?? 0) : undefined;
+      if (grassMap && !p.dead && inBush(grassMap, p.x, p.y)) {
         const mine = state.players.get(this.room!.sessionId);
         const team = p.owner ? state.players.get(p.owner)?.team : p.team;
+        const at = this.predicted;
         if (team === mine?.team) body.setAlpha(Math.min(body.alpha, 0.55));
+        else if (mine && !mine.dead && seesInto(grassMap, at.x, at.y, p.x, p.y)) body.setAlpha(Math.min(body.alpha, 0.4));
         else bushed = true;
       }
       if (bushed) {

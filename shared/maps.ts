@@ -361,3 +361,42 @@ export function stepAlong(dist: Int16Array, x: number, y: number): { x: number; 
   const len = Math.hypot(best.x - x, best.y - y) || 1;
   return { x: (best.x - x) / len, y: (best.y - y) / len };
 }
+
+const regionCache = new WeakMap<ClassicMap, Int16Array>();
+
+/** Which patch of tall grass a spot is in (touching grass blocks form one patch); -1 outside grass. */
+export function bushPatch(m: ClassicMap, x: number, y: number): number {
+  let ids = regionCache.get(m);
+  if (!ids) {
+    ids = new Int16Array(m.tiles.length).fill(-1);
+    let next = 0;
+    for (let i = 0; i < m.tiles.length; i++) {
+      if (m.tiles[i] !== T_BUSH || ids[i] >= 0) continue;
+      const queue = [i];
+      ids[i] = next;
+      for (let q = 0; q < queue.length; q++) {
+        const at = queue[q];
+        const c = at % MAP_COLS_C;
+        const r = (at - c) / MAP_COLS_C;
+        for (const [nc, nr] of [[c + 1, r], [c - 1, r], [c, r + 1], [c, r - 1]]) {
+          if (nc < 0 || nr < 0 || nc >= MAP_COLS_C || nr >= MAP_ROWS_C) continue;
+          const ni = nr * MAP_COLS_C + nc;
+          if (m.tiles[ni] === T_BUSH && ids[ni] < 0) {
+            ids[ni] = next;
+            queue.push(ni);
+          }
+        }
+      }
+      next++;
+    }
+    regionCache.set(m, ids);
+  }
+  if (tileAt(m, x, y) !== T_BUSH) return -1;
+  return ids[Math.floor((y - MAP_Y) / BLOCK) * MAP_COLS_C + Math.floor((x - MAP_X) / BLOCK)];
+}
+
+/** Can someone at (ax, ay) see a hero at (bx, by)? Not into grass, unless both stand in the same patch. */
+export function seesInto(m: ClassicMap, ax: number, ay: number, bx: number, by: number): boolean {
+  const patch = bushPatch(m, bx, by);
+  return patch < 0 || patch === bushPatch(m, ax, ay);
+}

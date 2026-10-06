@@ -82,7 +82,7 @@ import {
   CLASSIC_RESPAWN,
   CLASSIC_TEAM_SIZE,
 } from "./game";
-import { BLOCK, CLASSIC_MAPS, MAP_X, MAP_Y, Team, classicMap, distanceField, inBush, mapLineClear, stepAlong } from "./maps";
+import { BLOCK, CLASSIC_MAPS, MAP_X, MAP_Y, Team, classicMap, distanceField, seesInto, mapLineClear, stepAlong } from "./maps";
 
 export const TICK_MS = 1000 / 30;
 const HURT_IFRAMES = 0.5;
@@ -4134,7 +4134,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
     this.state.players.forEach((v, vid) => {
       if (v.dead || !this.isFoe(id, vid) || this.hidden(v)) return;
       const d = Math.hypot(v.x - p.x, v.y - p.y);
-      if (map && inBush(map, v.x, v.y)) return; // Classic: nobody can see into tall grass
+      if (map && !seesInto(map, p.x, p.y, v.x, v.y)) return; // Classic: no seeing into tall grass (unless in the same patch)
       if (d < dist) [dist, foe] = [d, v];
     });
     if (map && !foe && !p.dead && this.pvpLive()) {
