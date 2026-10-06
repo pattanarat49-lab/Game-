@@ -12,6 +12,8 @@ const menu = document.getElementById("menu")!;
 const form = document.getElementById("join-form") as HTMLFormElement;
 const nameInput = document.getElementById("name") as HTMLInputElement;
 const errorText = document.getElementById("error")!;
+const roomInput = document.getElementById("room-code") as HTMLInputElement;
+const backButton = document.getElementById("back-btn")!;
 
 nameInput.value = localStorageGet("riftborn-name") ?? `Rift${Math.floor(100 + Math.random() * 900)}`;
 
@@ -165,7 +167,29 @@ function buildHeroPicker() {
 }
 
 const soloOnly = import.meta.env.VITE_SOLO_ONLY === "1";
-if (soloOnly) document.getElementById("join-online")?.remove();
+if (soloOnly) {
+  document.getElementById("join-online")?.remove();
+  roomInput.remove(); // room numbers are for online play
+}
+
+/** BACK: leave the room (or the solo game) and return to the menu. */
+function backToMenu() {
+  if (!game) return;
+  game.registry.set("leaving", true);
+  const room = game.registry.get("room") as { leave?: () => unknown } | undefined;
+  try {
+    room?.leave?.();
+  } catch {
+    // already gone
+  }
+  game.destroy(true);
+  game = undefined;
+  backButton.classList.add("hidden");
+  errorText.textContent = "";
+  menu.classList.remove("hidden");
+  if (document.fullscreenElement) document.exitFullscreen?.().catch(() => undefined);
+}
+backButton.addEventListener("click", backToMenu);
 
 form.addEventListener("submit", async (event) => {
   event.preventDefault();
@@ -211,9 +235,15 @@ form.addEventListener("submit", async (event) => {
   game.registry.set("hero", selectedHero);
   game.registry.set("stage", selectedStage);
   game.registry.set("botHero", selectedBot);
+  // Same mode + same room number = same room; no number = any open room of that mode.
+  game.registry.set("roomCode", solo ? "" : roomInput.value.trim().slice(0, 8).toUpperCase());
+  backButton.classList.remove("hidden");
+  const mine = game;
   game.events.on("connection-error", (err: Error) => {
+    if (mine !== game || mine.registry.get("leaving")) return; // we pressed BACK
     errorText.textContent = `Could not reach the rift: ${err?.message ?? err}. Is the server running?`;
     menu.classList.remove("hidden");
+    backButton.classList.add("hidden");
     game?.destroy(true);
     game = undefined;
   });

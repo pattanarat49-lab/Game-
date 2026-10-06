@@ -339,13 +339,15 @@ export class GameScene extends Phaser.Scene {
 
     if (this.registry.get("solo")) {
       this.room = new LocalRoom(this.registry.get("playerName"), this.registry.get("hero"), stage, this.registry.get("botHero"));
+      this.registry.set("room", this.room);
       if (stage === "pve" || stage === "classic") this.openLobby(stage);
       this.scene.launch("Hud");
       return;
     }
     try {
       const client = new Client(serverUrl());
-      this.room = await client.joinOrCreate(ROOM_NAME, { name: this.registry.get("playerName"), hero: this.registry.get("hero"), stage });
+      this.room = await client.joinOrCreate(ROOM_NAME, { name: this.registry.get("playerName"), hero: this.registry.get("hero"), stage, code: this.registry.get("roomCode") ?? "" });
+      this.registry.set("room", this.room);
     } catch (err) {
       console.error(err);
       this.game.events.emit("connection-error", err);

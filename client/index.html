@@ -44,6 +44,25 @@
         text-align: center;
         padding: 16px;
       }
+      #back-btn {
+        position: fixed;
+        top: 6px;
+        left: 6px;
+        z-index: 30;
+        font-size: 9px;
+        padding: 6px 10px;
+        box-shadow: 2px 2px 0 #1a0f14;
+        opacity: 0.85;
+      }
+      #back-btn:active {
+        transform: translate(1px, 1px);
+      }
+      #back-btn.hidden {
+        display: none;
+      }
+      #room-code {
+        width: 170px;
+      }
       #menu.hidden {
         display: none;
       }
@@ -349,11 +368,13 @@
       <div id="heroes" role="group" aria-label="Choose your hero"></div>
       <form id="join-form">
         <input id="name" maxlength="16" placeholder="Your name" autocomplete="off" />
+        <input id="room-code" maxlength="8" placeholder="Room no. (online)" autocomplete="off" inputmode="numeric" />
         <button type="submit" id="join-online">PLAY ONLINE</button>
         <button type="submit" id="join-solo">PLAY SOLO</button>
       </form>
       <p id="error"></p>
     </div>
+    <button type="button" id="back-btn" class="hidden" aria-label="Back to menu">&#9664; BACK</button>
     <div id="rotate">
       <div class="icon">📱</div>
       <p>Turn your phone sideways to play</p>

@@ -31,7 +31,7 @@ export class HudScene extends Phaser.Scene {
 
   create() {
     this.bars = this.add.graphics();
-    this.hpText = this.add.text(20, 18, "", FONT);
+    this.hpText = this.add.text(76, 18, "", FONT); // room for the BACK button in the corner
     this.skills = this.add.text(20, 64, "", { ...FONT, fontSize: "10px", lineSpacing: 6 });
     this.waveText = this.add.text(this.scale.width / 2, 16, "", { ...FONT, color: "#ffd23f" }).setOrigin(0.5, 0);
     this.pingText = this.add.text(this.scale.width - 20, 4, "", { ...FONT, fontSize: "8px" }).setOrigin(1, 0);
