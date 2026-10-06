@@ -40,6 +40,20 @@ export class Player extends Schema {
   @type("float32") slow = 0;
   /** SHADOW WHIP: legs tied, cannot walk for this many seconds. */
   @type("float32") root = 0;
+  /** How hard the current slow is (0 = the usual burn slow). */
+  @type("float32") slowPct = 0;
+  /** Seconds left unable to use skills (ANTI-MAGIC CUT). */
+  @type("float32") silence = 0;
+  /** Seconds left taunted (ROOT SNARE): runs at `link` and attacks it. */
+  @type("float32") taunt = 0;
+  /** Seconds left gone from the map (eaten, possessing, ...); nothing can see or hit the hero. */
+  @type("float32") vanish = 0;
+  /** Seconds left inside a DOMAIN EXPANSION (off the map, with `link`). */
+  @type("float32") domain = 0;
+  /** Who the hero is tied to right now (taunt, eaten by, possessing, domain rival, swap pick). */
+  @type("string") link = "";
+  /** The hero this one looks like to rivals (the Trickster's disguise). */
+  @type("string") disguise = "";
   /** Classic 3v3: 1 = Red, 2 = Blue. */
   @type("uint8") team = 0;
   /** Classic 3v3: lives left (shown as hearts over the head). */

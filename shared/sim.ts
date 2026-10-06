@@ -7,6 +7,8 @@ import {
   CHARGE_FULL,
   chargePower,
   chargeTimeOf,
+  comboChargeMul,
+  isChargeSkill,
   fxBuffs,
   type FxStep,
   type FxHit,
@@ -162,6 +164,19 @@ const TRUCK_RADIUS = 60;
 /** How tall a hero's hitbox is above its feet (world pixels; heroes are drawn about 33 tall). */
 const BODY_HEIGHT = 24;
 const EYEBEAM_TICK = 0.1; // seconds between HEAT VISION hits
+const DOMAIN_RADIUS = 110; // DOMAIN EXPANSION: how big the closed-off duel circle is
+const PIANO_GAP = 0.12; // seconds between PIANO notes
+const PIANO_NOTE_SPEED = 260;
+const KUNAI_WINDOW = 6; // seconds to warp to the MARKED KUNAI before the cooldown starts
+const BLOOD_WINDOW = 8; // seconds the BLOOD TRAP blood waits to be called back
+const BLOOD_LAY_TIME = 4; // seconds she keeps laying blood after the first press
+const IGNITE_DELAY = 0.7; // the red shot's burn goes off this long after the hit
+/** Heroes whose skills look back in time (REWIND): their recent path is kept. */
+const REWINDERS = new Set(
+  Object.entries(HEROES)
+    .filter(([, h]) => [h.skill, h.skill2].some((sk) => sk?.steps?.some((st) => st.do === "rewind")))
+    .map(([id]) => id),
+);
 
 export interface SimPlayer {
   name: string;
@@ -226,6 +241,20 @@ export interface SimPlayer {
   power: number;
   /** Seconds left of a lasting second skill (VANISH, BAT FORM, MOTORCYCLE, EXCALIBUR). */
   active2: number;
+  /** How hard the current slow is (0 = the usual burn slow). */
+  slowPct: number;
+  /** Seconds left unable to use skills (ANTI-MAGIC CUT). */
+  silence: number;
+  /** Seconds left taunted (ROOT SNARE): runs at `link` and attacks it. */
+  taunt: number;
+  /** Seconds left gone from the map (eaten, possessing...): nothing can see or hit the hero. */
+  vanish: number;
+  /** Seconds left inside a DOMAIN EXPANSION (off the map, with `link`). */
+  domain: number;
+  /** Who the hero is tied to right now (taunt, eaten by, possessing, domain rival). */
+  link: string;
+  /** The hero this one looks like to rivals (the Trickster's disguise). */
+  disguise: string;
 }
 
 export interface SimEnemy {
@@ -368,7 +397,7 @@ interface PlayerBrain {
   /** Combo skills: steps still to go off, seconds until each, and the aim they were cast with. */
   /** Set when a combo blinked behind a foe: its later steps aim at that foe. */
   fxAim?: number;
-  fxQueue?: { t: number; step: FxStep; aim: number; sx: number; sy: number }[];
+  fxQueue?: { t: number; step: FxStep; aim: number; sx: number; sy: number; power?: number }[];
   /** STONE WALL: the rocks standing and seconds until they crumble. */
   walls?: { ids: string[]; left: number };
   /** STAR SHOT: shots of the volley still to fire. */
@@ -376,6 +405,38 @@ interface PlayerBrain {
   volleyTimer?: number;
   volleyAim?: number;
   eyebeamTick: number;
+  /** Charged combo skills: how hard the cast going out hits (comboChargeMul). */
+  fxPower?: number;
+  /** REWIND: where he was (and how hurt) over the last few seconds. */
+  trail?: { t: number; x: number; y: number; hp: number }[];
+  /** DEATH'S DOOR: the Reaper walking us around. */
+  possessedBy?: string;
+  /** EATER: the Slime Lord holding us, and seconds before we may come out. */
+  eatenBy?: string;
+  eatGrace?: number;
+  /** DOMAIN EXPANSION: where we stood before, and the domain we are in. */
+  domainHome?: { x: number; y: number };
+  domainSpot?: { x: number; y: number };
+  /** SWALLOW: a foe's skill, ready to use once. */
+  stolen?: SkillDef;
+  /** MARKED KUNAI: the kunai zones, warps left, and seconds left to use them. */
+  kunai?: { zones: string[]; warps: number; left: number };
+  /** BLOOD TRAP: blood drops laid down the way, and seconds left to lay more / call them back. */
+  blood?: { zones: string[]; lay: number; left: number };
+  /** SWIFT: the next basic attack fires three arrows in a row. */
+  triple?: number;
+  tripleLeft?: number;
+  tripleTimer?: number;
+  /** Fire & Ice Hero: which colour the next basic shot is. */
+  altShot?: number;
+  /** SHIELD BASH and pushing shots: hitboxes moving forward, carrying foes. */
+  pushes?: { x: number; y: number; angle: number; left: number; speed: number; width: number; carried: Set<string>; dmg: number; stun: number; wallStun: number; self: boolean; zone: string; knockSlow?: number }[];
+  /** PIANO: notes still to play, time to the next, and where the piano stands. */
+  piano?: { left: number; timer: number; x: number; y: number; note: number };
+  /** NAME WRITTEN: seconds until the bar is full. */
+  note?: number;
+  /** FAKE CLONE: this clone is a harmless decoy that runs around (where to, and when it turns). */
+  decoy?: { angle: number; timer: number };
   /** Bot Duel: this player is driven by the simulation itself. */
   bot?: { strafe: number; strafeTimer: number; think: number; aimErr: number; level: number; hp: number; path?: Int16Array; pathTo?: number; pathTimer?: number;
     /** Classic: where it last saw a rival, where it is searching now, and when it last checked each patch of grass. */
@@ -436,6 +497,12 @@ interface ZoneBrain {
   follow?: boolean;
   /** SEVENTH FORM: the crackling lane (start, direction, length, width). */
   lane?: { x: number; y: number; angle: number; len: number; width: number };
+  /** BIRDCAGE: the foes caught inside, who cannot walk out. */
+  cage?: Set<string>;
+  /** Obscuring fog: heroes inside cannot be seen (except by its owner). */
+  fog?: boolean;
+  /** Fire & Ice Hero: a burn that goes off once (target key). */
+  ignite?: string;
 }
 
 interface BulletBrain {
@@ -457,6 +524,19 @@ interface BulletBrain {
   back?: number;
   /** POWER SHOT: stuns whatever it hits for this many seconds. */
   stun?: number;
+  /** How hard `slow` slows (0..1), and seconds of no skills on hit. */
+  slowPct?: number;
+  silence?: number;
+  /** Extra hit radius (big combo shots). */
+  hitSize?: number;
+  /** Wall bounces left (DIRECT VOLLEY). */
+  bounces?: number;
+  /** Bursts into these shots where it ends (COCKROACH SHOT). */
+  split?: { n: number; range: number; speed: number; shape: string; size: number; color: string } & FxHit;
+  /** AXE BOOMERANG: foes it caught, dragged home with it. */
+  carry?: Set<string>;
+  /** Fire & Ice Hero's red shot: sets the target alight (one more hit a moment later). */
+  ignite?: number;
 }
 
 /** Where everyone was at one moment, for the TIME MACHINE. */
@@ -688,6 +768,15 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
     s.players.forEach((p, id) => {
       if (p.owner) return helpers.push(id);
       if (heroOf(p.hero).formOf) this.endForm(p, this.brains.get(id));
+      const b0 = this.brains.get(id);
+      if (b0) {
+        // Swallowed, possessed, domains, kunai, blood, the piano...: all over with the round.
+        this.endStates(id, p, b0);
+        [b0.stolen, b0.trail, b0.triple] = [undefined, undefined, 0];
+        if (b0.stolen === undefined && heroOf(p.hero).skill2?.kind === "copyskill") p.mode = 0;
+      }
+      p.taunt = p.vanish = p.domain = p.silence = p.slowPct = 0;
+      p.link = "";
       p.dead = false;
       p.respawnIn = 0;
       p.hp = p.maxHp;
@@ -772,6 +861,9 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
     const bot = this.brains.get(this.rootOf(attacker))?.bot;
     let rage = p.buff > 0 && heroOf(p.hero).skill.kind === "rage" ? heroOf(p.hero).skill.damage : 1; // BLOOD RAGE
     for (const b of fxBuffs(p)) rage *= b.dmg ?? 1; // combo damage buffs
+    const hero = heroOf(p.hero);
+    if (p.domain > 0 && hero.skill.kind === "domainx") rage *= hero.skill.damage; // twice as deadly in his own domain
+    if (p.hero === "mob" && p.maxHp > 0) rage *= 1 + 4 * Math.max(0, 1 - p.hp / p.maxHp); // Psychic Kid: up to 500% when nearly down
     return rage * (bot ? BOT_LEVELS[bot.level].damage : 1) * (p.power || 1) * (DAMAGE_BALANCE[(heroOf(p.hero).formOf ?? p.hero) as HeroId] ?? 1); // an alien form hits like its hero
   }
 
@@ -874,8 +966,17 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
   }
 
   /** VANISH: an invisible hero cannot be seen or targeted (shots can still hit him by chance). */
-  private hidden(p: P): boolean {
-    return p.active2 > 0 && heroOf(p.hero).skill2?.kind === "invis";
+  private hidden(p: P, by?: string): boolean {
+    if (p.vanish > 0) return true; // eaten, or inside a foe
+    if (p.active2 > 0 && heroOf(p.hero).skill2?.kind === "invis") return true;
+    // Inside an obscuring fog, only its maker can see.
+    let fogged = false;
+    const me = this.rootOf(by);
+    this.state.zones.forEach((z, zid) => {
+      const zb = this.zoneBrains.get(zid);
+      if (!fogged && zb?.fog && zb.owner !== me && Math.hypot(p.x - z.x, p.y - z.y) <= z.radius) fogged = true;
+    });
+    return fogged;
   }
 
   /** Can this target be hit by a lasting skill again yet? Marks it hit if so. */
@@ -963,9 +1064,20 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
   }
 
   /** SACRIFICE: she drives the sword into herself, and the nearest enemy loses the same share of HP. */
+  /** The rival with the least HP within `radius` (SACRIFICE picks them). */
+  private weakestFoe(id: string, p: P, radius: number): { key: string; x: number; y: number } | undefined {
+    let best = Infinity;
+    let out: { key: string; x: number; y: number } | undefined;
+    this.state.players.forEach((v, vid) => {
+      if (v.dead || !this.isFoe(id, vid) || this.hidden(v, id) || Math.hypot(v.x - p.x, v.y - p.y) > radius) return;
+      if (v.hp < best) [best, out] = [v.hp, { key: `p:${vid}`, x: v.x, y: v.y }];
+    });
+    return out;
+  }
+
   private sacrifice(id: string, p: P, skill: SkillDef) {
     const share = skill.damage;
-    const t = this.findTarget(id, p, skill.radius, true);
+    const t = this.weakestFoe(id, p, skill.radius) ?? this.findTarget(id, p, skill.radius, true);
     this.addZone("sacrifice", p.x, p.y, 16, 0.7, { owner: id, every: Infinity, damage: 0 });
     if (t?.key.startsWith("p:")) {
       const vid = t.key.slice(2);
@@ -1031,9 +1143,12 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
   private castCombo(id: string, p: P, skill: SkillDef, brain: PlayerBrain) {
     const q = (brain.fxQueue ??= []);
     brain.fxAim = undefined;
+    // A charged combo hits harder the longer it was held (bots let go halfway).
+    const full = chargeTimeOf(skill);
+    const power = isChargeSkill(skill) ? comboChargeMul(brain.bot ? full / 2 : brain.input.charge2 ?? 0, full) : 1;
     for (const step of skill.steps ?? []) {
       const n = step.times ?? 1;
-      for (let i = 0; i < n; i++) q.push({ t: (step.wait ?? 0) + i * (step.gap ?? 0.15), step, aim: p.aim, sx: p.x, sy: p.y });
+      for (let i = 0; i < n; i++) q.push({ t: (step.wait ?? 0) + i * (step.gap ?? 0.15), step, aim: p.aim, sx: p.x, sy: p.y, power });
       if (step.do === "buff") {
         if (skill === heroOf(p.hero).skill) p.buff = Math.max(p.buff, step.dur);
         else p.active2 = Math.max(p.active2, step.dur);
@@ -1041,6 +1156,8 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       }
     }
     this.runFxQueue(id, p, brain, 0);
+    const hero = heroOf(p.hero);
+    if (hero.skill2?.kind === "fakeclone" && skill === hero.skill) this.decoysCopy(id, p, skill); // the clones copy the SPIRAL SPHERE
   }
 
   private runFxQueue(id: string, p: P, brain: PlayerBrain, dt: number) {
@@ -1050,7 +1167,11 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       q[i].t -= dt;
       if (q[i].t <= 0) due.unshift(...q.splice(i, 1));
     }
-    for (const e of due) if (!p.dead) this.fxStep(id, p, brain, e.step, brain.fxAim ?? e.aim, e.sx, e.sy);
+    for (const e of due) {
+      if (p.dead) continue;
+      const st = e.power && e.power !== 1 && "dmg" in e.step && e.step.dmg ? ({ ...e.step, dmg: e.step.dmg * e.power } as FxStep) : e.step;
+      this.fxStep(id, p, brain, st, brain.fxAim ?? e.aim, e.sx, e.sy);
+    }
     if (!q.length) brain.fxAim = undefined;
   }
 
@@ -1089,13 +1210,21 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       if (h.dmg) this.damagePlayer(vid, h.dmg * PVP_DAMAGE_SCALE, true, owner);
       if (v.dead) return;
       if (h.stun) v.stun = Math.max(v.stun, h.stun);
-      if (h.slow) v.slow = Math.max(v.slow, h.slow);
+      if (h.slow) this.slowPlayer(v, h.slow, h.slowPct);
       if (h.root) v.root = Math.max(v.root, h.root);
+      if (h.silence) v.silence = Math.max(v.silence, h.silence);
       if (h.knock) {
         const [dx, dy] = push(v.x, v.y);
         this.knockPlayer(vid, h.knock > 0 ? dx : -dx, h.knock > 0 ? dy : -dy, Math.abs(h.knock));
       }
     });
+  }
+
+  /** Slow a hero for `seconds`; `pct` is how hard (0..1 of speed taken away), the usual burn slow when left out. */
+  private slowPlayer(v: P, seconds: number, pct?: number) {
+    if (pct && (v.slow <= 0 || pct >= v.slowPct)) v.slowPct = pct;
+    else if (!pct && v.slow <= 0) v.slowPct = 0;
+    v.slow = Math.max(v.slow, seconds);
   }
 
   /** A hit test for a lane from (x, y) along `angle`. */
@@ -1123,6 +1252,15 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
         const w = st.width ?? 26;
         this.fxArea(id, this.laneTest(p.x, p.y, aim, len, w), st, { x: p.x, y: p.y }, aim);
         this.fxLaneZone(id, "dash", st.color, p.x, p.y, aim, len, w);
+        if (st.trail) {
+          // Bombs dropped all along the way go off a moment later.
+          const tr = st.trail;
+          for (let i = 0; i < tr.n; i++) {
+            const k = (i + 0.5) / tr.n;
+            const zid = this.addZone(`fxd:${tr.look ?? "meteor"}:${st.color}`, p.x + Math.cos(aim) * len * k, p.y + Math.sin(aim) * len * k, tr.radius, tr.delay + i * 0.08, { owner: id, every: Infinity, damage: 0 });
+            this.zoneBrains.get(zid)!.fxEnd = { dmg: tr.dmg, color: st.color };
+          }
+        }
         [p.x, p.y] = [end.x, end.y];
         p.warp = (p.warp + 1) % 256;
         brain.target = undefined;
@@ -1154,6 +1292,13 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
         if (st.knock || st.dmg) this.cutBulletsInLane(id, p.x, p.y, aim, st.len, st.width);
         break;
       case "ring":
+        if (st.look === "pull") {
+          // UNIVERSAL PULL: everything in the ring is yanked right up to him.
+          this.fxArea(id, (x, y, r) => Math.hypot(x - p.x, y - p.y) <= st.radius + r, { ...st, knock: 0 }, { x: p.x, y: p.y });
+          this.pullAll(id, p, st.radius);
+          this.addZone(`fx:pull:${st.color}`, p.x, p.y, st.radius, 0.6, { owner: id, every: Infinity, damage: 0 });
+          break;
+        }
         this.fxArea(id, (x, y, r) => Math.hypot(x - p.x, y - p.y) <= st.radius + r, st, { x: p.x, y: p.y });
         this.addZone(`fx:${st.look ?? "burst"}:${st.color}`, p.x, p.y, st.radius, 0.55, { owner: id, every: Infinity, damage: 0 });
         break;
@@ -1165,7 +1310,8 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
           return Math.abs(diff) <= st.arc / 2;
         };
         this.fxArea(id, inCone, st, { x: p.x, y: p.y });
-        this.cutBullets(id, p.x, p.y, aim, st.range, st.arc);
+        if (st.reflect) this.reflectInCone(id, p, aim, st.range, st.arc);
+        else this.cutBullets(id, p.x, p.y, aim, st.range, st.arc);
         this.addZone(`fxc:${st.color}:${aim.toFixed(3)}:${st.arc.toFixed(3)}`, p.x, p.y, st.range, 0.35, { owner: id, every: Infinity, damage: 0 });
         break;
       }
@@ -1175,15 +1321,24 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
           const bid = this.spawnBullet(`fxo:${st.shape ?? "orb"}:${st.color}:${st.size ?? 3}`, p.x, p.y, a, st.speed, { owner: id, damage: st.dmg ?? 0, pierce: st.pierce ?? 0, life: st.range / st.speed });
           const b = this.bulletBrains.get(bid)!;
           if (st.stun) b.stun = st.stun;
-          if (st.slow) b.slow = st.slow;
+          if (st.slow) [b.slow, b.slowPct] = [st.slow, st.slowPct];
+          if (st.silence) b.silence = st.silence;
           if (st.home) [b.homing, b.age] = [true, 0];
+          if (st.hitSize) b.hitSize = st.hitSize;
+          if (st.bounce) b.bounces = st.bounce;
+          if (st.split) b.split = st.split;
         }
         break;
       }
       case "drop": {
-        const spot = this.fxSpot(id, p, st.at, aim);
-        const zid = this.addZone(`fxd:${st.look ?? "meteor"}:${st.color}`, spot.x, spot.y, st.radius, st.delay, { owner: id, every: Infinity, damage: 0 });
-        this.zoneBrains.get(zid)!.fxEnd = { dmg: st.dmg, stun: st.stun, slow: st.slow, root: st.root, knock: st.knock, color: st.color };
+        // Several spots: spread across the front (SOUND SLASH's bombs); otherwise just the one.
+        const n = st.spots ?? 1;
+        for (let i = 0; i < n; i++) {
+          const a = aim + (n > 1 ? (i / (n - 1) - 0.5) * 1.6 : 0);
+          const spot = this.fxSpot(id, p, st.at, a);
+          const zid = this.addZone(`fxd:${st.look ?? "meteor"}:${st.color}`, spot.x, spot.y, st.radius, st.delay, { owner: id, every: Infinity, damage: 0 });
+          this.zoneBrains.get(zid)!.fxEnd = { dmg: st.dmg, stun: st.stun, slow: st.slow, root: st.root, knock: st.knock, color: st.color };
+        }
         break;
       }
       case "field": {
@@ -1192,6 +1347,37 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
         const zb = this.zoneBrains.get(zid)!;
         zb.fxHit = { dmg: st.dmg, stun: st.stun, slow: st.slow, root: st.root, knock: st.knock, heal: st.heal };
         if (st.follow) zb.follow = true;
+        if (st.fog) {
+          zb.fog = true;
+          const z = s.zones.get(zid);
+          if (z) z.kind += `:${this.rootOf(id)}`; // the client hides heroes inside from everyone but its maker
+        }
+        if (st.cage) {
+          // BIRDCAGE: every foe inside when it closes is shut in.
+          zb.cage = new Set();
+          s.players.forEach((v, vid) => {
+            if (!v.dead && this.isFoe(id, vid) && Math.hypot(v.x - spot.x, v.y - spot.y) <= st.radius) zb.cage!.add(vid);
+          });
+          const z = s.zones.get(zid);
+          if (z) z.kind += `:cage:${this.rootOf(id)}`; // drawn as bars; the client keeps the caught ones in too
+        }
+        break;
+      }
+      case "push":
+        this.startPush(id, p, brain, { len: st.len, width: st.width, speed: st.speed, dmg: st.dmg ?? 0, stun: st.stun ?? 0, wallStun: st.wallStun, self: !!st.carrySelf, look: `fxp:fist:${st.color}` });
+        break;
+      case "rewind": {
+        // REWIND: back to where he stood, as healthy as he was, `secs` ago.
+        const then = brain.trail?.find((t) => t.t >= this.clock - st.secs);
+        if (!then) break;
+        this.addZone(`fx:puff:${st.color}`, p.x, p.y, 16, 0.4, { owner: id, every: Infinity, damage: 0 });
+        const at = this.move(then.x, then.y, 0, 0, PLAYER_RADIUS);
+        [p.x, p.y] = [at.x, at.y];
+        p.hp = Math.max(p.hp, Math.min(p.maxHp, then.hp));
+        p.warp = (p.warp + 1) % 256;
+        brain.target = undefined;
+        brain.trail = [];
+        this.addZone(`fx:shock:${st.color}`, p.x, p.y, 24, 0.5, { owner: id, every: Infinity, damage: 0 });
         break;
       }
       case "lock": {
@@ -1238,6 +1424,52 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
         this.addZone(`fx:shock:${st.color}`, p.x, p.y, st.radius ?? 30, 0.5, { owner: id, every: Infinity, damage: 0 });
         break;
     }
+  }
+
+  /** UNIVERSAL PULL: every foe within `radius` lands right next to him. */
+  private pullAll(id: string, p: P, radius: number) {
+    const s = this.state;
+    const near = (x: number, y: number) => {
+      const d = Math.hypot(x - p.x, y - p.y) || 1;
+      return this.move(p.x, p.y, ((x - p.x) / d) * 22, ((y - p.y) / d) * 22, PLAYER_RADIUS);
+    };
+    s.enemies.forEach((e) => {
+      const def = ENEMIES[e.kind as EnemyKind];
+      if (def.block || def.boss || Math.hypot(e.x - p.x, e.y - p.y) > radius + this.er(e)) return;
+      const at = near(e.x, e.y);
+      [e.x, e.y] = [at.x, at.y];
+    });
+    if (!this.pvpLive()) return;
+    s.players.forEach((v, vid) => {
+      if (v.dead || !this.isFoe(id, vid) || this.bodyDist(v, p.x, p.y) > radius + this.pr(v)) return;
+      const at = near(v.x, v.y);
+      [v.x, v.y] = [at.x, at.y];
+      v.warp = (v.warp + 1) % 256;
+      const vb = this.brains.get(vid);
+      if (vb) [vb.target, vb.dashTimer] = [undefined, 0];
+    });
+  }
+
+  /** CROSS CUT: hostile shots inside the swing are sent back at whoever fired them. */
+  private reflectInCone(id: string, p: P, aim: number, range: number, arc: number) {
+    this.state.bullets.forEach((b, bid) => {
+      const bb = this.bulletBrains.get(bid);
+      if (!bb) return;
+      const theirs = b.hostile || (bb.owner !== undefined && this.isFoe(bb.owner, id));
+      if (!theirs) return;
+      const d = Math.hypot(b.x - p.x, b.y - p.y);
+      if (d > range + BULLET_CUT_SLACK) return;
+      let diff = Math.atan2(b.y - p.y, b.x - p.x) - aim;
+      diff = Math.atan2(Math.sin(diff), Math.cos(diff));
+      if (Math.abs(diff) > arc / 2) return;
+      const sp = Math.hypot(b.vx, b.vy);
+      [b.vx, b.vy] = [Math.cos(aim) * sp, Math.sin(aim) * sp];
+      b.hostile = false;
+      bb.owner = id;
+      bb.hit.clear();
+      bb.life = Math.max(bb.life, 0.8);
+      this.addZone("parry", b.x, b.y, 10, 0.3, { owner: id, every: Infinity, damage: 0 });
+    });
   }
 
   /** Hit one target by key (a monster id, or "p:" + a player id), stunning it (bosses shrug stuns off). */
@@ -1399,6 +1631,10 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
     if (!this.pvpLive() || !attacker) return false;
     const a = this.rootOf(attacker);
     const v = this.rootOf(victim);
+    const ap = this.state.players.get(a);
+    const vp = this.state.players.get(victim);
+    if (vp && vp.vanish > 0) return false; // gone from the map
+    if (ap && vp && (ap.domain > 0 || vp.domain > 0) && !(ap.domain > 0 && vp.domain > 0 && (ap.link === this.rootOf(victim) || vp.link === a))) return false; // a domain shuts the world out
     // PvE Squad: the players are one team; only the bot (and what it summons) is on the other side.
     if (this.state.stage === "pve") return (a === "bot") !== (v === "bot");
     if (this.classic) return (this.state.players.get(a)?.team ?? 0) !== (this.state.players.get(v)?.team ?? -1);
@@ -1652,8 +1888,9 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       if (brain.bot) this.botThink(id, p, brain, dt);
       // ALIEN TRANSFORM: back to human when the time is up (or on falling).
       if (!p.owner && heroOf(p.hero).formOf && (p.dead || p.buff <= 0)) this.endForm(p, brain);
-      const input = brain.input;
       const hero = heroOf(p.hero);
+      if (this.tickStates(id, p, brain, hero, dt)) return; // eaten, possessing, ...
+      const input = this.steerInput(id, p, brain, hero);
       brain.hurtTimer = Math.max(0, brain.hurtTimer - dt);
       brain.attackTimer = Math.max(0, brain.attackTimer - dt);
       brain.kbExtra = Math.max(0, brain.kbExtra - KNOCKBACK_DISTANCE * 2 * dt);
@@ -1813,6 +2050,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       }
       p.x = moved.x;
       p.y = moved.y;
+      if (p.domain > 0) this.keepInDomain(p, brain);
       if (p.latch > 0 && !brain.zip && hero.skill.kind === "latch") this.updateLatch(id, p, brain, hero, dt);
       p.dashing = brain.dashTimer > 0;
       // Speed Raptor: running into a foe hurts it.
@@ -1858,9 +2096,22 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
             const by = p.y + Math.cos(input.aim) * off;
             this.spawnBullet((hero.shot ?? "magic") as BulletKind, bx, by, input.aim, hero.shotSpeed, { owner: id, damage: hero.damage, pierce: 0, life: hero.range / hero.shotSpeed });
           }
+        } else if (hero.attack === "magic" && p.hero === "todoroki") {
+          // Fire & Ice Hero: blue (ice, slows 10%) and red (fire, burns once more after the hit), in turn.
+          brain.altShot = brain.altShot ? 0 : 1;
+          const red = brain.altShot === 0;
+          const bid = this.spawnBullet((red ? "fxo:orb:ff5020:3" : hero.shot ?? "magic") as BulletKind, p.x, p.y, input.aim, hero.shotSpeed, { owner: id, damage: hero.damage, pierce: 0, life: hero.range / hero.shotSpeed });
+          const bb = this.bulletBrains.get(bid)!;
+          if (red) bb.ignite = hero.damage * 0.5;
+          else [bb.slow, bb.slowPct] = [1.5, 0.1];
         } else if (hero.attack === "magic") {
           const bid = this.spawnBullet((hero.shot ?? "magic") as BulletKind, p.x, p.y, input.aim, hero.shotSpeed, { owner: id, damage: hero.damage, pierce: 0, life: hero.range / hero.shotSpeed, blast: hero.aoe });
           if (hero.slowHit) this.bulletBrains.get(bid)!.slow = hero.slowHit; // ice shards slow
+          if (brain.triple) {
+            // SWIFT: this shot is the first of three in a row.
+            brain.triple = 0;
+            [brain.tripleLeft, brain.tripleTimer] = [2, 0.09];
+          }
         } else if (hero.skill2?.kind === "yoyo" && p.mode === 1) {
           this.throwYoyo(id, p, hero.skill2);
         } else if (hero.attack === "flame") {
@@ -1877,21 +2128,28 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
           p.mode = 0;
           this.sweep(id, p.x, p.y, input.aim, hero.range, hero.arc, hero.damage * hero.skill.damage, 2, hero.skill.duration ?? 1);
         } else {
-          this.sweep(id, p.x, p.y, input.aim, hero.range, hero.arc, hero.damage, hero.knock ?? true);
+          const hammer = p.buff > 0 && hero.skill.kind === "bloodhammer" ? 2 : 1; // BLOOD HAMMER: twice as hard and as long
+          this.sweep(id, p.x, p.y, input.aim, hero.range * hammer, hero.arc, hero.damage * hammer, hero.knock ?? true);
         }
       }
 
       // Skills (ordinary humans under a reality change cannot use any)
-      const powerless = (s.reality > 0 && this.isFoe(s.realityBy, id)) || auto;
-      if (input.skill && p.skillCooldown <= 0 && hero.skill.kind !== "passive" && !powerless && this.chargedEnough(hero.skill, brain)) {
+      const powerless = (s.reality > 0 && this.isFoe(s.realityBy, id)) || auto || p.silence > 0 || p.taunt > 0;
+      if (input.skill && p.skillCooldown <= 0 && hero.skill.kind !== "passive" && !powerless && this.chargedEnough(hero.skill, brain) && !this.skillLocked(p, hero.skill)) {
         p.skillCooldown = hero.skill.cooldown;
         p.skillSeq++;
         this.useSkill(id, p, hero, hero.skill, brain);
       }
-      if (hero.skill2 && input.skill2 && p.skill2Cooldown <= 0 && !powerless && this.chargedEnough(hero.skill2, brain)) {
+      if (hero.skill2 && input.skill2 && p.skill2Cooldown <= 0 && !powerless && this.chargedEnough(hero.skill2, brain) && !this.skillLocked(p, hero.skill2)) {
         p.skill2Cooldown = hero.skill2.cooldown;
         p.skill2Seq++;
-        this.useSkill(id, p, hero, hero.skill2, brain);
+        if (brain.stolen) {
+          // SWALLOW: the stolen skill goes off instead, once.
+          const stolen = brain.stolen;
+          brain.stolen = undefined;
+          p.mode = 0;
+          this.useSkill(id, p, hero, stolen, brain);
+        } else this.useSkill(id, p, hero, hero.skill2, brain);
       }
 
       // Okita's dimension slash keeps cutting for a moment.
@@ -1976,6 +2234,680 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
     });
   }
 
+  // ------------------------------------------------- lasting states (2026-10-06 skills)
+
+  /**
+   * Timers and states that run before anything else each tick: silence, taunts, possession,
+   * being eaten, domains, pushes, the piano, kunai and blood. Returns true when the hero
+   * does nothing else this tick (eaten, or possessing a foe).
+   */
+  private tickStates(id: string, p: P, brain: PlayerBrain, hero: HeroDef, dt: number): boolean {
+    const s = this.state;
+    p.silence = Math.max(0, p.silence - dt);
+    if (p.slow <= 0) p.slowPct = 0;
+    if (p.hero === "loki") {
+      // The Trickster always looks like one of his rivals to them (the client draws him so).
+      let look = "";
+      s.players.forEach((q, qid) => {
+        if (!look && !q.owner && !q.dead && this.isFoe(id, qid)) look = qid;
+      });
+      if (!look) s.players.forEach((q, qid) => {
+        if (!look && !q.owner && this.isFoe(id, qid)) look = qid;
+      });
+      p.disguise = look;
+    }
+    if (hero.skill.kind !== "latch") p.latch = Math.max(0, p.latch - dt); // carried along by a push or an axe
+    if (fxBuffs(p).some((b) => b.ccImmune)) {
+      // Sword dance: nothing holds him.
+      p.stun = 0;
+      p.root = 0;
+      p.slow = 0;
+      if (!brain.possessedBy) p.taunt = 0;
+    }
+    // The cooldown only starts once the pet is gone (or the portals have closed).
+    if (hero.skill.waitGone && this.stillOut(id, hero.skill)) p.skillCooldown = Math.max(p.skillCooldown, hero.skill.cooldown);
+    if (hero.skill2?.waitGone && this.stillOut(id, hero.skill2)) p.skill2Cooldown = Math.max(p.skill2Cooldown, hero.skill2.cooldown);
+    if (REWINDERS.has(p.hero) && !p.dead) {
+      // REWIND: remember where he was, and how hurt, for the last few seconds.
+      const trail = (brain.trail ??= []);
+      trail.push({ t: this.clock, x: p.x, y: p.y, hp: p.hp });
+      while (trail.length && trail[0].t < this.clock - 3) trail.shift();
+    }
+    if (p.dead) {
+      this.endStates(id, p, brain);
+      return false;
+    }
+    // Being walked around by a Reaper, or taunted.
+    if (p.taunt > 0) {
+      p.taunt = Math.max(0, p.taunt - dt);
+      const by = s.players.get(p.link);
+      if (!by || by.dead || p.taunt <= 0) this.endTaunt(p, brain);
+    }
+    if (p.domain > 0) {
+      p.domain = Math.max(0, p.domain - dt);
+      const rival = s.players.get(p.link);
+      if (p.domain <= 0 || !rival || rival.dead || !(rival.domain > 0)) this.endDomain(id);
+      else this.keepInDomain(p, brain);
+    }
+    if (brain.pushes?.length) this.updatePushes(id, p, brain, dt);
+    if (brain.piano) this.playPiano(id, p, brain, hero, dt);
+    if (brain.kunai) {
+      brain.kunai.left -= dt;
+      if (brain.kunai.left <= 0) this.endKunai(id, p, brain, hero);
+    }
+    if (brain.blood) {
+      brain.blood.left -= dt;
+      this.layBlood(id, p, brain, dt);
+      if (brain.blood.left <= 0) this.endBlood(p, brain, hero);
+    }
+    if (brain.note !== undefined) {
+      // NAME WRITTEN: when the bar is full, the nearest foe in range falls.
+      brain.note -= dt;
+      if (brain.note <= 0) {
+        brain.note = undefined;
+        p.buff = 0;
+        this.writeName(id, p, hero.skill);
+      }
+    }
+    if (brain.tripleLeft) {
+      // SWIFT: the rest of the triple shot.
+      brain.tripleTimer = (brain.tripleTimer ?? 0) - dt;
+      if (brain.tripleTimer <= 0) {
+        brain.tripleLeft--;
+        brain.tripleTimer = 0.09;
+        p.attackSeq++;
+        this.basicShot(id, p, hero, p.aim);
+      }
+    }
+    if (p.vanish > 0) {
+      const cooldowns = () => {
+        p.dashCooldown = Math.max(0, p.dashCooldown - dt);
+        p.skillCooldown = Math.max(0, p.skillCooldown - dt);
+        p.skill2Cooldown = Math.max(0, p.skill2Cooldown - dt);
+      };
+      if (brain.eatenBy) {
+        // Inside the Slime Lord: safe, riding along, until any button lets us out.
+        const eater = s.players.get(brain.eatenBy);
+        brain.eatGrace = Math.max(0, (brain.eatGrace ?? 0) - dt);
+        const input = brain.input;
+        const out = brain.eatGrace <= 0 && (input.dash || input.skill || !!input.skill2 || input.shoot);
+        if (!eater || eater.dead || out) this.popOut(id, p, brain);
+        else {
+          [p.x, p.y] = [eater.x, eater.y];
+          brain.target = undefined;
+          cooldowns();
+          return true;
+        }
+      } else if (p.link) {
+        // DEATH'S DOOR: inside a foe, walking it around.
+        p.vanish = Math.max(0, p.vanish - dt);
+        const v = s.players.get(p.link);
+        if (!v || v.dead || p.vanish <= 0) this.endPossess(id, p, brain);
+        else {
+          [p.x, p.y] = [v.x, v.y];
+          brain.target = undefined;
+          cooldowns();
+          return true;
+        }
+      } else p.vanish = Math.max(0, p.vanish - dt);
+    }
+    return false;
+  }
+
+  /** What the hero does this tick: its own buttons, or a taunt / a possessing Reaper steering it. */
+  private steerInput(id: string, p: P, brain: PlayerBrain, hero: HeroDef): PlayerInput {
+    const s = this.state;
+    if (brain.possessedBy) {
+      const r = this.brains.get(brain.possessedBy);
+      brain.target = undefined;
+      const i = r?.input ?? EMPTY_INPUT;
+      return { ...EMPTY_INPUT, left: i.left, right: i.right, up: i.up, down: i.down, aim: i.aim };
+    }
+    if (p.taunt > 0) {
+      const t = s.players.get(p.link);
+      brain.target = undefined;
+      if (!t) return { ...EMPTY_INPUT, aim: p.aim };
+      const dx = t.x - p.x;
+      const dy = t.y - p.y;
+      const d = Math.hypot(dx, dy) || 1;
+      const near = d < Math.max(hero.range * 0.8, 20);
+      return {
+        ...EMPTY_INPUT,
+        aim: Math.atan2(dy, dx),
+        left: !near && dx / d < -0.38,
+        right: !near && dx / d > 0.38,
+        up: !near && dy / d < -0.38,
+        down: !near && dy / d > 0.38,
+        shoot: d < hero.range + 30 || hero.attack === "magic" || hero.attack === "rifle",
+      };
+    }
+    return brain.input;
+  }
+
+  /** Skills that cannot go off right now (FIRE ARROW inside his own domain). */
+  private skillLocked(p: P, sk: SkillDef): boolean {
+    const hero = heroOf(p.hero);
+    if (p.domain > 0 && hero.skill.kind === "domainx" && sk === hero.skill2) return true;
+    return false;
+  }
+
+  /** Is what this skill made still around (its pet, or its pair of portals)? */
+  private stillOut(id: string, sk: SkillDef): boolean {
+    let out = false;
+    if (sk.waitGone === "pet") {
+      this.state.players.forEach((q) => {
+        if (q.owner === id && q.hero === sk.pet && !q.dead) out = true;
+      });
+    } else if (sk.waitGone === "portal") {
+      this.state.zones.forEach((z, zid) => {
+        const zb = this.zoneBrains.get(zid);
+        if (zb && zb.owner === id && zb.link && (z.kind === "portalA" || z.kind === "portalB")) out = true;
+      });
+    }
+    return out;
+  }
+
+  /** Falling ends every lasting state. */
+  private endStates(id: string, p: P, brain: PlayerBrain) {
+    if (brain.eatenBy) this.popOut(id, p, brain);
+    if (p.vanish > 0 && p.link) this.endPossess(id, p, brain);
+    if (p.domain > 0) this.endDomain(id);
+    if (p.taunt > 0) this.endTaunt(p, brain);
+    if (brain.kunai) this.endKunai(id, p, brain, heroOf(p.hero));
+    if (brain.blood) this.endBlood(p, brain, heroOf(p.hero));
+    brain.piano = undefined;
+    brain.pushes = undefined;
+    brain.note = undefined;
+    brain.tripleLeft = 0;
+    p.silence = 0;
+  }
+
+  private endTaunt(p: P, brain: PlayerBrain) {
+    p.taunt = 0;
+    if (brain.possessedBy) {
+      const rid = brain.possessedBy;
+      const r = this.state.players.get(rid);
+      const rb = this.brains.get(rid);
+      brain.possessedBy = undefined;
+      if (r && rb && r.vanish > 0) this.endPossess(rid, r, rb);
+    }
+    if (!(p.domain > 0) && !(p.vanish > 0)) p.link = "";
+  }
+
+  /** ROOT SNARE: every foe within reach must come at him and attack only him. */
+  private tauntAround(id: string, p: P, skill: SkillDef) {
+    this.sweep(id, p.x, p.y, 0, skill.radius, Math.PI * 2, skill.damage);
+    this.addZone("roots", p.x, p.y, skill.radius, 0.6, { owner: id, every: Infinity, damage: 0 });
+    if (!this.pvpLive()) {
+      this.rootAround(id, p.x, p.y, skill.radius, skill.duration ?? 2); // monsters just get tied up
+      return;
+    }
+    this.state.players.forEach((v, vid) => {
+      if (v.dead || v.owner || !this.isFoe(id, vid) || this.bodyDist(v, p.x, p.y) > skill.radius + this.pr(v)) return;
+      const vb = this.brains.get(vid);
+      if (!vb || vb.possessedBy) return;
+      v.taunt = Math.max(v.taunt, skill.duration ?? 2);
+      v.link = id;
+    });
+  }
+
+  /** DEATH'S DOOR: the Reaper slips into the nearest foe and walks it around. */
+  private possess(id: string, p: P, brain: PlayerBrain, skill: SkillDef) {
+    const t = this.findTarget(id, p, skill.radius, true);
+    const vid = t?.key.startsWith("p:") ? t.key.slice(2) : undefined;
+    const v = vid ? this.state.players.get(vid) : undefined;
+    const vb = vid ? this.brains.get(vid) : undefined;
+    if (!vid || !v || !vb || v.owner || vb.possessedBy || v.vanish > 0) {
+      p.skill2Cooldown = 0.5; // nobody to take: try again soon
+      return;
+    }
+    this.addZone("fx:puff:6a2a8a", p.x, p.y, 18, 0.5, { owner: id, every: Infinity, damage: 0 });
+    p.vanish = skill.duration ?? 5;
+    p.link = vid;
+    vb.possessedBy = id;
+    v.taunt = skill.duration ?? 5;
+    v.link = id;
+    const zid = this.addZone("possess", v.x, v.y, 16, skill.duration ?? 5, { owner: id, every: Infinity, damage: 0 });
+    this.zoneBrains.get(zid)!.stick = `p:${vid}`;
+  }
+
+  private endPossess(id: string, p: P, brain: PlayerBrain) {
+    const s = this.state;
+    const v = s.players.get(p.link);
+    const vb = this.brains.get(p.link);
+    if (v && vb && vb.possessedBy === id) {
+      vb.possessedBy = undefined;
+      v.taunt = 0;
+      if (!(v.domain > 0)) v.link = "";
+    }
+    s.zones.forEach((z, zid) => {
+      if (z.kind === "possess" && this.zoneBrains.get(zid)?.owner === id) this.removeZone(zid);
+    });
+    const at = v ? this.move(v.x, v.y, -Math.cos(p.aim) * 22, -Math.sin(p.aim) * 22, PLAYER_RADIUS) : { x: p.x, y: p.y };
+    [p.x, p.y] = [at.x, at.y];
+    p.vanish = 0;
+    p.link = "";
+    p.warp = (p.warp + 1) % 256;
+    brain.target = undefined;
+    brain.hurtTimer = Math.max(brain.hurtTimer, 0.4);
+    this.addZone("fx:puff:6a2a8a", p.x, p.y, 18, 0.5, { owner: id, every: Infinity, damage: 0 });
+  }
+
+  /** EATER: the Slime Lord swallows the ally his aim picks; inside, it cannot be hurt. */
+  private eatAlly(id: string, p: P, skill: SkillDef) {
+    const pick = this.pickByAim(id, p, skill.radius, (qid, q) => qid !== id && !q.owner && !this.isFoe(id, qid) && !(q.vanish > 0) && !(q.domain > 0));
+    const qb = pick && this.brains.get(pick);
+    const q = pick && this.state.players.get(pick);
+    if (!pick || !q || !qb) {
+      p.skill2Cooldown = 0.5; // no ally near: nothing used up
+      return;
+    }
+    q.vanish = 9999;
+    q.link = id;
+    qb.eatenBy = id;
+    qb.eatGrace = 0.6;
+    q.stun = 0;
+    q.taunt = 0;
+    this.addZone("fx:burst:60c0ff", q.x, q.y, 22, 0.5, { owner: id, every: Infinity, damage: 0 });
+  }
+
+  private popOut(id: string, p: P, brain: PlayerBrain) {
+    const eater = brain.eatenBy ? this.state.players.get(brain.eatenBy) : undefined;
+    brain.eatenBy = undefined;
+    p.vanish = 0;
+    p.link = "";
+    if (eater) {
+      const at = this.move(eater.x, eater.y, Math.cos(p.aim) * 22, Math.sin(p.aim) * 22, PLAYER_RADIUS);
+      [p.x, p.y] = [at.x, at.y];
+    }
+    p.warp = (p.warp + 1) % 256;
+    brain.target = undefined;
+    brain.dashTimer = 0;
+    brain.hurtTimer = Math.max(brain.hurtTimer, 0.5);
+    this.addZone("fx:burst:60c0ff", p.x, p.y, 22, 0.5, { owner: id, every: Infinity, damage: 0 });
+  }
+
+  /** The hero (anywhere on the map) nearest to the line of the aim, for skills picked by dragging. */
+  private pickByAim(id: string, p: P, range: number, ok: (qid: string, q: P) => boolean): string | undefined {
+    let best = Infinity;
+    let pick: string | undefined;
+    this.state.players.forEach((q, qid) => {
+      if (q.dead || !ok(qid, q)) return;
+      const d = Math.hypot(q.x - p.x, q.y - p.y);
+      if (d > range) return;
+      let diff = Math.atan2(q.y - p.y, q.x - p.x) - p.aim;
+      diff = Math.abs(Math.atan2(Math.sin(diff), Math.cos(diff)));
+      const score = diff * 200 + d * 0.15; // mostly the angle, a little the distance
+      if (diff < 1.2 && score < best) [best, pick] = [score, qid];
+    });
+    return pick;
+  }
+
+  /** SWAP: trade places with the hero the aim picks, anywhere on the map. */
+  private swapAny(id: string, p: P, skill: SkillDef) {
+    const pick = this.pickByAim(id, p, skill.radius, (qid, q) => qid !== id && !(q.vanish > 0) && !(q.domain > 0) && !this.hidden(q, id));
+    const q = pick && this.state.players.get(pick);
+    if (!pick || !q) {
+      p.skillCooldown = Math.min(p.skillCooldown, 0.5);
+      p.skill2Cooldown = Math.min(p.skill2Cooldown, 0.5);
+      return;
+    }
+    this.addZone("fx:puff:60c0ff", p.x, p.y, 18, 0.45, { owner: id, every: Infinity, damage: 0 });
+    this.addZone("fx:puff:60c0ff", q.x, q.y, 18, 0.45, { owner: id, every: Infinity, damage: 0 });
+    [p.x, p.y, q.x, q.y] = [q.x, q.y, p.x, p.y];
+    p.warp = (p.warp + 1) % 256;
+    q.warp = (q.warp + 1) % 256;
+    for (const who of [id, pick]) {
+      const b = this.brains.get(who);
+      if (b) [b.target, b.dashTimer] = [undefined, 0];
+    }
+    if (skill.damage && this.isFoe(id, pick)) this.damagePlayer(pick, skill.damage * PVP_DAMAGE_SCALE, true, id);
+  }
+
+  /** DOMAIN EXPANSION: he and the foe the aim picks leave the fight for a duel inside his domain. */
+  private openDomain(id: string, p: P, skill: SkillDef) {
+    const t = this.findTarget(id, p, skill.radius, true);
+    const vid = t?.key.startsWith("p:") ? t.key.slice(2) : undefined;
+    const v = vid ? this.state.players.get(vid) : undefined;
+    const vb = vid ? this.brains.get(vid) : undefined;
+    const pb = this.brains.get(id)!;
+    if (!vid || !v || !vb || v.owner || v.domain > 0 || v.vanish > 0) {
+      p.skillCooldown = 0.5;
+      return;
+    }
+    const life = skill.duration ?? 10;
+    const spot = { x: p.x, y: p.y };
+    this.addZone(`domainx:${id}:${vid}`, spot.x, spot.y, DOMAIN_RADIUS, life, { owner: id, every: Infinity, damage: 0 });
+    for (const [q, qb, qid] of [[p, pb, id], [v, vb, vid]] as [P, PlayerBrain, string][]) {
+      q.domain = life;
+      q.link = qid === id ? vid : id;
+      qb.domainSpot = spot;
+      qb.target = undefined;
+      qb.dashTimer = 0;
+    }
+    // The foe is pulled in right in front of him.
+    const at = this.move(p.x, p.y, Math.cos(p.aim) * 50, Math.sin(p.aim) * 50, PLAYER_RADIUS);
+    [v.x, v.y] = [at.x, at.y];
+    v.warp = (v.warp + 1) % 256;
+  }
+
+  private keepInDomain(p: P, brain: PlayerBrain) {
+    const c = brain.domainSpot;
+    if (!c) return;
+    const dx = p.x - c.x;
+    const dy = p.y - c.y;
+    const d = Math.hypot(dx, dy);
+    const max = DOMAIN_RADIUS - PLAYER_RADIUS;
+    if (d > max) [p.x, p.y] = [c.x + (dx / d) * max, c.y + (dy / d) * max];
+  }
+
+  private endDomain(id: string) {
+    const s = this.state;
+    const p = s.players.get(id);
+    if (!p) return;
+    const partner = p.link;
+    for (const qid of [id, partner]) {
+      const q = s.players.get(qid);
+      const qb = this.brains.get(qid);
+      if (!q || !qb || !(q.domain > 0 || qb.domainSpot)) continue;
+      q.domain = 0;
+      qb.domainSpot = undefined;
+      if (!(q.taunt > 0) && !(q.vanish > 0)) q.link = "";
+    }
+    s.zones.forEach((z, zid) => {
+      if (z.kind.startsWith("domainx:") && (z.kind.includes(`:${id}`) || z.kind.includes(`:${partner}`))) this.removeZone(zid);
+    });
+  }
+
+  /** NAME WRITTEN goes off: the nearest foe within reach simply falls (bosses lose a big chunk). */
+  private writeName(id: string, p: P, skill: SkillDef) {
+    const t = this.findTarget(id, p, skill.radius, true);
+    if (!t) return;
+    this.addZone("fxd:pillar:202020", t.x, t.y, 24, 0.05, { owner: id, every: Infinity, damage: 0 });
+    if (t.key.startsWith("p:")) {
+      const v = this.state.players.get(t.key.slice(2));
+      if (v) this.damagePlayer(t.key.slice(2), v.hp + 1, true, id, true);
+    } else {
+      const e = this.state.enemies.get(t.key);
+      if (e) this.damageEnemy(t.key, ENEMIES[e.kind as EnemyKind].boss ? e.maxHp * 0.2 : e.hp + 1, id);
+    }
+  }
+
+  /** SHIELD BASH and the STONE FIST: a hitbox sliding forward that carries foes along until a wall stops it. */
+  private startPush(id: string, p: P, brain: PlayerBrain, o: { len: number; width: number; speed: number; dmg: number; stun: number; wallStun: number; self: boolean; look: string }) {
+    const zone = this.addZone(o.look, p.x, p.y, o.width / 2, o.len / o.speed + 0.1, { owner: id, every: Infinity, damage: 0 });
+    (brain.pushes ??= []).push({ x: p.x, y: p.y, angle: p.aim, left: o.len, speed: o.speed, width: o.width, carried: new Set(), dmg: o.dmg, stun: o.stun, wallStun: o.wallStun, self: o.self, zone });
+  }
+
+  private updatePushes(id: string, p: P, brain: PlayerBrain, dt: number) {
+    const s = this.state;
+    for (const push of [...brain.pushes!]) {
+      const step = Math.min(push.left, push.speed * dt);
+      const cos = Math.cos(push.angle);
+      const sin = Math.sin(push.angle);
+      const next = this.move(push.x, push.y, cos * step, sin * step, PLAYER_RADIUS);
+      const wall = Math.hypot(next.x - push.x, next.y - push.y) < step * 0.5;
+      push.left -= step;
+      [push.x, push.y] = [next.x, next.y];
+      const z = s.zones.get(push.zone);
+      if (z) [z.x, z.y] = [push.x + cos * 10, push.y + sin * 10];
+      if (push.self) {
+        [p.x, p.y] = [push.x, push.y];
+        p.latch = Math.max(p.latch, 0.15); // the client rides along
+        brain.target = undefined;
+      }
+      // Catch foes in front, then carry them along.
+      const fx = push.x + cos * 14;
+      const fy = push.y + sin * 14;
+      const catchR = push.width / 2;
+      s.enemies.forEach((e, eid) => {
+        const def = ENEMIES[e.kind as EnemyKind];
+        if (def.block || def.boss) return;
+        if (!push.carried.has(eid) && Math.hypot(e.x - fx, e.y - fy) <= catchR + this.er(e)) {
+          push.carried.add(eid);
+          if (push.dmg) this.damageEnemy(eid, push.dmg, id);
+        }
+        if (push.carried.has(eid) && s.enemies.has(eid)) [e.x, e.y] = [push.x + cos * 18, push.y + sin * 18];
+      });
+      if (this.pvpLive()) {
+        s.players.forEach((v, vid) => {
+          if (v.dead || !this.isFoe(id, vid)) return;
+          if (!push.carried.has(vid) && this.bodyDist(v, fx, fy) <= catchR + this.pr(v)) {
+            push.carried.add(vid);
+            if (push.dmg) this.damagePlayer(vid, push.dmg * PVP_DAMAGE_SCALE, true, id);
+          }
+          if (push.carried.has(vid) && !v.dead) {
+            const at = this.move(push.x, push.y, cos * 20, sin * 20, PLAYER_RADIUS);
+            [v.x, v.y] = [at.x, at.y];
+            v.latch = Math.max(v.latch, 0.15);
+            const vb = this.brains.get(vid);
+            if (vb) [vb.target, vb.dashTimer] = [undefined, 0];
+          }
+        });
+      }
+      if (wall || push.left <= 0) {
+        // Slammed into the wall (or the push ran out): stunned.
+        const stun = wall ? push.wallStun : push.stun;
+        for (const key of push.carried) {
+          if (s.enemies.has(key)) this.strike(id, key, 0, stun);
+          else {
+            const v = s.players.get(key);
+            if (v && !v.dead && stun > 0) v.stun = Math.max(v.stun, stun);
+          }
+        }
+        if (wall) this.addZone("parry", push.x + cos * 20, push.y + sin * 20, 14, 0.3, { owner: id, every: Infinity, damage: 0 });
+        this.removeZone(push.zone);
+        brain.pushes!.splice(brain.pushes!.indexOf(push), 1);
+        if (push.self) p.warp = (p.warp + 1) % 256;
+      }
+    }
+  }
+
+  /** PIANO: the piano plays its notes, one after another, all around it. */
+  private playPiano(id: string, p: P, brain: PlayerBrain, hero: HeroDef, dt: number) {
+    const pn = brain.piano!;
+    const sk = hero.skill.kind === "piano" ? hero.skill : hero.skill2!;
+    pn.timer -= dt;
+    while (pn.timer <= 0 && pn.left > 0) {
+      pn.timer += PIANO_GAP;
+      pn.left--;
+      const a = pn.note * 2.39996; // the golden angle: notes spread evenly all the way round
+      const letter = "CDEFG"[pn.note % 5];
+      pn.note++;
+      this.spawnBullet(`note:${letter}` as BulletKind, pn.x, pn.y - 6, a, PIANO_NOTE_SPEED, { owner: id, damage: sk.damage, pierce: 0, life: sk.radius / PIANO_NOTE_SPEED });
+    }
+    if (pn.left <= 0) brain.piano = undefined;
+  }
+
+  /** MARKED KUNAI: three kunai stick where they land; then the next presses warp to one of them. */
+  private throwKunai(id: string, p: P, brain: PlayerBrain, skill: SkillDef) {
+    if (brain.kunai) {
+      // Warp to the kunai closest to where he aims.
+      let best = Infinity;
+      let pick = -1;
+      brain.kunai.zones.forEach((zid, i) => {
+        const z = this.state.zones.get(zid);
+        if (!z) return;
+        let diff = Math.atan2(z.y - p.y, z.x - p.x) - p.aim;
+        diff = Math.abs(Math.atan2(Math.sin(diff), Math.cos(diff)));
+        if (diff < best) [best, pick] = [diff, i];
+      });
+      const zid = pick >= 0 ? brain.kunai.zones[pick] : undefined;
+      const z = zid ? this.state.zones.get(zid) : undefined;
+      if (z && zid) {
+        this.addZone("fx:puff:ffe040", p.x, p.y, 16, 0.4, { owner: id, every: Infinity, damage: 0 });
+        [p.x, p.y] = [z.x, z.y];
+        p.warp = (p.warp + 1) % 256;
+        brain.target = undefined;
+        this.sweep(id, p.x, p.y, 0, 30, Math.PI * 2, skill.damage); // a flash strike where he lands
+        this.addZone("fx:puff:ffe040", p.x, p.y, 16, 0.4, { owner: id, every: Infinity, damage: 0 });
+        this.removeZone(zid);
+        brain.kunai.zones.splice(pick, 1);
+        brain.kunai.warps--;
+      }
+      p.mode = brain.kunai.warps;
+      if (brain.kunai.warps <= 0 || !brain.kunai.zones.length) this.endKunai(id, p, brain, heroOf(p.hero));
+      else p.skill2Cooldown = 0.3;
+      return;
+    }
+    const zones: string[] = [];
+    const n = skill.count ?? 3;
+    for (let i = 0; i < n; i++) {
+      const a = p.aim + (n > 1 ? (i / (n - 1) - 0.5) * (skill.width ?? 0.6) : 0);
+      const end = this.move(p.x, p.y, Math.cos(a) * skill.radius, Math.sin(a) * skill.radius, 4);
+      const d = Math.hypot(end.x - p.x, end.y - p.y);
+      this.lineHit(id, p.x, p.y, a, d, 12, skill.damage);
+      this.fxLaneZone(id, "chain", "ffe040", p.x, p.y, a, d, 3, 0.25);
+      zones.push(this.addZone(`kunai:${a.toFixed(2)}`, end.x, end.y, 8, KUNAI_WINDOW + 0.5, { owner: id, every: Infinity, damage: 0 }));
+    }
+    brain.kunai = { zones, warps: 3, left: KUNAI_WINDOW };
+    p.mode = 3;
+    p.skill2Cooldown = 0.3;
+  }
+
+  private endKunai(id: string, p: P, brain: PlayerBrain, hero: HeroDef) {
+    for (const zid of brain.kunai?.zones ?? []) this.removeZone(zid);
+    brain.kunai = undefined;
+    p.mode = 0;
+    const sk = hero.skill2?.kind === "kunai" ? hero.skill2 : undefined;
+    if (sk) p.skill2Cooldown = Math.max(p.skill2Cooldown, sk.cooldown);
+  }
+
+  /** BLOOD TRAP: first press starts laying blood along the way; the second calls it all back through foes. */
+  private bloodTrap(id: string, p: P, brain: PlayerBrain, skill: SkillDef) {
+    if (brain.blood) {
+      for (const zid of brain.blood.zones) {
+        const z = this.state.zones.get(zid);
+        if (!z) continue;
+        const a = Math.atan2(p.y - z.y, p.x - z.x);
+        const d = Math.hypot(p.x - z.x, p.y - z.y);
+        this.fxArea(id, this.laneTest(z.x, z.y, a, d, 18), { dmg: skill.damage }, { x: z.x, y: z.y }, a);
+        this.fxLaneZone(id, "chain", "c01020", z.x, z.y, a, d, 6, 0.35);
+      }
+      this.endBlood(p, brain, heroOf(p.hero));
+      return;
+    }
+    p.hp = Math.max(1, p.hp - p.maxHp * 0.05);
+    brain.blood = { zones: [], lay: 0, left: BLOOD_WINDOW };
+    p.mode = 1;
+    p.skill2Cooldown = 0.3;
+  }
+
+  private layBlood(id: string, p: P, brain: PlayerBrain, dt: number) {
+    const b = brain.blood!;
+    b.lay -= dt;
+    if (b.lay > 0 || b.left < BLOOD_WINDOW - BLOOD_LAY_TIME || b.zones.length >= 12) return;
+    const last = b.zones.length ? this.state.zones.get(b.zones[b.zones.length - 1]) : undefined;
+    if (last && Math.hypot(last.x - p.x, last.y - p.y) < 18) return;
+    b.lay = 0.2;
+    b.zones.push(this.addZone("blood", p.x, p.y, 8, BLOOD_WINDOW + 0.5, { owner: id, every: Infinity, damage: 0 }));
+  }
+
+  private endBlood(p: P, brain: PlayerBrain, hero: HeroDef) {
+    for (const zid of brain.blood?.zones ?? []) this.removeZone(zid);
+    brain.blood = undefined;
+    p.mode = 0;
+    const sk = hero.skill2?.kind === "bloodtrap" ? hero.skill2 : undefined;
+    if (sk) p.skill2Cooldown = Math.max(p.skill2Cooldown, sk.cooldown);
+  }
+
+  /** SWALLOW: takes the nearest foe's first skill; the next E uses it once. */
+  private copySkill(id: string, p: P, brain: PlayerBrain, skill: SkillDef) {
+    const t = this.findTarget(id, p, skill.radius, true);
+    const v = t?.key.startsWith("p:") ? this.state.players.get(t.key.slice(2)) : undefined;
+    if (!t || !v) {
+      p.skill2Cooldown = 0.5;
+      return;
+    }
+    this.fxLaneZone(id, "grab", "6020a0", p.x, p.y, Math.atan2(t.y - p.y, t.x - p.x), Math.hypot(t.x - p.x, t.y - p.y), 8, 0.5);
+    this.strike(id, t.key, skill.damage);
+    const stolen = heroOf(v.hero).skill;
+    if (stolen.kind === "passive" || stolen.kind === "copyskill") return;
+    brain.stolen = stolen;
+    p.mode = 1;
+    p.skill2Cooldown = 0.5;
+  }
+
+  /** FAKE CLONE: five harmless clones run around him (one hit and they are gone). */
+  private fakeClones(id: string, p: P, skill: SkillDef) {
+    const before = new Set<string>();
+    this.state.players.forEach((_q, qid) => before.add(qid));
+    this.state.players.forEach((q, qid) => {
+      if (q.owner === id && this.brains.get(qid)?.decoy) this.removePlayer(qid);
+    });
+    this.spawnSummon(id, p, p.hero, 1, skill.count ?? 5, skill.duration ?? 8);
+    this.state.players.forEach((q, qid) => {
+      if (before.has(qid) || q.owner !== id) return;
+      const b = this.brains.get(qid)!;
+      b.decoy = { angle: Math.random() * Math.PI * 2, timer: 0 };
+      this.addZone("fx:puff:ffa030", q.x, q.y, 14, 0.4, { owner: id, every: Infinity, damage: 0 });
+    });
+  }
+
+  /** A decoy clone runs around near its owner and never attacks. */
+  private runDecoy(id: string, c: P, brain: PlayerBrain, owner: P, dt: number) {
+    const d = brain.decoy!;
+    d.timer -= dt;
+    if (d.timer <= 0) {
+      d.timer = 0.6 + Math.random() * 0.8;
+      d.angle = Math.random() * Math.PI * 2;
+    }
+    const tx = owner.x + Math.cos(d.angle) * 60;
+    const ty = owner.y + Math.sin(d.angle) * 60;
+    const dx = tx - c.x;
+    const dy = ty - c.y;
+    const dist = Math.hypot(dx, dy);
+    if (dist > 6) {
+      const sp = heroSpeed(c) * dt;
+      const moved = this.move(c.x, c.y, (dx / dist) * Math.min(sp, dist), (dy / dist) * Math.min(sp, dist), PLAYER_RADIUS);
+      [c.x, c.y] = [moved.x, moved.y];
+    }
+    c.aim = owner.aim;
+    [c.hp, c.maxHp] = [owner.hp, owner.maxHp]; // looks just like him
+  }
+
+  /** The SPIRAL SPHERE: his decoys copy it at the same foe. */
+  private decoysCopy(id: string, p: P, skill: SkillDef) {
+    const t = this.findTarget(id, p, 320);
+    this.state.players.forEach((c, cid) => {
+      const cb = this.brains.get(cid);
+      if (c.owner !== id || !cb?.decoy || c.dead) return;
+      const aim = t ? Math.atan2(t.y - c.y, t.x - c.x) : p.aim;
+      c.aim = aim;
+      c.skillSeq++;
+      for (const st of skill.steps ?? []) this.fxStep(cid, c, cb, st, aim, c.x, c.y);
+    });
+  }
+
+  /** The Fire & Ice Hero's red shot burns its target once more a moment after the hit. */
+  private igniteTarget(owner: string, key: string, damage: number, x: number, y: number) {
+    const zid = this.addZone("ignite", x, y, 8, IGNITE_DELAY, { owner, every: Infinity, damage });
+    this.zoneBrains.get(zid)!.stick = key;
+    this.zoneBrains.get(zid)!.ignite = key;
+  }
+
+  /** A hero's normal shot (used again for SWIFT's extra arrows). */
+  private basicShot(id: string, p: P, hero: HeroDef, aim: number) {
+    const kind = (hero.attack === "rifle" ? "snipe" : hero.shot ?? "magic") as BulletKind;
+    this.spawnBullet(kind, p.x, p.y, aim, hero.shotSpeed, { owner: id, damage: hero.damage, pierce: hero.attack === "rifle" ? hero.pierce : 0, life: hero.range / hero.shotSpeed, blast: hero.aoe });
+  }
+
+  /** Where a shot ends (wall, time, or its last hit): COCKROACH SHOT bursts into roaches. */
+  private endBullet(id: string) {
+    const b = this.state.bullets.get(id);
+    const brain = this.bulletBrains.get(id);
+    if (b && brain?.split) {
+      const sp = brain.split;
+      for (let i = 0; i < sp.n; i++) {
+        const a = (i / sp.n) * Math.PI * 2 + Math.random() * 0.3;
+        const bid = this.spawnBullet(`fxo:${sp.shape}:${sp.color}:${sp.size}` as BulletKind, b.x, b.y, a, sp.speed, { owner: brain.owner, damage: sp.dmg ?? 0, pierce: 0, life: sp.range / sp.speed });
+        const nb = this.bulletBrains.get(bid)!;
+        if (sp.stun) nb.stun = sp.stun;
+      }
+    }
+    this.removeBullet(id);
+  }
+
   private useSkill(id: string, p: P, hero: HeroDef, skill: SkillDef, brain: PlayerBrain) {
     const s = this.state;
     switch (skill.kind) {
@@ -2050,7 +2982,11 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       case "wave": {
         // a flying sword wave that cuts through every enemy in its path
         const speed = 300;
-        this.spawnBullet("wave", p.x, p.y, p.aim, speed, { owner: id, damage: skill.damage, pierce: 99, life: skill.radius / speed });
+        const n = skill.count ?? 1; // SKY SLASH: three waves in a fan
+        for (let i = 0; i < n; i++) {
+          const a = p.aim + (n > 1 ? (i / (n - 1) - 0.5) * 0.45 : 0);
+          this.spawnBullet("wave", p.x, p.y, a, speed, { owner: id, damage: skill.damage, pierce: 99, life: skill.radius / speed });
+        }
         break;
       }
       case "burst": // three rapid piercing shots
@@ -2068,7 +3004,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
         this.lineHit(id, p.x, p.y, p.aim, skill.radius, skill.width ?? 16, skill.damage, skill.duration ?? 0);
         break;
       case "onepunch": // whatever is in front of Saitama simply stops existing
-        this.sweep(id, p.x, p.y, p.aim, skill.radius, 2.4, ONE_PUNCH_DAMAGE);
+        this.sweep(id, p.x, p.y, p.aim, hero.range, hero.arc, ONE_PUNCH_DAMAGE); // as far and as wide as his normal punch
         break;
       case "heal":
         s.players.forEach((q, qid) => {
@@ -2193,6 +3129,8 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       case "reflect":
       case "sprint":
         p.active2 = skill.duration ?? 1;
+        brain.triple = 1; // SWIFT: the next shot is three arrows in a row
+        brain.attackTimer = 0;
         break;
       case "shadowstep": {
         if (brain.shadow) {
@@ -2246,12 +3184,8 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
         const share = Math.min(1, held / chargeTimeOf(skill));
         const full = share >= 0.999;
         const dist = skill.radius * (0.35 + 0.65 * share);
-        const end = this.move(p.x, p.y, Math.cos(p.aim) * dist, Math.sin(p.aim) * dist, PLAYER_RADIUS);
-        this.lineHit(id, p.x, p.y, p.aim, Math.hypot(end.x - p.x, end.y - p.y) + 10, skill.width ?? 30, skill.damage, full ? skill.duration ?? 2 : 0, full ? 0 : 1);
-        p.x = end.x;
-        p.y = end.y;
-        p.warp = (p.warp + 1) % 256;
-        brain.target = undefined;
+        // He drives forward step by step, shoving everything in front of him along (a wall stops them, stunned).
+        this.startPush(id, p, brain, { len: dist, width: skill.width ?? 30, speed: 260, dmg: skill.damage, stun: full ? skill.duration ?? 2 : 0, wallStun: full ? skill.duration ?? 2 : 1, self: true, look: "fxp:shield:f0e0a0" });
         brain.hurtTimer = Math.max(brain.hurtTimer, 0.3);
         break;
       }
@@ -2295,6 +3229,53 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       case "harden":
         p.mode = Math.min(skill.count ?? 10, p.mode + 1);
         break;
+      case "taunt":
+        this.tauntAround(id, p, skill);
+        break;
+      case "possess":
+        this.possess(id, p, brain, skill);
+        break;
+      case "eater":
+        this.eatAlly(id, p, skill);
+        break;
+      case "swapany":
+        this.swapAny(id, p, skill);
+        break;
+      case "domainx":
+        this.openDomain(id, p, skill);
+        break;
+      case "deathnote":
+        // NAME WRITTEN: he writes (walking slowly) while the bar fills; then the nearest foe in range falls.
+        p.buff = skill.duration ?? 10;
+        brain.note = skill.duration ?? 10;
+        break;
+      case "kunai":
+        this.throwKunai(id, p, brain, skill);
+        break;
+      case "bloodtrap":
+        this.bloodTrap(id, p, brain, skill);
+        break;
+      case "bloodhammer":
+        // BLOOD HAMMER: pays 10% HP for a hammer of blood (twice the damage and reach) for a while.
+        p.hp = Math.max(1, p.hp - p.maxHp * 0.1);
+        p.buff = skill.duration ?? 7;
+        brain.attackTimer = 0;
+        this.addZone("fx:burst:c01020", p.x, p.y, 26, 0.45, { owner: id, every: Infinity, damage: 0 });
+        break;
+      case "copyskill":
+        this.copySkill(id, p, brain, skill);
+        break;
+      case "fakeclone":
+        this.fakeClones(id, p, skill);
+        break;
+      case "piano": {
+        // PIANO: a piano appears in front of him and plays a run of notes all around.
+        const spot = this.move(p.x, p.y, Math.cos(p.aim) * 24, Math.sin(p.aim) * 24, 10);
+        const n = skill.count ?? 24;
+        brain.piano = { left: n, timer: 0.15, x: spot.x, y: spot.y, note: 0 };
+        this.addZone("piano", spot.x, spot.y, 18, n * PIANO_GAP + 0.4, { owner: id, every: Infinity, damage: 0 });
+        break;
+      }
       case "combo":
         this.castCombo(id, p, skill, brain);
         break;
@@ -2357,7 +3338,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
         const speed = 520;
         const out = skill.radius / (speed * SHOT_SPEED_SCALE * HERO_SHOT_SCALE);
         const bid = this.spawnBullet("axe", p.x, p.y, p.aim, speed, { owner: id, damage: skill.damage, pierce: 999, life: out + 3 });
-        Object.assign(this.bulletBrains.get(bid)!, { bounce: true, back: out, age: 0, rehit: true });
+        Object.assign(this.bulletBrains.get(bid)!, { bounce: true, back: out, age: 0, rehit: true, carry: new Set() }); // and drags whoever it hits home with it
         break;
       }
       case "jackbox": {
@@ -2851,7 +3832,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       if (!ENEMIES[e.kind as EnemyKind].block) consider(eid, e.x, e.y);
     });
     this.state.players.forEach((v, vid) => {
-      if (!v.dead && this.isFoe(id, vid) && !this.hidden(v)) consider(`p:${vid}`, v.x, v.y);
+      if (!v.dead && this.isFoe(id, vid) && !this.hidden(v, id)) consider(`p:${vid}`, v.x, v.y);
     });
     return pick ? { key: pick, x: tx, y: ty } : undefined;
   }
@@ -3150,6 +4131,11 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       c.stun = Math.max(0, c.stun - dt);
       return;
     }
+    if (brain.decoy) {
+      this.runDecoy(id, c, brain, owner, dt);
+      return;
+    }
+    if (c.hero === owner.hero) c.disguise = owner.disguise; // the Trickster's copy wears the same disguise
     // Find something to fight: the nearest enemy, or a rival player in the arena.
     let tx = 0;
     let ty = 0;
@@ -3163,7 +4149,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       if (d < best) [best, tx, ty] = [d, e.x, e.y]; // measured to its edge, so melee helpers close in
     });
     this.state.players.forEach((v, vid) => {
-      if (v.dead || !this.isFoe(id, vid) || this.hidden(v)) return;
+      if (v.dead || !this.isFoe(id, vid) || this.hidden(v, id)) return;
       const d = Math.hypot(v.x - c.x, v.y - c.y) - PLAYER_RADIUS;
       if (d < best) [best, tx, ty] = [d, v.x, v.y];
     });
@@ -3248,7 +4234,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
         const o = s.players.get(brain.owner);
         if (o && !o.dead) [z.x, z.y] = [o.x, o.y];
       }
-      if ((z.kind === "sticky" || z.kind === "whip" || z.kind === "petrify" || z.kind === "iceblock") && brain.stick) {
+      if ((z.kind === "sticky" || z.kind === "whip" || z.kind === "petrify" || z.kind === "iceblock" || z.kind === "ignite" || z.kind === "possess") && brain.stick) {
         // The bomb rides along on whatever it is stuck to.
         const key = brain.stick;
         const v = key.startsWith("p:") ? s.players.get(key.slice(2)) : s.enemies.get(key);
@@ -3311,6 +4297,23 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
         this.stunAround(brain.owner, z.x, z.y, z.radius, brain.stun ?? 2);
       }
       if (z.life <= 0 && z.kind === "sticky") this.stickyBlast(z, brain);
+      if (z.life <= 0 && brain.ignite) {
+        // The red shot's burn flares up once more.
+        this.strike(brain.owner, brain.ignite, brain.damage);
+        this.addZone("fx:burst:ff5020", z.x, z.y, 14, 0.35, { owner: brain.owner, every: Infinity, damage: 0 });
+      }
+      if (brain.cage) {
+        // BIRDCAGE: those caught inside cannot walk out.
+        for (const vid of brain.cage) {
+          const v = s.players.get(vid);
+          if (!v || v.dead) continue;
+          const dx = v.x - z.x;
+          const dy = v.y - z.y;
+          const d = Math.hypot(dx, dy);
+          const max = z.radius - PLAYER_RADIUS;
+          if (d > max) [v.x, v.y] = [z.x + (dx / d) * max, z.y + (dy / d) * max];
+        }
+      }
       if (z.life <= 0 && brain.blast) this.landBlast(z, brain);
       if (z.life <= 0 && brain.fxEnd) {
         // A combo drop lands.
@@ -3449,6 +4452,14 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
     const brain = this.brains.get(id);
     if (!p || !brain || p.dead || p.dashing) return;
     if (heroOf(p.hero).invincible || p.barrier > 0) return;
+    if (p.vanish > 0) return; // eaten (safe inside) or inside a foe
+    if (attacker && attacker !== ENEMY && (p.domain > 0) !== (this.state.players.get(this.rootOf(attacker))?.domain ?? 0) > 0) return; // a domain shuts the world out
+    if (brain.decoy && amount > 0) {
+      // FAKE CLONE: one hit and it is gone.
+      this.addZone("fx:puff:ffffff", p.x, p.y, 14, 0.4, { owner: id, every: Infinity, damage: 0 });
+      this.removePlayer(id);
+      return;
+    }
     if (attacker && attacker !== ENEMY && !raw) amount *= this.dmgMul(attacker) * HERO_HIT_SCALE;
     // HARDEN: each stack takes a share off every hit.
     const hard = heroOf(p.hero).skill;
@@ -4014,6 +5025,20 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       if (onlyOwner && !onlyOwner.has(brain.owner ?? "")) return;
       if (brain.homing) this.steerMissile(b, brain, dt);
       if (brain.bounce && this.flyFist(id, b, brain, dt)) return;
+      if (brain.carry?.size) this.carryAlong(b, brain);
+      if (brain.bounces) {
+        // DIRECT VOLLEY: off the walls it goes, and may hit everyone again.
+        const nx = b.x + b.vx * dt;
+        const ny = b.y + b.vy * dt;
+        const out = (x: number, y: number) => x < 4 || y < 4 || x > WORLD_W - 4 || y > WORLD_H - 4 || this.blocked(x, y);
+        if (out(nx, ny)) {
+          if (out(nx, b.y)) b.vx = -b.vx;
+          if (out(b.x, ny)) b.vy = -b.vy;
+          if (!out(nx, b.y) && !out(b.x, ny)) [b.vx, b.vy] = [-b.vx, -b.vy];
+          brain.bounces--;
+          brain.hit.clear();
+        }
+      }
       b.x += b.vx * dt;
       b.y += b.vy * dt;
       brain.life -= dt;
@@ -4021,7 +5046,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       const blocked = b.kind !== "wave" && b.kind !== "godslash" && b.kind !== "missile" && !brain.bounce && this.blocked(b.x, b.y);
       if (brain.life <= 0 || b.x < 0 || b.y < 0 || b.x > WORLD_W || b.y > WORLD_H || blocked) {
         if (brain.blast > 0) this.sweep(brain.owner ?? "", b.x, b.y, 0, brain.blast, Math.PI * 2, brain.damage);
-        this.removeBullet(id);
+        this.endBullet(id);
         return;
       }
 
@@ -4047,7 +5072,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       }
 
       // Heroes' shots hit a little generously, so fights between heroes connect more often.
-      const hitRadius = SHOT_HIT_SLACK + (b.kind === "fist" ? 7 : b.kind === "wave" ? 14 : b.kind === "godslash" ? 8 : b.kind === "fireball" ? 8 : b.kind === "missile" || b.kind.startsWith("card") ? 5 : 2);
+      const hitRadius = SHOT_HIT_SLACK + (b.kind === "fist" ? 7 : b.kind === "wave" ? 14 : b.kind === "godslash" ? 8 : b.kind === "fireball" ? 8 : b.kind === "missile" || b.kind.startsWith("card") ? 5 : 2) + (brain.hitSize ?? 0);
       if (this.pvpLive()) {
         s.players.forEach((v, vid) => {
           if (!s.bullets.has(id) || !this.isFoe(brain.owner, vid) || v.dead || brain.hit.has(vid)) return;
@@ -4064,8 +5089,11 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
           brain.hit.add(vid);
           this.damagePlayer(vid, (brain.pct ? v.maxHp * brain.pct : brain.damage) * PVP_DAMAGE_SCALE, true, brain.owner);
           if (brain.stun && !v.dead) v.stun = Math.max(v.stun, brain.stun); // POWER SHOT
-          if (brain.slow && !v.dead) v.slow = Math.max(v.slow, brain.slow); // ice shards
-          if (brain.pierceLeft <= 0) this.removeBullet(id);
+          if (brain.slow && !v.dead) this.slowPlayer(v, brain.slow, brain.slowPct); // ice shards
+          if (brain.silence && !v.dead) v.silence = Math.max(v.silence, brain.silence);
+          if (brain.ignite && !v.dead) this.igniteTarget(brain.owner ?? "", `p:${vid}`, brain.ignite, v.x, v.y);
+          if (brain.carry && !v.dead) brain.carry.add(`p:${vid}`);
+          if (brain.pierceLeft <= 0) this.endBullet(id);
           else brain.pierceLeft--;
         });
         if (!s.bullets.has(id)) return;
@@ -4085,7 +5113,9 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
           this.damageEnemy(eid, brain.pct ? e.maxHp * brain.pct * (def.boss ? 0.1 : 1) : brain.damage, brain.owner);
           if (brain.stun && !def.boss && s.enemies.has(eid)) e.stun = Math.max(e.stun, brain.stun);
           if (brain.slow && !def.block && s.enemies.has(eid)) e.slow = Math.max(e.slow, brain.slow);
-          if (brain.pierceLeft <= 0) this.removeBullet(id);
+          if (brain.ignite && s.enemies.has(eid)) this.igniteTarget(brain.owner ?? "", eid, brain.ignite, e.x, e.y);
+          if (brain.carry && !def.boss && !def.block && s.enemies.has(eid)) brain.carry.add(eid);
+          if (brain.pierceLeft <= 0) this.endBullet(id);
           else brain.pierceLeft--;
         }
       });
@@ -4132,6 +5162,24 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
     return false;
   }
 
+  /** AXE BOOMERANG: whoever it caught is dragged along with it. */
+  private carryAlong(b: B, brain: BulletBrain) {
+    for (const key of brain.carry!) {
+      if (key.startsWith("p:")) {
+        const v = this.state.players.get(key.slice(2));
+        const vb = this.brains.get(key.slice(2));
+        if (!v || v.dead) continue;
+        const at = this.move(v.x, v.y, b.x - v.x, b.y - v.y, PLAYER_RADIUS);
+        [v.x, v.y] = [at.x, at.y];
+        v.latch = Math.max(v.latch, 0.15);
+        if (vb) [vb.target, vb.dashTimer] = [undefined, 0];
+      } else {
+        const e = this.state.enemies.get(key);
+        if (e) [e.x, e.y] = [b.x, b.y];
+      }
+    }
+  }
+
   /** Turn a homing missile toward the nearest monster (or rival, in PvP). */
   private steerMissile(b: B, brain: BulletBrain, dt: number) {
     brain.age = (brain.age ?? 0) + dt;
@@ -4145,7 +5193,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       if (d < best) [best, tx, ty] = [d, e.x, e.y];
     });
     this.state.players.forEach((v, vid) => {
-      if (v.dead || !this.isFoe(brain.owner, vid) || this.hidden(v)) return;
+      if (v.dead || !this.isFoe(brain.owner, vid) || this.hidden(v, brain.owner)) return;
       const d = Math.hypot(v.x - b.x, v.y - b.y);
       if (d < best) [best, tx, ty] = [d, v.x, v.y];
     });
@@ -4170,7 +5218,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
     let dist = Infinity;
     const map = this.classic ? classicMap(this.state.map) : undefined;
     this.state.players.forEach((v, vid) => {
-      if (v.dead || !this.isFoe(id, vid) || this.hidden(v)) return;
+      if (v.dead || !this.isFoe(id, vid) || this.hidden(v, id)) return;
       const d = Math.hypot(v.x - p.x, v.y - p.y);
       if (map && !seesInto(map, p.x, p.y, v.x, v.y)) return; // Classic: no seeing into tall grass (unless in the same patch)
       if (d < dist) [dist, foe] = [d, v];
@@ -4359,7 +5407,28 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       case "petrify":
       case "iceprison":
       case "deathdoor":
+      case "possess":
+      case "domainx":
+      case "copyskill":
         return dist <= skill.radius;
+      case "taunt":
+        return dist <= skill.radius + 10;
+      case "deathnote":
+        return dist <= skill.radius * 0.8;
+      case "swapany":
+        return dist > 150 && Math.random() < 0.3;
+      case "kunai":
+        return dist <= skill.radius;
+      case "eater":
+        return false; // bots fight alone
+      case "fakeclone":
+        return dist < 220;
+      case "piano":
+        return dist < (skill.radius ?? 200) * 0.7;
+      case "bloodtrap":
+        return dist < 160;
+      case "bloodhammer":
+        return dist < 70 && hpLeft > 0.3;
       case "error":
         return dist < 240;
       case "reap":

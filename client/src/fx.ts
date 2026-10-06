@@ -185,6 +185,23 @@ export function drawFxZone(floor: G, sky: G, z: any, now: number): boolean {
         }
         floor.fillStyle(c, 0.12 * t).fillCircle(z.x, z.y, r);
         break;
+      case "pull": {
+        // UNIVERSAL PULL: rings and streaks rushing IN toward him (the opposite of a burst).
+        floor.fillStyle(c, 0.12 * t).fillCircle(z.x, z.y, r);
+        for (let i = 0; i < 3; i++) {
+          const k = 1 - ((grow * 1.6 + i / 3) % 1);
+          sky.lineStyle(2, i ? light : c, 0.8 * t).strokeCircle(z.x, z.y, r * k);
+        }
+        for (let i = 0; i < 16; i++) {
+          const a = (i / 16) * Math.PI * 2 + grow * 2.5;
+          const d0 = r * (1 - ((grow * 1.4 + rnd(i)) % 1));
+          const d1 = d0 * 0.6;
+          sky.lineStyle(2, i % 2 ? light : 0xffffff, 0.9 * t).lineBetween(z.x + Math.cos(a) * d0, z.y + Math.sin(a) * d0, z.x + Math.cos(a + 0.25) * d1, z.y + Math.sin(a + 0.25) * d1);
+        }
+        sky.fillStyle(0x000000, 0.5 * t).fillCircle(z.x, z.y, 6);
+        sky.lineStyle(2, light, t).strokeCircle(z.x, z.y, 8);
+        break;
+      }
       case "puff":
         for (let i = 0; i < 6; i++) {
           const a = (i / 6) * Math.PI * 2;
@@ -242,6 +259,18 @@ export function drawFxZone(floor: G, sky: G, z: any, now: number): boolean {
     const h = 220 * (1 - k * k);
     const y = z.y - h;
     switch (look) {
+      case "skull": {
+        // FIRE BIRD STAR: a red skull swells over the spot, then bursts.
+        const sr = r * (0.35 + 0.65 * k);
+        const sy = z.y - sr * 0.6;
+        sky.fillStyle(c, 0.25 + 0.5 * k).fillCircle(z.x, sy, sr);
+        sky.fillStyle(c, 0.4 + 0.5 * k).fillRoundedRect(z.x - sr * 0.55, sy + sr * 0.55, sr * 1.1, sr * 0.55, 4);
+        sky.fillStyle(0x200000, 0.9).fillCircle(z.x - sr * 0.38, sy, sr * 0.24).fillCircle(z.x + sr * 0.38, sy, sr * 0.24);
+        sky.fillStyle(0x200000, 0.9).fillTriangle(z.x, sy + sr * 0.2, z.x - sr * 0.12, sy + sr * 0.42, z.x + sr * 0.12, sy + sr * 0.42);
+        for (let i = -2; i <= 2; i++) sky.fillStyle(0x200000, 0.8).fillRect(z.x + i * sr * 0.2 - 1, sy + sr * 0.62, 2, sr * 0.4);
+        sky.fillStyle(light, 0.6 * k).fillCircle(z.x - sr * 0.38, sy, sr * 0.08).fillCircle(z.x + sr * 0.38, sy, sr * 0.08);
+        break;
+      }
       case "pillar":
         sky.fillStyle(c, 0.25 + 0.4 * k).fillRect(z.x - r * 0.5 * k, z.y - 260, r * k, 260);
         sky.fillStyle(0xffffff, 0.5 * k).fillRect(z.x - r * 0.15 * k, z.y - 260, r * 0.3 * k, 260);
@@ -269,6 +298,25 @@ export function drawFxZone(floor: G, sky: G, z: any, now: number): boolean {
     }
     return true;
   }
+  if (head === "fxp") {
+    // A push: the STONE FIST or the Paladin's shield, sliding forward.
+    const [, shape, col] = parts;
+    const c = fxColor(col);
+    const light = fxLight(c);
+    const r = z.radius;
+    if (shape === "shield") {
+      sky.fillStyle(c, 0.9).fillRoundedRect(z.x - r * 0.45, z.y - r * 1.1, r * 0.9, r * 1.2, 5);
+      sky.lineStyle(2, light, 1).strokeRoundedRect(z.x - r * 0.45, z.y - r * 1.1, r * 0.9, r * 1.2, 5);
+      sky.fillStyle(0xffffff, 0.9).fillRect(z.x - 1.5, z.y - r * 0.95, 3, r * 0.9).fillRect(z.x - r * 0.3, z.y - r * 0.6, r * 0.6, 3);
+    } else {
+      floor.fillStyle(0x000000, 0.25).fillEllipse(z.x, z.y + 4, r * 2, r * 0.7);
+      sky.fillStyle(c, 1).fillRoundedRect(z.x - r, z.y - r * 1.4, r * 2, r * 1.5, 8);
+      sky.fillStyle(light, 1).fillRect(z.x - r, z.y - r * 0.6, r * 2, 4);
+      sky.lineStyle(2, 0x302820, 0.8).strokeRoundedRect(z.x - r, z.y - r * 1.4, r * 2, r * 1.5, 8);
+      for (let i = 1; i < 4; i++) sky.lineStyle(1, 0x302820, 0.7).lineBetween(z.x - r + (i * r) / 2, z.y - r * 1.4, z.x - r + (i * r) / 2, z.y - r * 0.6);
+    }
+    return true;
+  }
   if (head === "fxf") {
     const [, look, col] = parts;
     const c = fxColor(col);
@@ -276,7 +324,27 @@ export function drawFxZone(floor: G, sky: G, z: any, now: number): boolean {
     const r = z.radius;
     const fade = Math.max(0, Math.min(1, age / 0.3, z.life / 0.5));
     const spin = now / 900;
+    if (look === "fog") {
+      // OBSCURING CLOUDS: thick rolling fog (who stands inside is hidden by the scene).
+      sky.fillStyle(c, 0.35 * fade).fillCircle(z.x, z.y, r);
+      for (let i = 0; i < 22; i++) {
+        const a = rnd(i) * Math.PI * 2 + spin * (i % 2 ? 0.6 : -0.6);
+        const d = Math.sqrt(rnd(i + 5)) * r * 0.85;
+        sky.fillStyle(i % 3 ? c : light, 0.35 * fade).fillCircle(z.x + Math.cos(a) * d, z.y + Math.sin(a) * d, 14 + rnd(i + 2) * 14);
+      }
+      return true;
+    }
     floor.fillStyle(c, (look === "dark" ? 0.4 : 0.18) * fade).fillCircle(z.x, z.y, r);
+    if (parts[3] === "cage") {
+      // BIRDCAGE: bars of string all the way round.
+      for (let i = 0; i < 28; i++) {
+        const a = (i / 28) * Math.PI * 2;
+        const bx = z.x + Math.cos(a) * r;
+        const by = z.y + Math.sin(a) * r;
+        sky.lineStyle(1, light, 0.8 * fade).lineBetween(bx, by, z.x + Math.cos(a) * r * 0.25, z.y - r * 1.1 + Math.sin(a) * r * 0.1);
+      }
+      sky.lineStyle(2, c, 0.9 * fade).strokeCircle(z.x, z.y, r);
+    }
     floor.lineStyle(2, c, 0.7 * fade).strokeCircle(z.x, z.y, r);
     const scatter = (n: number, draw: (x: number, y: number, i: number) => void) => {
       for (let i = 0; i < n; i++) {
@@ -392,6 +460,28 @@ export function fxShotTexture(scene: Phaser.Scene, kind: string): string {
       ctx.fill();
       ctx.fillStyle = hex(light);
       ctx.fillRect(cx - 1, cy - 1, 2, 2);
+      break;
+    case "roach":
+      // A cockroach: brown body, little legs, feelers.
+      ctx.beginPath();
+      ctx.ellipse(cx, cy, s, s * 0.6, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = "#1a0c04";
+      ctx.lineWidth = 1;
+      for (let i = -1; i <= 1; i++) {
+        ctx.beginPath();
+        ctx.moveTo(cx + i * s * 0.5, cy - s * 0.5);
+        ctx.lineTo(cx + i * s * 0.7, 0.5);
+        ctx.moveTo(cx + i * s * 0.5, cy + s * 0.5);
+        ctx.lineTo(cx + i * s * 0.7, H - 0.5);
+        ctx.stroke();
+      }
+      ctx.beginPath();
+      ctx.moveTo(cx + s, cy);
+      ctx.lineTo(W - 0.5, 0.5);
+      ctx.moveTo(cx + s, cy);
+      ctx.lineTo(W - 0.5, H - 0.5);
+      ctx.stroke();
       break;
     case "spike":
       ctx.beginPath();

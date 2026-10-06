@@ -213,6 +213,18 @@ export type SkillKind =
   | "dive" // DRAGOON DIVE: leap out of reach, then crash down on the aimed spot
   | "roar" // DEMON ROAR: stuns and throws back everything nearby
   | "cyclone" // KANABO CYCLONE: three full spins of the club
+  | "taunt" // ROOT SNARE (Moss Golem): every foe in the ring runs at him and attacks him
+  | "deathnote" // NAME WRITTEN: he walks very slowly while a bar fills, then the nearest foe in range falls
+  | "swapany" // SWAP (Surgeon Pirate): trade places with the hero picked by the aim, anywhere on the map
+  | "possess" // DEATH'S DOOR (Reaper): vanish into a foe and walk it around
+  | "kunai" // MARKED KUNAI: three kunai stick where they land; warp to the one picked by the aim, up to 3 times
+  | "eater" // EATER (Slime Lord): swallow an ally; it takes no damage until it comes back out
+  | "domainx" // DOMAIN EXPANSION (Cursed King): he and one foe leave the map for a duel in his domain
+  | "copyskill" // SWALLOW (Darkness Pirate): take a foe's skill and use it once
+  | "fakeclone" // FAKE CLONE: five harmless clones run around him; they copy his SPIRAL SPHERE
+  | "piano" // PIANO (Skeleton Bard): a piano that fires notes all around for a while
+  | "bloodtrap" // BLOOD TRAP: drop blood on the way, then pull it all back through foes
+  | "bloodhammer" // BLOOD HAMMER: a blood hammer for a while: harder, longer swings
   | "combo" // a skill built from FX steps (dash, lane, ring, shots, drop, field, lock, buff, heal, shield, blink)
   | "charge"; // hold to charge (walking slower), let go to smash: the longer the charge, the harder and longer it hits
 
@@ -228,6 +240,10 @@ export interface SkillDef {
   pet?: HeroId; // for "summon": which helper comes out (damage = its share of the summoner's max HP)
   max?: number; // for "summon": most of these helpers out at once (the oldest leaves); default `count`
   chargeTime?: number; // for charged skills: seconds to a full charge (default CHARGE_FULL)
+  /** Charged skills: the hero walks at this share of their speed while charging (default CHARGE_SLOW). */
+  chargeSlow?: number;
+  /** The cooldown only starts once the helper ("pet") or the portals ("portal") from this skill are gone. */
+  waitGone?: "pet" | "portal";
   /** What the skill does, in words (shown on the hero details). */
   desc?: string;
   /** "combo" skills: what happens, in order (each step can wait a moment after the cast). */
@@ -244,6 +260,10 @@ export interface FxHit {
   root?: number;
   /** Throw foes back (times a normal knockback); negative pulls them in. */
   knock?: number;
+  /** How hard `slow` slows (0..1 of speed taken away); default BURN_SLOW's. */
+  slowPct?: number;
+  /** Seconds the foe cannot use skills (ANTI-MAGIC CUT). */
+  silence?: number;
 }
 
 /** Where a "drop" or "field" goes: this far ahead along the aim, on the caster ("self"), or on the nearest foe ("target"). */
@@ -254,16 +274,18 @@ export type FxAt = number | "self" | "target";
  * `wait`: seconds after the cast before this step goes off. `times`/`gap`: repeat it.
  */
 export type FxStep = { wait?: number; times?: number; gap?: number; color: string } & (
-  | ({ do: "dash"; len: number; width?: number } & FxHit)
+  | ({ do: "dash"; len: number; width?: number; trail?: { n: number; radius: number; delay: number; dmg: number; look?: "meteor" | "pillar" | "bolt" | "fist" | "blade" | "skull" } } & FxHit)
   | { do: "blink"; to: "behind" | "aim" | "start"; range: number }
   | ({ do: "lane"; len: number; width: number; look?: "beam" | "slash" | "wave" | "chain" | "bolt" } & FxHit)
-  | ({ do: "ring"; radius: number; look?: "burst" | "shock" | "petal" | "spin" } & FxHit)
-  | ({ do: "cone"; range: number; arc: number } & FxHit)
-  | ({ do: "shots"; n: number; spread: number; speed: number; range: number; pierce?: number; shape?: "orb" | "blade" | "star" | "spike"; size?: number; home?: boolean } & FxHit)
-  | ({ do: "drop"; at: FxAt; delay: number; radius: number; look?: "meteor" | "pillar" | "bolt" | "fist" | "blade" } & FxHit)
-  | ({ do: "field"; at: FxAt; follow?: boolean; radius: number; life: number; tick: number; heal?: number; look?: "storm" | "mist" | "flames" | "sand" | "petals" | "dark" | "ice" | "light" | "water" | "web" } & FxHit)
+  | ({ do: "ring"; radius: number; look?: "burst" | "shock" | "petal" | "spin" | "pull" } & FxHit)
+  | ({ do: "cone"; range: number; arc: number; reflect?: boolean } & FxHit)
+  | ({ do: "shots"; n: number; spread: number; speed: number; range: number; pierce?: number; shape?: "orb" | "blade" | "star" | "spike" | "roach"; size?: number; home?: boolean; hitSize?: number; bounce?: number; split?: { n: number; range: number; speed: number; shape: "orb" | "blade" | "star" | "spike" | "roach"; size: number; color: string } & FxHit } & FxHit)
+  | ({ do: "drop"; at: FxAt; delay: number; radius: number; spots?: number; look?: "meteor" | "pillar" | "bolt" | "fist" | "blade" | "skull" } & FxHit)
+  | ({ do: "field"; at: FxAt; follow?: boolean; radius: number; life: number; tick: number; heal?: number; cage?: boolean; fog?: boolean; look?: "storm" | "mist" | "flames" | "sand" | "petals" | "dark" | "ice" | "light" | "water" | "web" | "fog" } & FxHit)
+  | ({ do: "push"; len: number; width: number; speed: number; wallStun: number; carrySelf?: boolean } & FxHit)
+  | { do: "rewind"; secs: number }
   | ({ do: "lock"; range: number; drag?: boolean; look?: "chain" | "bolt" | "grab" | "eye" } & FxHit)
-  | { do: "buff"; dur: number; speed?: number; dmg?: number; atk?: number; armor?: number; leech?: number; regen?: number; invuln?: boolean }
+  | { do: "buff"; dur: number; speed?: number; dmg?: number; atk?: number; armor?: number; leech?: number; regen?: number; invuln?: boolean; ccImmune?: boolean }
   | { do: "heal"; pct: number; radius?: number }
   | { do: "shield"; dur: number; radius?: number }
 );
@@ -341,7 +363,7 @@ const BASE_HEROES: Record<BaseHeroId, HeroDef> = {
     // SMASH also stuns everything it hits for `duration` seconds (bosses shrug it off).
     skill: { kind: "smash", name: "SMASH", cooldown: 5, damage: 60, radius: 70, duration: 1, desc: "slams the ground: hurts and stuns everything around him for 1s." },
     // HEAT VISION: a beam `radius` long that follows his aim for `duration` seconds, `damage` per second.
-    skill2: { kind: "eyebeam", name: "HEAT VISION", cooldown: 8, damage: 70, radius: 220, width: 10, duration: 2.5, desc: "red laser beams from his eyes for 2.5s that follow his aim." },
+    skill2: { kind: "eyebeam", name: "HEAT VISION", cooldown: 8, damage: 140, radius: 220, width: 10, duration: 2.5, desc: "red laser beams from his eyes for 2.5s that follow his aim." },
   },
   isekai: {
     name: "Reborn Knight",
@@ -358,14 +380,14 @@ const BASE_HEROES: Record<BaseHeroId, HeroDef> = {
     aoe: 0,
     shotSpeed: 0,
     pierce: 0,
-    skill: { kind: "wave", name: "SKY SLASH", cooldown: 4, damage: 40, radius: 230, desc: "a flying sword wave down the lane." },
+    skill: { kind: "wave", name: "SKY SLASH", cooldown: 4, damage: 40, radius: 230, count: 3, desc: "three flying sword waves in a fan down the lane." },
     // EXCALIBUR: `count` light swords circle `radius` away for `duration` seconds.
     skill2: { kind: "excalibur", name: "EXCALIBUR", cooldown: 14, damage: 18, radius: 40, duration: 6, count: 4 },
   },
   simo: {
     name: "Frost Sniper",
     role: "Sniper",
-    blurb: "Very long range and huge damage, but slow to reload. Shots pierce. VANISH (E): invisible for 2s; monsters and rivals lose track of him.",
+    blurb: "Very long range and huge damage, but slow to reload. Shots stop at the first hero they hit. VANISH (E): invisible for 2s; monsters and rivals lose track of him.",
     stars: 5,
     maxHp: 90,
     speed: 105,
@@ -376,7 +398,7 @@ const BASE_HEROES: Record<BaseHeroId, HeroDef> = {
     arc: 0,
     aoe: 0,
     shotSpeed: 720,
-    pierce: 3,
+    pierce: 0,
     skill: { kind: "burst", name: "FROST VOLLEY", cooldown: 6, damage: 255, radius: 0, desc: "a rapid volley of piercing sniper shots." },
     // VANISH: invisible for `duration` seconds (monsters and rivals lose track of him).
     skill2: { kind: "invis", name: "VANISH", cooldown: 12, damage: 0, radius: 0, duration: 2 },
@@ -384,7 +406,7 @@ const BASE_HEROES: Record<BaseHeroId, HeroDef> = {
   killua: {
     name: "Volt Kid",
     role: "Lightning assassin",
-    blurb: "Strikes call down lightning that hits an area. YOYO MODE (E): basic attacks become a yoyo that locks on and never misses (weaker, no blast); use it again to switch back.",
+    blurb: "Strikes call down lightning that hits an area. YOYO MODE (E): basic attacks become a yoyo that locks on and never misses (weaker, no blast) and he runs 30% faster; use it again to switch back.",
     stars: 4,
     maxHp: 100,
     speed: 320,
@@ -415,7 +437,7 @@ const BASE_HEROES: Record<BaseHeroId, HeroDef> = {
     aoe: 42,
     shotSpeed: 240,
     pierce: 0,
-    skill: { kind: "fireball", name: "FIRE SPIRIT", cooldown: 6, damage: 70, radius: 90, desc: "a big fire spirit fireball that explodes in a wide blast." },
+    skill: { kind: "fireball", name: "FIRE SPIRIT", cooldown: 6, damage: 119.6, radius: 90, desc: "a big fire spirit fireball that explodes in a wide blast." },
     // MOVING CASTLE: the castle is `radius` wide (each side), walks at CASTLE_SPEED and hits each target once.
     skill2: { kind: "castle", name: "MOVING CASTLE", cooldown: 16, damage: 60, radius: 40, duration: 1 },
   },
@@ -442,7 +464,7 @@ const BASE_HEROES: Record<BaseHeroId, HeroDef> = {
   saitama: {
     name: "Plain Hero",
     role: "Hobby hero",
-    blurb: "Plain punches. FINAL BLOW: one short punch that knocks out whatever is right in front of him, but takes 30s to come back.",
+    blurb: "Plain punches. FINAL BLOW: one punch, exactly as far and wide as his normal punch, that knocks out whatever it hits, but takes 30s to come back.",
     stars: 3,
     maxHp: 135,
     speed: 105,
@@ -465,7 +487,7 @@ const BASE_HEROES: Record<BaseHeroId, HeroDef> = {
     speed: 105,
     attack: "magic",
     attackCooldown: 0.6,
-    damage: 18,
+    damage: 12.3,
     range: 220,
     arc: 0,
     aoe: 0,
@@ -499,7 +521,7 @@ const BASE_HEROES: Record<BaseHeroId, HeroDef> = {
   okita: {
     name: "Sakura Blade",
     role: "Swordswoman",
-    blurb: "Lightning-fast sword. PHANTOM SLASH cuts everything around her again and again. SACRIFICE (E): she stabs herself for 50% of her max HP and the nearest enemy loses 50% of theirs; if both fall, the round is a draw.",
+    blurb: "Lightning-fast sword. PHANTOM SLASH cuts everything around her again and again. SACRIFICE (E): she stabs herself for 50% of her max HP and the enemy with the least HP nearby loses 50% of theirs; if both fall, the round is a draw.",
     stars: 4,
     maxHp: 110,
     speed: 125,
@@ -550,7 +572,7 @@ const BASE_HEROES: Record<BaseHeroId, HeroDef> = {
     pierce: 0,
     skill: { kind: "timestop", name: "TIME STOP", cooldown: 20, damage: 0, radius: 0, duration: 4 },
     // STAR SHOT: `count` shots in a straight line, flying `radius` far.
-    skill2: { kind: "starfinger", name: "STAR SHOT", cooldown: 6, damage: 20, radius: 280, count: 5 },
+    skill2: { kind: "starfinger", name: "STAR SHOT", cooldown: 6, damage: 48.1, radius: 280, count: 5 },
   },
   rudeus: {
     name: "Storm Mage",
@@ -588,9 +610,9 @@ const BASE_HEROES: Record<BaseHeroId, HeroDef> = {
     shotSpeed: 0,
     pierce: 0,
     // PAWN: `damage` is its share of his max HP; up to `max` out at once, each for `duration` seconds.
-    skill: { kind: "summon", name: "PAWN", cooldown: 4, damage: 0.35, radius: 0, count: 1, max: 3, duration: 20, pet: "pawn" },
+    skill: { kind: "summon", name: "PAWN", cooldown: 4, damage: 0.105, radius: 0, count: 1, max: 3, duration: 20, pet: "pawn" },
     // QUEEN: a turret with `damage` times his max HP, for `duration` seconds.
-    skill2: { kind: "summon", name: "QUEEN", cooldown: 22, damage: 1.5, radius: 0, count: 1, duration: 12, pet: "queen" },
+    skill2: { kind: "summon", name: "QUEEN", cooldown: 22, damage: 0.45, radius: 0, count: 1, duration: 12, pet: "queen" },
   },
   thorfinn: {
     name: "Viking Kid",
@@ -607,9 +629,9 @@ const BASE_HEROES: Record<BaseHeroId, HeroDef> = {
     aoe: 0,
     shotSpeed: 0,
     pierce: 0,
-    skill: { kind: "rush", name: "DAGGER RUSH", cooldown: 4, damage: 55, radius: 120, width: 24 },
+    skill: { kind: "rush", name: "DAGGER RUSH", cooldown: 4, damage: 82.5, radius: 120, width: 24 },
     // KNIFE STORM: `count` knives in a ring, flying `radius` far.
-    skill2: { kind: "knives", name: "KNIFE STORM", cooldown: 8, damage: 22, radius: 200, count: 12 },
+    skill2: { kind: "knives", name: "KNIFE STORM", cooldown: 8, damage: 33, radius: 200, count: 12 },
   },
   titan: {
     name: "Giant Shifter",
@@ -653,7 +675,7 @@ const BASE_HEROES: Record<BaseHeroId, HeroDef> = {
   loki: {
     name: "Trickster",
     role: "Trickster god",
-    blurb: "Magic shots. ILLUSION raises a golden city for 10s (enemies inside lose a share of their HP every second). CLONE makes a copy that fights, and nobody can tell which one is real.",
+    blurb: "Magic shots. ILLUSION raises a golden city for 10s (enemies inside lose a share of their HP every second). CLONE makes a copy that fights, and nobody can tell which one is real. Rivals always see him looking like one of their own side.",
     stars: 5,
     maxHp: 120,
     speed: 110,
@@ -688,7 +710,7 @@ const BASE_HEROES: Record<BaseHeroId, HeroDef> = {
     gun: { attackCooldown: 0.06, damage: 6, range: 240, shotSpeed: 520, spread: 0.08 },
     skill: { kind: "swap", name: "SWAP MODE", cooldown: 0.8, damage: 0, radius: 0 },
     // STICKY BOMB: dart up to `radius` away; the bomb goes off after `duration` seconds and throws the target `width` knockbacks far.
-    skill2: { kind: "sticky", name: "STICKY BOMB", cooldown: 9, damage: 60, radius: 160, width: 5, duration: 0.8 },
+    skill2: { kind: "sticky", name: "STICKY BOMB", cooldown: 9, damage: 92.6, radius: 160, width: 5, duration: 0.8 },
   },
   joyboy: {
     name: "Rubber Pirate",
@@ -706,14 +728,14 @@ const BASE_HEROES: Record<BaseHeroId, HeroDef> = {
     shotSpeed: 0,
     pierce: 0,
     // GATLING PUNCH: `damage` per hit, every 0.1s for `duration`, in a lane `radius` long and `width` wide.
-    skill: { kind: "gatling", name: "GATLING PUNCH", cooldown: 6, damage: 14, radius: 110, width: 40, duration: 1 },
+    skill: { kind: "gatling", name: "GATLING PUNCH", cooldown: 6, damage: 28, radius: 110, width: 40, duration: 1 },
     // RUBBER PUNCH: a fast stretching punch that stuns for 1s, then snaps back.
     skill2: { kind: "rubberpunch", name: "RUBBER PUNCH", cooldown: 10, damage: 40, radius: 0, duration: 3 },
   },
   rick: {
     name: "Mad Scientist",
     role: "Inventor",
-    blurb: "Laser gun. PORTAL GUN: shoot one portal, then another; walk into one to come out of the other (only he can use them). MISSILES: 10 homing missiles that chase targets until they hit.",
+    blurb: "Laser gun. PORTAL GUN: shoot one portal, then another; walk into one to come out of the other (only he can use them); the 7s cooldown only starts once the pair has closed. MISSILES: 10 homing missiles that chase targets until they hit.",
     stars: 5,
     maxHp: 110,
     speed: 110,
@@ -727,7 +749,7 @@ const BASE_HEROES: Record<BaseHeroId, HeroDef> = {
     pierce: 0,
     shot: "laser",
     // PORTAL GUN: each press opens a portal up to `radius` ahead; the pair stays open `duration` seconds.
-    skill: { kind: "portal", name: "PORTAL GUN", cooldown: 8, damage: 0, radius: 160, duration: 20 },
+    skill: { kind: "portal", name: "PORTAL GUN", cooldown: 7, damage: 0, radius: 160, duration: 20, waitGone: "portal" },
     skill2: { kind: "missiles", name: "MISSILES", cooldown: 14, damage: 25, radius: 0, count: 10, duration: 8 },
   },
   doraemon: {
@@ -753,7 +775,7 @@ const BASE_HEROES: Record<BaseHeroId, HeroDef> = {
   trainer: {
     name: "Monster Tamer",
     role: "Tamer",
-    blurb: "Weak, slow punches. SPARK MOUSE: a fast electric mouse (60% HP) zaps enemies. FLAME DRAGON: a big fire dragon (200% HP). Pets stay until they fall or the Tamer does.",
+    blurb: "Weak, slow punches. SPARK MOUSE: a fast electric mouse (30% HP) zaps enemies. FLAME DRAGON: a big fire dragon (100% HP). Pets stay until they fall or the Tamer does; each 10s cooldown only starts once its pet has fallen.",
     stars: 3,
     maxHp: 110,
     speed: 110,
@@ -765,8 +787,8 @@ const BASE_HEROES: Record<BaseHeroId, HeroDef> = {
     aoe: 0,
     shotSpeed: 0,
     pierce: 0,
-    skill: { kind: "summon", name: "SPARK MOUSE", cooldown: 15, damage: 0.6, radius: 0, count: 1, pet: "sparkmouse" },
-    skill2: { kind: "summon", name: "FLAME DRAGON", cooldown: 18, damage: 2, radius: 0, count: 1, pet: "flamedragon" },
+    skill: { kind: "summon", name: "SPARK MOUSE", cooldown: 10, damage: 0.3, radius: 0, count: 1, pet: "sparkmouse", waitGone: "pet" },
+    skill2: { kind: "summon", name: "FLAME DRAGON", cooldown: 10, damage: 1, radius: 0, count: 1, pet: "flamedragon", waitGone: "pet" },
   },
   kid: {
     name: "Phantom Thief",
@@ -797,7 +819,7 @@ const BASE_HEROES: Record<BaseHeroId, HeroDef> = {
     speed: 165,
     attack: "sword",
     attackCooldown: 0.25,
-    damage: 20,
+    damage: 40,
     range: 44,
     arc: 1.6,
     aoe: 0,
@@ -941,7 +963,7 @@ const BASE_HEROES: Record<BaseHeroId, HeroDef> = {
     pierce: 0,
     skill: { kind: "summon", name: "GLADIATORS", cooldown: 30, damage: 0.1, radius: 0, count: 20, duration: 20, pet: "gladiator" },
     // TROJAN HORSE: placed `width` ahead, it waits `duration` seconds, then blasts everything within `radius`.
-    skill2: { kind: "trojan", name: "TROJAN HORSE", cooldown: 20, damage: 150, radius: 120, width: 60, duration: 10 },
+    skill2: { kind: "trojan", name: "TROJAN HORSE", cooldown: 20, damage: 2250, radius: 120, width: 60, duration: 10 },
   },
   vampire: {
     name: "Vampire",
@@ -1043,7 +1065,7 @@ const BASE_HEROES: Record<BaseHeroId, HeroDef> = {
   archer: {
     name: "Archer",
     role: "Bow ranger",
-    blurb: "Shoots arrows from afar. POWER SHOT: hold until fully charged, then let go for one heavy arrow that pierces and stuns. SWIFT (E): runs 50% faster for 4s.",
+    blurb: "Shoots arrows from afar. POWER SHOT: hold until fully charged, then let go for one heavy arrow that pierces and stuns. SWIFT (E): runs 50% faster for 4s, and his next shot fires three arrows in a quick row.",
     stars: 4,
     maxHp: 95,
     speed: 110,
@@ -1057,7 +1079,7 @@ const BASE_HEROES: Record<BaseHeroId, HeroDef> = {
     pierce: 0,
     shot: "arrow",
     // POWER SHOT: fires only at full charge (`chargeTime` s); flies `radius`, stuns `duration` s.
-    skill: { kind: "chargeshot", name: "POWER SHOT", cooldown: 5, damage: 80, radius: 380, duration: 1.2, chargeTime: 1.2 },
+    skill: { kind: "chargeshot", name: "POWER SHOT", cooldown: 5, damage: 160, radius: 380, duration: 1.2, chargeTime: 1.2 },
     skill2: { kind: "sprint", name: "SWIFT", cooldown: 10, damage: 0, radius: 0, duration: 4, width: 1.5 },
   },
   ninja: {
@@ -1082,7 +1104,7 @@ const BASE_HEROES: Record<BaseHeroId, HeroDef> = {
   paladin: {
     name: "Paladin",
     role: "Holy knight",
-    blurb: "Very tough. HOLY SHIELD: a shield of light; he and allies nearby take no damage for 2.5s. SHIELD BASH (E): hold to charge, let go to rush ahead shield first; a full charge stuns for 2s (low damage).",
+    blurb: "Very tough. HOLY SHIELD: a shield of light; he and allies nearby take no damage for 2.5s. SHIELD BASH (E): hold to charge, let go to drive ahead shield first, shoving every foe in front along with him; a full charge (or a wall) stuns them.",
     stars: 3,
     maxHp: 280,
     speed: 95,
@@ -1116,9 +1138,9 @@ const BASE_HEROES: Record<BaseHeroId, HeroDef> = {
     shot: "leaf",
     stacks: { label: "TREES" },
     // GROW TREE: planted `width` ahead; heals `damage` of max HP a second within `radius`.
-    skill: { kind: "tree", name: "GROW TREE", cooldown: 5, damage: 0.03, radius: 100, width: 40 },
+    skill: { kind: "tree", name: "GROW TREE", cooldown: 6, damage: 0.03, radius: 100, width: 40 },
     // LEAF STORM: `damage`, plus `width` more of it for every tree.
-    skill2: { kind: "leafstorm", name: "LEAF STORM", cooldown: 8, damage: 30, radius: 300, width: 0.35 },
+    skill2: { kind: "leafstorm", name: "LEAF STORM", cooldown: 4, damage: 30, radius: 300, width: 0.35 },
   },
   monk: {
     name: "Monk",
@@ -1177,7 +1199,7 @@ const BASE_HEROES: Record<BaseHeroId, HeroDef> = {
     pierce: 0,
     stacks: { label: "ARMOR", max: 10 },
     // HARDEN: `damage` less damage taken per stack, up to `count` stacks.
-    skill: { kind: "harden", name: "HARDEN", cooldown: 3, damage: 0.05, radius: 0, count: 10 },
+    skill: { kind: "harden", name: "HARDEN", cooldown: 6, damage: 0.05, radius: 0, count: 10 },
     // ROCK BARRAGE: `count` punches down a `radius` x `width` lane over `duration`*0.5 s; pinned foes are stunned `duration` s.
     skill2: { kind: "barrage", name: "ROCK BARRAGE", cooldown: 9, damage: 14, radius: 50, width: 40, count: 6, duration: 1.5 },
   },
@@ -1205,7 +1227,7 @@ const BASE_HEROES: Record<BaseHeroId, HeroDef> = {
   reaper: {
     name: "Reaper",
     role: "Soul collector",
-    blurb: "Wide scythe cuts. SOUL REAP: a full spin; every foe hit gives a soul (up to 5) and heals him 2.4%. DEATH'S DOOR (E): blinks behind the nearest foe and cuts, 40% harder per soul (souls are used up) and double on a foe under 35% HP.",
+    blurb: "Wide scythe cuts. SOUL REAP: a full spin; every foe hit gives a soul (up to 5) and heals him 5%. DEATH'S DOOR (E): vanishes into the nearest foe and walks it wherever he likes for 5s.",
     stars: 3,
     maxHp: 110,
     speed: 105,
@@ -1219,13 +1241,13 @@ const BASE_HEROES: Record<BaseHeroId, HeroDef> = {
     pierce: 0,
     stacks: { label: "SOULS", max: 5 },
     // SOUL REAP: `damage` in a full circle of `radius`; heals `width` of max HP per foe hit.
-    skill: { kind: "reap", name: "SOUL REAP", cooldown: 6, damage: 26, radius: 60, width: 0.06, count: 5 },
-    skill2: { kind: "deathdoor", name: "DEATH'S DOOR", cooldown: 10, damage: 40, radius: 280, width: 0.4 },
+    skill: { kind: "reap", name: "SOUL REAP", cooldown: 6, damage: 26, radius: 60, width: 0.125, count: 5 },
+    skill2: { kind: "possess", name: "DEATH'S DOOR", cooldown: 10, damage: 0, radius: 200, duration: 5, desc: "vanishes into the nearest foe within 200 and walks it wherever he likes for 5s (it cannot attack or use skills); he is gone from the map meanwhile." },
   },
   mossgolem: {
     name: "Moss Golem",
     role: "Ancient guardian",
-    blurb: "Huge HP, mossy fists. ROOT SNARE: roots burst out all around him, tying every foe's legs for 2s. GAIA SHELL (E): moss covers him for 5s; he takes half damage and heals 1.2% HP a second.",
+    blurb: "Huge HP, mossy fists. ROOT SNARE: roots burst out all around him; every foe caught must run at him and attack only him for 2s. GAIA SHELL (E): moss covers him for 5s; he takes half damage and heals 1.2% HP a second.",
     stars: 3,
     maxHp: 300,
     speed: 85,
@@ -1237,20 +1259,20 @@ const BASE_HEROES: Record<BaseHeroId, HeroDef> = {
     aoe: 0,
     shotSpeed: 0,
     pierce: 0,
-    skill: { kind: "roots", name: "ROOT SNARE", cooldown: 8, damage: 15, radius: 100, duration: 2 },
+    skill: { kind: "taunt", name: "ROOT SNARE", cooldown: 8, damage: 15, radius: 100, duration: 2, desc: "roots burst out around him: every foe within 100 must run at him and attack only him for 2s (no skills)." },
     // GAIA SHELL: takes `width` of normal damage, heals `damage` of max HP a second.
     skill2: { kind: "gaia", name: "GAIA SHELL", cooldown: 14, damage: 0.03, radius: 0, width: 0.5, duration: 5 },
   },
   berserker: {
     name: "Berserker",
     role: "Raging axeman",
-    blurb: "Heavy axe swings. BLOOD RAGE: for 6s he swings much faster and 30% harder, but takes 15% more damage. AXE BOOMERANG (E): hurls his axe; it spins out and comes back, cutting everything both ways.",
+    blurb: "Heavy axe swings. BLOOD RAGE: for 6s he swings much faster and 30% harder, but takes 15% more damage. AXE BOOMERANG (E): hurls his axe; it spins out and comes back, cutting everything both ways and dragging whoever it hits back with it.",
     stars: 4,
     maxHp: 160,
     speed: 100,
     attack: "sword",
     attackCooldown: 0.6,
-    damage: 30,
+    damage: 45,
     range: 30,
     arc: 1.8,
     aoe: 0,
@@ -1576,6 +1598,8 @@ const BASE_HEROES: Record<BaseHeroId, HeroDef> = {
 };
 
 export const HEROES: Record<HeroId, HeroDef> = { ...BASE_HEROES, ...newHeroDefs() };
+// Kick Chef fights with the Taekwondo Master's kit and stats (user request 2026-10-06); his own look and name stay.
+HEROES.sanji = { ...BASE_HEROES.taekwondo, name: HEROES.sanji.name, role: HEROES.sanji.role };
 
 /** Every hero has this many times the HP written above (user request 2026-10-03: triple HP, nothing else changed). */
 export const HP_SCALE = 3;
@@ -1614,7 +1638,10 @@ for (const [id, e] of Object.entries(NEW_HEROES).sort((a, b) => a[1].win - b[1].
   PVP_RANKING.splice(at, 0, id as HeroId);
 }
 /** Heroes taken out of the game (user request 2026-10-04): not on any hero select; their code is kept. */
-const REMOVED_HEROES: HeroId[] = ["swordgod", "yaotsu", "badigadi"];
+const REMOVED_HEROES: HeroId[] = ["swordgod", "yaotsu", "badigadi",
+  // removed 2026-10-06 (user list)
+  "nobara", "marco", "cell", "hinata", "geto", "leorio", "roger", "akaza", "shinra", "anya", "byakuya", "momo", "denji", "reigen", "jiraiya", "stark", "aokiji", "itachi", "hancock", "armin", "kurapika", "alphonse", "hijikata", "kirito", "sakura", "toji", "yuno", "rukia", "robin", "kagura", "gohan", "okarun", "trunks", "albedo", "makima", "franky", "ryuk", "sabo", "kakashi", "mikasa", "ace", "aki", "vegeta", "taekwondo", "oni",
+];
 export const HERO_IDS = [
   ...PVP_RANKING,
   ...(Object.keys(HEROES) as HeroId[]).filter((id) => !PVP_RANKING.includes(id)),
@@ -1716,6 +1743,8 @@ for (const [id, e] of Object.entries(NEW_HEROES)) {
   CLASS_OF[id as HeroId] = e.cls;
   DAMAGE_BALANCE[id as HeroId] ??= e.bal;
 }
+CLASS_OF.sanji = CLASS_OF.taekwondo;
+DAMAGE_BALANCE.sanji = DAMAGE_BALANCE.taekwondo;
 export function heroClass(id: string): HeroClass {
   const base = HEROES[id as HeroId]?.formOf ?? id;
   return CLASS_OF[base as HeroId] ?? "fighter";
@@ -1893,7 +1922,11 @@ export function chargePower(held: number, full = CHARGE_FULL): number {
 /** Skills that are held to charge and go off when let go. */
 const CHARGE_KINDS: SkillKind[] = ["charge", "chargeslash", "chargeshot", "shieldcharge"];
 export function isChargeSkill(skill?: SkillDef): boolean {
-  return !!skill && CHARGE_KINDS.includes(skill.kind);
+  return !!skill && (CHARGE_KINDS.includes(skill.kind) || (skill.kind === "combo" && skill.chargeTime !== undefined));
+}
+/** A charged combo skill: its hits are this many times as strong (0.6x let go at once, up to 1.5x at full charge). */
+export function comboChargeMul(held: number, full: number): number {
+  return 0.6 + 0.9 * Math.min(1, Math.max(0, held) / full);
 }
 /** Seconds a charged skill takes to charge fully. */
 export function chargeTimeOf(skill: SkillDef): number {
@@ -1982,13 +2015,16 @@ export function formFromAim(hero: string, aim: number): HeroId | undefined {
 /** Burned by the Blaze Alien's flamethrower: moves this much slower. */
 export const BURN_SLOW = 0.55;
 
-export function heroSpeed(p: { hero: string; big: number; active2?: number; buff?: number; slow?: number; root?: number }): number {
+export function heroSpeed(p: { hero: string; big: number; active2?: number; buff?: number; slow?: number; slowPct?: number; root?: number; mode?: number }): number {
   if ((p.root ?? 0) > 0) return 0; // SHADOW WHIP: legs tied
   const hero = heroOf(p.hero);
   let bike = (p.active2 ?? 0) > 0 && (hero.skill2?.kind === "bike" || hero.skill2?.kind === "sprint") ? hero.skill2.width ?? 2 : 1;
   for (const b of fxBuffs(p)) bike *= b.speed ?? 1; // combo speed buffs
   const base = hero.ram ? hero.speed * MOVE_SCALE : HERO_WALK; // the Speed Raptor keeps its own speed
-  return base * (p.big > 0 ? BIG_SLOW : 1) * ((p.slow ?? 0) > 0 ? BURN_SLOW : 1) * bike;
+  if (hero.skill2?.kind === "yoyo" && p.mode === 1) bike *= 1.3; // YOYO MODE: lighter on his feet
+  if (hero.skill.kind === "deathnote" && (p.buff ?? 0) > 0) bike *= 0.2; // NAME WRITTEN: writing, barely moving
+  const slowed = (p.slow ?? 0) > 0 ? 1 - ((p.slowPct ?? 0) > 0 ? p.slowPct! : 1 - BURN_SLOW) : 1;
+  return base * (p.big > 0 ? BIG_SLOW : 1) * slowed * bike;
 }
 
 /** The boxing ring the PvP Arena and Bot Duel are fought in: a small square with no cover. */

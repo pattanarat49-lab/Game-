@@ -501,11 +501,30 @@ export class GameScene extends Phaser.Scene {
       return;
     }
     this.chargeFull = chargeTimeOf(skill!);
+    this.chargeSlow = skill!.chargeSlow ?? CHARGE_SLOW;
     if (!this.chargeStart) this.chargeStart = now;
     this.charge2 = Math.min(this.chargeFull, (now - this.chargeStart) / 1000);
   }
   /** Seconds to a full charge for the skill being charged. */
   private chargeFull = CHARGE_FULL;
+  /** How fast we walk while charging it. */
+  private chargeSlow = CHARGE_SLOW;
+
+  /** Walls we cannot walk through: a DOMAIN EXPANSION's edge, or a BIRDCAGE we were caught in. */
+  private keepInside(state: any, me: any, before: { x: number; y: number }) {
+    const myId = this.room!.sessionId;
+    const clamp = (z: any, r: number) => {
+      const dx = this.predicted.x - z.x;
+      const dy = this.predicted.y - z.y;
+      const d = Math.hypot(dx, dy);
+      if (d > r) this.predicted = { x: z.x + (dx / d) * r, y: z.y + (dy / d) * r };
+    };
+    state.zones?.forEach((z: any) => {
+      if (me.domain > 0 && z.kind.startsWith("domainx:") && z.kind.split(":").includes(myId)) clamp(z, z.radius - PLAYER_RADIUS);
+      const parts = z.kind.split(":");
+      if (parts[3] === "cage" && parts[4] !== myId && Math.hypot(before.x - z.x, before.y - z.y) <= z.radius - PLAYER_RADIUS + 1) clamp(z, z.radius - PLAYER_RADIUS);
+    });
+  }
 
   /**
    * Skills are aimed while their key is held (the mouse points the way) and go off when it is let go.
@@ -572,8 +591,8 @@ export class GameScene extends Phaser.Scene {
       this.warp = me.warp;
       this.predicted = { x: me.x, y: me.y };
       this.dashTimer = 0;
-    } else if (me.latch > 0) {
-      // BLOOD LATCH: we ride along on our victim, wherever the server says it is.
+    } else if (me.latch > 0 || me.taunt > 0 || me.vanish > 0) {
+      // BLOOD LATCH (or carried, taunted, possessed, swallowed): the server moves us; we ride along.
       const k = Math.min(1, dt * 20);
       this.predicted = { x: this.predicted.x + (me.x - this.predicted.x) * k, y: this.predicted.y + (me.y - this.predicted.y) * k };
       this.dashTimer = 0;
@@ -601,7 +620,7 @@ export class GameScene extends Phaser.Scene {
         this.dashCooldown = DASH_COOLDOWN;
         this.playDashBurst(this.predicted.x, this.predicted.y, Math.atan2(this.dashDir.y, this.dashDir.x));
       }
-      const slow = this.charging2 ? CHARGE_SLOW : 1; // charging MAX SMASH
+      const slow = this.charging2 ? this.chargeSlow : 1; // charging MAX SMASH (and the other charged skills)
       let vx = dir.x * heroSpeed(me) * slow;
       let vy = dir.y * heroSpeed(me) * slow;
       if (this.dashTimer > 0) {
@@ -621,7 +640,9 @@ export class GameScene extends Phaser.Scene {
         this.kbVel.x *= fade;
         this.kbVel.y *= fade;
       }
+      const before = this.predicted;
       this.predicted = moveCircle(this.predicted.x, this.predicted.y, vx * dt, vy * dt, PLAYER_RADIUS, areaOf(state.stage, state.map));
+      this.keepInside(state, me, before);
 
       // Safety net: if the server keeps us somewhere else, ease back to it.
       const err = Math.hypot(me.x - this.predicted.x, me.y - this.predicted.y);
@@ -718,6 +739,11 @@ export class GameScene extends Phaser.Scene {
 
       const isMe = id === this.room!.sessionId;
       const body = view.body;
+      // The Trickster looks like one of our own side to us (his rivals).
+      const disguised = p.hero === "loki" && p.disguise && this.rivalOfMe(state, id) ? state.players.get(p.disguise) : undefined;
+      const shown: string = disguised?.hero ?? p.hero;
+      const name: string = disguised?.name ?? p.name;
+      if (view.label.text !== name) view.label.setText(name);
       if (isMe) body.setPosition(this.predicted.x, this.predicted.y);
       else {
         const at = this.smoothed(`p${id}`, p.x, p.y);
@@ -766,15 +792,16 @@ export class GameScene extends Phaser.Scene {
       const humanized = state.reality > 0 && ringStage(state.stage) && (p.owner || id) !== state.realityBy && !p.dead;
       const skill2 = heroOf(p.hero).skill2;
       const batNow = !p.dead && p.active2 > 0 && skill2?.kind === "bat";
-      const look = humanized ? "human" : titanNow ? "titanform" : batNow ? "batform" : `hero_${p.hero}`;
+      const look = humanized ? "human" : titanNow ? "titanform" : batNow ? "batform" : `hero_${shown}`;
       // Heroes with hand-made art: a front view mirrored to the aim side, or turning to face it (4 or 8 facings).
-      const art = look === `hero_${p.hero}` && hasHeroArt(p.hero);
+      const art = look === `hero_${shown}` && hasHeroArt(shown);
       // A basic attack plays the hero's hand-made swing frames, if he has them.
       if (view.swing) view.swing = Math.max(0, view.swing - dt);
-      const swing = art && view.swing && !p.dead ? attackFrame(p.hero, aim, 1 - view.swing / SWING_TIME) : undefined;
-      const layout = swing ? attackArtLayout(p.hero) : art ? heroArtLayout(p.hero) : undefined;
-      const texture = swing ? swing.texture : art ? `${look}_${facingOf(aim, p.hero)}` : look;
-      if (art) body.setFlipX(swing ? swing.flip : frontOnly(p.hero) && Math.cos(aim) < 0);
+      const swing = art && view.swing && !p.dead ? attackFrame(shown, aim, 1 - view.swing / SWING_TIME) : undefined;
+      const layout = swing ? attackArtLayout(shown) : art ? heroArtLayout(shown) : undefined;
+      const texture = swing ? swing.texture : art ? `${look}_${facingOf(aim, shown)}` : look;
+      if (art) body.setFlipX(swing ? swing.flip : frontOnly(shown) && Math.cos(aim) < 0);
+      if (disguised) view.weapon?.setVisible(false);
       const artScale = layout ? layout.scale : 1;
       body.setScale(k * artScale * (titanNow && !humanized ? 2.6 : humanized ? 1 : SUMMON_SCALE[p.hero] ?? 1));
       if (body.texture.key !== texture) {
@@ -835,13 +862,16 @@ export class GameScene extends Phaser.Scene {
         else if (mine && !mine.dead && seesInto(grassMap, at.x, at.y, p.x, p.y)) body.setAlpha(Math.min(body.alpha, 0.4));
         else bushed = true;
       }
-      if (bushed) {
+      // Swallowed, inside a foe, in a domain we are not in, or in someone else's fog: not on our screen.
+      const gone = this.goneFromView(state, p, id);
+      if (gone && isMe) body.setAlpha(0.3);
+      if (bushed || (gone && !isMe)) {
         body.setAlpha(0);
         view.weapon?.setVisible(false);
       }
-      const hiddenNow = unseen || bushed;
+      const hiddenNow = unseen || bushed || (gone && !isMe);
       if (state.stage === "classic") {
-        const team = p.owner ? state.players.get(p.owner)?.team : p.team;
+        const team = disguised ? disguised.team : p.owner ? state.players.get(p.owner)?.team : p.team;
         const color = team === 1 ? "#ff8a94" : team === 2 ? "#8ac4ff" : "#ffffff";
         if (view.label.style.color !== color) view.label.setColor(color);
       }
@@ -909,8 +939,8 @@ export class GameScene extends Phaser.Scene {
             view.bar.lineStyle(3, 0xf0b88a, 1).lineBetween(body.x, body.y - 6 * k, fist.x, fist.y);
           });
         }
-        const team = state.stage === "classic" ? (p.owner ? state.players.get(p.owner)?.team : p.team) : 0;
-        view.bar.fillStyle(team ? TEAM_MARKERS[team] : PLAYER_MARKERS[p.color % 4], team ? 0.8 : 0.5).fillEllipse(body.x, body.y + 1, 14 * k, 5 * k);
+        const team = state.stage === "classic" ? (disguised ? disguised.team : p.owner ? state.players.get(p.owner)?.team : p.team) : 0;
+        view.bar.fillStyle(team ? TEAM_MARKERS[team] : PLAYER_MARKERS[(disguised ?? p).color % 4], team ? 0.8 : 0.5).fillEllipse(body.x, body.y + 1, 14 * k, 5 * k);
         view.bar.fillStyle(0x000000, 0.7).fillRect(body.x - 12, body.y + 3 + 2 * k, 24, 2);
         view.bar.fillStyle(0x4cd964, 1).fillRect(body.x - 12, body.y + 3 + 2 * k, 24 * (p.hp / p.maxHp), 2);
         if (state.stage === "classic" && !p.owner) this.drawLives(view.bar, body.x, view.label.y - 11, p.lives ?? 0);
@@ -986,9 +1016,37 @@ export class GameScene extends Phaser.Scene {
             view.bar.lineStyle(1, 0xd8dce8, 0.9).lineBetween(body.x, body.y - 8 * k - 1, hook.x, hook.y - 1);
           }
           if (Math.random() < 0.5) this.sparks.explode(1, body.x, body.y - 4);
-        } else if (p.latch > 0 && Math.random() < 0.5) {
+        } else if (p.latch > 0 && heroOf(p.hero).skill.kind === "latch" && Math.random() < 0.5) {
           // BLOOD LATCH: drops of blood fly off the bite.
           view.bar.fillStyle(0xe02a3a, 1).fillRect(body.x + (Math.random() - 0.5) * 14, body.y - 8 - Math.random() * 10, 2, 2);
+        }
+        if (p.buff > 0 && heroOf(p.hero).skill.kind === "deathnote") {
+          // NAME WRITTEN: the bar fills while he writes.
+          const full = heroOf(p.hero).skill.duration ?? 10;
+          const share = Math.min(1, 1 - p.buff / full);
+          const top = view.label.y - 9;
+          view.bar.fillStyle(0x000000, 0.8).fillRect(body.x - 16, top, 32, 4);
+          view.bar.fillStyle(0xff2020, 1).fillRect(body.x - 16, top, 32 * share, 4);
+          view.bar.lineStyle(1, 0xffffff, 0.8).strokeRect(body.x - 16, top, 32, 4);
+          view.bar.fillStyle(0xf0f0f0, 1).fillRect(body.x + 8 * Math.cos(aim), body.y - 12 * k, 7, 9); // the notebook
+        }
+        if (p.buff > 0 && heroOf(p.hero).skill.kind === "bloodhammer") {
+          // BLOOD HAMMER: a big hammer of blood in his hands.
+          const hx = body.x + Math.cos(aim) * 12 * k;
+          const hy = body.y - 8 * k + Math.sin(aim) * 6;
+          view.bar.lineStyle(3, 0x6a0010, 1).lineBetween(body.x, body.y - 6 * k, hx, hy);
+          view.bar.fillStyle(0xc01020, 1).fillRoundedRect(hx - 7, hy - 5, 14, 10, 3);
+          view.bar.fillStyle(0xff4050, 1).fillRect(hx - 6, hy - 4, 12, 2);
+        }
+        if (p.silence > 0) {
+          // ANTI-MAGIC CUT: no skills (a crossed-out spark over the head).
+          const sx = body.x + 10;
+          const sy = view.label.y - 6;
+          view.bar.lineStyle(1.5, 0xb060ff, 1).strokeCircle(sx, sy, 4).lineBetween(sx - 3, sy - 3, sx + 3, sy + 3);
+        }
+        if (p.taunt > 0) {
+          // ROOT SNARE / DEATH'S DOOR: something else is steering this hero.
+          view.bar.fillStyle(0xff3030, 1).fillRect(body.x - 1, view.label.y - 12, 2, 5).fillRect(body.x - 1, view.label.y - 6, 2, 2);
         }
         if (p.revive > 0) {
           // REVIVE is armed: a golden halo.
@@ -2436,6 +2494,130 @@ export class GameScene extends Phaser.Scene {
   // --------------------------------------------------------------- zones
 
   /** Lasting skill areas, plus the stopped-time and domain overlays. */
+  /** Is this hero on the other side from us (as the server's isFoe sees it)? */
+  private rivalOfMe(state: any, id: string): boolean {
+    const myId = this.room!.sessionId;
+    const root = state.players.get(id)?.owner || id;
+    if (root === myId) return false;
+    if (state.stage === "pve") return (root === "bot") !== (myId === "bot");
+    if (state.stage === "classic") return (state.players.get(root)?.team ?? 0) !== (state.players.get(myId)?.team ?? -1);
+    return true;
+  }
+
+  /** Off our screen right now: swallowed or inside a foe, behind a domain wall, or in someone else's fog. */
+  private goneFromView(state: any, p: any, id: string): boolean {
+    if (p.dead) return false;
+    const myId = this.room!.sessionId;
+    const me = state.players.get(myId);
+    const root = p.owner || id;
+    if (p.vanish > 0) return true;
+    const mine = me?.domain > 0;
+    if (mine && id !== myId && root !== me.link) return true;
+    if (!mine && p.domain > 0) return true;
+    let fogged = false;
+    state.zones?.forEach((z: any) => {
+      if (fogged || !z.kind.startsWith("fxf:fog:")) return;
+      const owner = z.kind.split(":")[3];
+      if (owner !== myId && Math.hypot(p.x - z.x, p.y - z.y) <= z.radius) fogged = true;
+    });
+    return fogged;
+  }
+
+  /** PIANO notes: a music note with its letter (C D E F G). */
+  private noteTexture(kind: string): string {
+    if (this.textures.exists(kind)) return kind;
+    const letter = kind.split(":")[1] ?? "C";
+    const colors: Record<string, string> = { C: "#ff6a6a", D: "#ffb04a", E: "#ffe84a", F: "#6aff8a", G: "#6ac8ff" };
+    const tex = this.textures.createCanvas(kind, 18, 16);
+    if (!tex) return "snipe";
+    const ctx = tex.getContext();
+    ctx.fillStyle = colors[letter] ?? "#ffffff";
+    ctx.strokeStyle = "#101018";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.ellipse(4, 12, 3.5, 2.6, -0.4, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillRect(6.5, 2, 1.5, 10);
+    ctx.fillRect(6.5, 2, 4, 2);
+    ctx.font = "bold 8px monospace";
+    ctx.fillStyle = "#ffffff";
+    ctx.fillText(letter, 11, 14);
+    tex.refresh();
+    return kind;
+  }
+
+  /** Zones for the 2026-10-06 skills (domains, the piano, kunai, blood, burns, possession). Returns false for any other kind. */
+  private drawNewZone(state: any, floor: Phaser.GameObjects.Graphics, sky: Phaser.GameObjects.Graphics, z: any, now: number, fade: number): boolean {
+    const kind: string = z.kind;
+    if (kind.startsWith("domainx:")) {
+      // DOMAIN EXPANSION: only the two inside see it; a shrine of red and black.
+      const me = state.players.get(this.room!.sessionId);
+      if (!(me?.domain > 0) || !kind.split(":").includes(this.room!.sessionId)) return true;
+      const r = z.radius * Math.min(1, 0.3 + (z.maxLife - z.life) * 3);
+      floor.fillStyle(0x000000, 0.75).fillRect(0, 0, WORLD_W, WORLD_H);
+      floor.fillStyle(0x2a0008, 0.95).fillCircle(z.x, z.y, r);
+      for (let i = 0; i < 10; i++) {
+        const a = (i / 10) * Math.PI * 2 + now / 3000;
+        floor.lineStyle(2, 0x8a0010, 0.8).lineBetween(z.x, z.y, z.x + Math.cos(a) * r, z.y + Math.sin(a) * r);
+      }
+      floor.lineStyle(4, 0xff2030, 0.9).strokeCircle(z.x, z.y, r);
+      floor.lineStyle(1, 0xffd0d0, 0.5).strokeCircle(z.x, z.y, r * 0.6);
+      // The shrine at the back.
+      sky.fillStyle(0x1a0004, 0.9).fillRect(z.x - 16, z.y - r - 4, 32, 14);
+      sky.fillStyle(0x8a0010, 1).fillTriangle(z.x - 22, z.y - r - 4, z.x + 22, z.y - r - 4, z.x, z.y - r - 18);
+      return true;
+    }
+    if (kind === "piano") {
+      // PIANO: a grand piano, keys and all, with notes rising off it.
+      const x = z.x;
+      const y = z.y;
+      sky.fillStyle(0x101014, fade).fillRoundedRect(x - 16, y - 20, 32, 16, 4);
+      sky.fillStyle(0x101014, fade).fillTriangle(x + 4, y - 20, x + 16, y - 20, x + 16, y - 30);
+      sky.fillStyle(0xffffff, fade).fillRect(x - 15, y - 8, 30, 5);
+      for (let i = 0; i < 7; i++) sky.fillStyle(0x101014, fade).fillRect(x - 13 + i * 4, y - 8, 2, 3);
+      sky.fillStyle(0x101014, fade).fillRect(x - 14, y - 4, 2, 6).fillRect(x + 12, y - 4, 2, 6);
+      floor.fillStyle(0x000000, 0.25 * fade).fillEllipse(x, y + 2, 34, 8);
+      return true;
+    }
+    if (kind.startsWith("kunai:")) {
+      // MARKED KUNAI stuck in the ground or a wall, with its warp mark.
+      const a = Number(kind.split(":")[1]) || 0;
+      const pulse = 0.5 + 0.5 * Math.sin(now / 120);
+      floor.lineStyle(1, 0xffe040, 0.4 + 0.4 * pulse).strokeCircle(z.x, z.y, 9);
+      sky.lineStyle(2, 0x404048, 1).lineBetween(z.x - Math.cos(a) * 9, z.y - Math.sin(a) * 9, z.x, z.y);
+      sky.fillStyle(0xd8dce8, 1).fillTriangle(z.x, z.y, z.x - Math.cos(a - 0.4) * 5, z.y - Math.sin(a - 0.4) * 5, z.x - Math.cos(a + 0.4) * 5, z.y - Math.sin(a + 0.4) * 5);
+      sky.fillStyle(0xffe040, 1).fillCircle(z.x - Math.cos(a) * 10, z.y - Math.sin(a) * 10, 2);
+      return true;
+    }
+    if (kind === "blood") {
+      floor.fillStyle(0x8a0010, 0.8 * fade).fillEllipse(z.x, z.y, 12, 7);
+      floor.fillStyle(0xd01020, 0.9 * fade).fillEllipse(z.x - 1, z.y - 1, 6, 3);
+      return true;
+    }
+    if (kind === "ignite") {
+      // The red shot's burn, about to flare up.
+      for (let i = 0; i < 3; i++) {
+        const fx = z.x + (i - 1) * 4;
+        const h = 6 + 3 * Math.abs(Math.sin(now / 80 + i));
+        sky.fillStyle(0xff5020, 0.9).fillTriangle(fx - 3, z.y - 4, fx + 3, z.y - 4, fx, z.y - 4 - h);
+        sky.fillStyle(0xffd040, 0.9).fillTriangle(fx - 1.5, z.y - 4, fx + 1.5, z.y - 4, fx, z.y - 4 - h * 0.5);
+      }
+      return true;
+    }
+    if (kind === "possess") {
+      // DEATH'S DOOR: a dark shroud hangs over the possessed foe.
+      const pulse = 0.5 + 0.5 * Math.sin(now / 140);
+      sky.lineStyle(2, 0x6a2a8a, 0.6 + 0.3 * pulse).strokeEllipse(z.x, z.y - 10, 26, 30);
+      for (let i = 0; i < 4; i++) {
+        const a = now / 300 + (i * Math.PI) / 2;
+        sky.fillStyle(0x2a0a3a, 0.8).fillCircle(z.x + Math.cos(a) * 12, z.y - 10 + Math.sin(a) * 14, 3);
+      }
+      return true;
+    }
+    return false;
+  }
+
   private drawZones(state: any, _dt: number) {
     const floor = this.zoneFloor;
     const sky = this.zoneSky;
@@ -2452,6 +2634,7 @@ export class GameScene extends Phaser.Scene {
       const age = z.maxLife - z.life;
       const fade = Math.max(0, Math.min(1, age / 0.4, z.life / 0.6));
       if (drawFxZone(floor, sky, z, now)) return;
+      if (this.drawNewZone(state, floor, sky, z, now, fade)) return;
       if (z.kind === "domain") {
         // Unlimited Void: a circle of endless starfield opens around him.
         const r = z.radius * Math.min(1, 0.3 + age * 2.5);
@@ -3006,7 +3189,7 @@ export class GameScene extends Phaser.Scene {
       seen.add(id);
       let sprite = this.bullets.get(id);
       if (!sprite) {
-        const texture = b.kind.startsWith("fxo:") ? fxShotTexture(this, b.kind) : b.kind.startsWith("card") ? b.kind : BULLET_TEXTURE[b.kind] ?? "snipe";
+        const texture = b.kind.startsWith("fxo:") ? fxShotTexture(this, b.kind) : b.kind.startsWith("note:") ? this.noteTexture(b.kind) : b.kind.startsWith("card") ? b.kind : BULLET_TEXTURE[b.kind] ?? "snipe";
         sprite = this.add.image(b.x, b.y, texture).setDepth(900).setData("kind", b.kind);
         if (b.kind === "wave" || b.kind === "snipe" || b.kind === "bullet" || b.kind === "slash" || b.kind === "godslash" || b.kind === "laser" || b.kind === "knife") sprite.setRotation(Math.atan2(b.vy, b.vx));
         if (b.kind.startsWith("card")) sprite.setScale(1.3);
@@ -3022,7 +3205,8 @@ export class GameScene extends Phaser.Scene {
         if (b.kind === "bigarrow") sprite.setScale(1.3);
         if (b.kind === "leafstorm") sprite.setScale(2);
         if (b.kind === "bluebolt") sprite.setScale(1.3);
-        if (b.kind.startsWith("fxo:blade") || b.kind.startsWith("fxo:spike")) sprite.setRotation(Math.atan2(b.vy, b.vx));
+        if (b.kind.startsWith("fxo:blade") || b.kind.startsWith("fxo:spike") || b.kind.startsWith("fxo:roach")) sprite.setRotation(Math.atan2(b.vy, b.vx));
+        if (b.kind.startsWith("note:")) sprite.setScale(1.2);
         this.bullets.set(id, sprite);
       }
       // Bullets fly in straight lines, so extrapolate locally and drift toward the server.

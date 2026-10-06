@@ -47,8 +47,22 @@ function skillNumbers(id: string, hero: HeroDef, sk: SkillDef): string {
   const dmg = `Damage ${D(sk.damage)}`;
   const n = sk.count;
   switch (sk.kind) {
-    case "combo":
-      return comboNumbers(sk.steps ?? [], D, H);
+    case "combo": {
+      const nums = comboNumbers(sk.steps ?? [], D, H);
+      return sk.chargeTime ? `Charge: x0.6 (tap) to x1.5 (full) · ${nums}` : nums;
+    }
+    case "taunt": return `${dmg} · Taunted ${s(sk.duration, 2)}`;
+    case "possess": return `Controls the foe for ${s(sk.duration, 5)}`;
+    case "eater": return "The ally takes no damage while inside";
+    case "swapany": return "Any hero on the map";
+    case "domainx": return `x${num(sk.damage)} damage inside · Lasts ${s(sk.duration, 10)}`;
+    case "deathnote": return `Writes for ${s(sk.duration, 10)} · Then the nearest foe within ${sk.radius} falls`;
+    case "kunai": return `${n ?? 3} kunai · Damage ${D(sk.damage)} each · Up to 3 warps within 6s`;
+    case "bloodtrap": return `Costs 5% HP · Damage ${D(sk.damage)} per drop of blood · Up to 12 drops`;
+    case "bloodhammer": return `Costs 10% HP · x2 damage and reach · Lasts ${s(sk.duration, 7)}`;
+    case "copyskill": return `${dmg} · Copies its Q for one use`;
+    case "fakeclone": return `${n ?? 5} clones · Last ${s(sk.duration, 8)} · One hit and they vanish`;
+    case "piano": return `${n ?? 24} notes · Damage ${D(sk.damage)} each`;
     case "smash": case "leap": case "palm": case "anvil": case "grab": case "dashkick": case "jab": case "kick": case "roar":
       return `${dmg} · Stun ${s(sk.duration, 1)}`;
     case "cross": case "storm": case "wave": case "fireball": case "domain": case "rush": case "bluelaser": case "lancecharge":
@@ -74,7 +88,7 @@ function skillNumbers(id: string, hero: HeroDef, sk: SkillDef): string {
     case "chargeslash": case "charge": return `Damage ${D(sk.damage)} to ${D(sk.damage * 4)} (full charge)`;
     case "chargeshot": return `${dmg} · Stun ${s(sk.duration, 1)}`;
     case "reflect": return `Lasts ${s(sk.duration, 1)} · Shots fly back x${num(sk.damage)}`;
-    case "sprint": return `+${num(((sk.width ?? 1.5) - 1) * 100)}% speed · Lasts ${s(sk.duration, 4)}`;
+    case "sprint": return `+${num(((sk.width ?? 1.5) - 1) * 100)}% speed · Lasts ${s(sk.duration, 4)} · Next shot x3`;
     case "shadowstep": return `${dmg} · ${s(sk.duration, 3)} to flash back`;
     case "shuriken": case "knives": case "sparks": case "starfinger": case "missiles":
       return `${n ?? 1} shots · Damage ${D(sk.damage)} each`;
@@ -106,7 +120,7 @@ function skillNumbers(id: string, hero: HeroDef, sk: SkillDef): string {
     case "barrage": return `${n ?? 6} punches · Damage ${D(sk.damage)} each`;
     case "titan": return `Giant for ${s(sk.duration, 10)} · Damage ${D(sk.damage)} per hit`;
     case "gatling": return `${Math.round((sk.duration ?? 1) / 0.1)} hits · Damage ${D(sk.damage)} each`;
-    case "portal": return `Portals last ${s(sk.duration, 20)}`;
+    case "portal": return `Portals last ${s(sk.duration, 20)}${sk.waitGone ? " · Cooldown starts once they close" : ""}`;
     case "biglight": return `Bigger x1.8, half speed · Lasts ${s(sk.duration, 5)}`;
     case "grapple": return `Range ${sk.radius}`;
     case "trojan": return `${dmg} · Bursts after ${s(sk.duration, 10)}`;
@@ -119,7 +133,7 @@ function skillNumbers(id: string, hero: HeroDef, sk: SkillDef): string {
     case "sacrifice": return `Both lose ${num(sk.damage * 100)}% of max HP`;
     case "frost": return `${dmg} · Frozen ${s(sk.duration, 3)}`;
     case "castle": return `${dmg} · Stun ${s(sk.duration, 1)}`;
-    case "summon": return `${n && n > 1 ? `${n} pets` : "Pet"} with ${num(sk.damage * 100)}% of his HP${sk.duration ? ` · Lasts ${s(sk.duration, 0)}` : ""}${sk.max && sk.max > 1 ? ` · Up to ${sk.max}` : ""}`;
+    case "summon": return `${n && n > 1 ? `${n} pets` : "Pet"} with ${num(sk.damage * 100)}% of his HP${sk.duration ? ` · Lasts ${s(sk.duration, 0)}` : ""}${sk.max && sk.max > 1 ? ` · Up to ${sk.max}` : ""}${sk.waitGone ? " · Cooldown starts once it falls" : ""}`;
     case "card": return `Card 1-9 takes ${num(sk.damage * 100 * bal * HERO_DAMAGE_SCALE)}%-${num(sk.damage * 900 * bal * HERO_DAMAGE_SCALE)}% of max HP`;
     case "revive": return `Lasts ${s(sk.duration, 5)}`;
     case "immortal": return `No damage for ${s(sk.duration, 3)} · Heals ${H(sk.damage)} HP a second`;
@@ -144,17 +158,25 @@ function comboNumbers(steps: FxStep[], D: (v: number) => string, H: (v: number) 
       if (st.leech) b.push(`heals ${num(st.leech * 100)}% of damage dealt`);
       if (st.regen) b.push(`heals ${H(st.regen)} a second`);
       if (st.invuln) b.push("can't be hurt");
+      if (st.ccImmune) b.push("can't be stunned or slowed");
       out.push(`${b.join(", ")} for ${num(st.dur)}s`);
     } else if (st.do === "heal") out.push(`Heals ${H(st.pct)} HP`);
     else if (st.do === "shield") out.push(`No damage for ${num(st.dur)}s`);
     else if (st.do === "blink") continue;
+    else if (st.do === "rewind") out.push(`Back to where he was ${num(st.secs)}s ago, with that HP`);
     else {
       const b: string[] = [];
       if (st.dmg) b.push(st.do === "shots" ? (st.n > 1 ? `${st.n} shots, damage ${D(st.dmg)} each` : `damage ${D(st.dmg)}`) : st.do === "field" ? `damage ${D(st.dmg)} every ${num(st.tick)}s` : `damage ${D(st.dmg)}`);
       else if (st.do === "shots" && st.n > 1) b.push(`${st.n} shots`);
       if (st.stun) b.push(`stun ${num(st.stun)}s`);
       if (st.root) b.push(`root ${num(st.root)}s`);
-      if (st.slow) b.push(`slow ${num(st.slow)}s`);
+      if (st.slow) b.push(st.slowPct ? `slow ${num(st.slowPct * 100)}% ${num(st.slow)}s` : `slow ${num(st.slow)}s`);
+      if (st.silence) b.push(`no skills ${num(st.silence)}s`);
+      if (st.do === "push") b.push(`wall stun ${num(st.wallStun)}s`);
+      if (st.do === "dash" && st.trail) b.push(`${st.trail.n} bombs, damage ${D(st.trail.dmg)} each`);
+      if (st.do === "drop" && st.spots && st.spots > 1) b.push(`${st.spots} spots`);
+      if (st.do === "shots" && st.bounce) b.push(`bounces ${st.bounce} times`);
+      if (st.do === "shots" && st.split) b.push(`bursts into ${st.split.n}${st.split.stun ? `, stun ${num(st.split.stun)}s` : ""}`);
       if (st.do === "field" && st.heal) b.push(`heals ${H(st.heal)} every ${num(st.tick)}s`);
       if (st.do === "field") b.push(`lasts ${num(st.life)}s`);
       if (b.length) out.push(b.join(", ") + times);
