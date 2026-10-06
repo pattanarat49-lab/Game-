@@ -2092,7 +2092,7 @@ export const STAGES: Record<StageId, StageDef> = {
 };
 
 /** Stages taken out of the game (user request 2026-10-05: the Boss Room); their code is kept. */
-const REMOVED_STAGES: StageId[] = ["boss"];
+const REMOVED_STAGES: StageId[] = ["boss", "lava", "jungle", "dojo"];
 export const STAGE_IDS = (Object.keys(STAGES) as StageId[]).filter((id) => !REMOVED_STAGES.includes(id));
 
 /** Wave stages: which enemies come in each wave. */
@@ -2101,7 +2101,7 @@ export function wavesOf(stage: string): Partial<Record<EnemyKind, number>>[] {
 }
 
 export function stageOf(id: string): StageId {
-  return (STAGE_IDS as string[]).includes(id) ? (id as StageId) : "lava";
+  return (STAGE_IDS as string[]).includes(id) ? (id as StageId) : "classic";
 }
 
 // Godzilla's atomic beam: a warning line, then a long beam that slowly turns toward its target.

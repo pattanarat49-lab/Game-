@@ -20,8 +20,8 @@ let selectedHero: HeroId = (localStorageGet("riftborn-hero") as HeroId) ?? "supe
 if (!HERO_IDS.includes(selectedHero)) selectedHero = "superman";
 let selectedBot: HeroId = (localStorageGet("riftborn-bot") as HeroId) ?? "superman";
 if (!HERO_IDS.includes(selectedBot)) selectedBot = "superman";
-let selectedStage: StageId = (localStorageGet("riftborn-stage") as StageId) ?? "lava";
-if (!STAGE_IDS.includes(selectedStage)) selectedStage = "lava";
+let selectedStage: StageId = (localStorageGet("riftborn-stage") as StageId) ?? "classic";
+if (!STAGE_IDS.includes(selectedStage)) selectedStage = "classic";
 buildStagePicker();
 buildHeroPicker();
 
