@@ -58,6 +58,10 @@ export class Player extends Schema {
   @type("uint8") team = 0;
   /** Classic 3v3: lives left (shown as hearts over the head). */
   @type("uint8") lives = 0;
+  /** Classic 3v3: joined after the match began; picks a hero, then takes a bot's place. */
+  @type("boolean") late = false;
+  /** Open World: this player's record (games, wins, recent results) as JSON, shown when someone looks them up. */
+  @type("string") stats = "";
 }
 
 export class Enemy extends Schema {

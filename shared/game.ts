@@ -1,5 +1,6 @@
 import { NEW_HEROES, NewHeroId, newHeroDefs } from "./heroes2";
 import { ClassicMap, classicMap, mapBlocksShot, moveOnMap } from "./maps";
+import { DUNGEON, OPEN_WORLD } from "./world";
 // Game rules shared by the client (prediction, rendering) and the server (authority).
 
 export const TILE = 16;
@@ -1950,6 +1951,8 @@ export interface PlayerInput {
   skill2?: boolean;
   /** Charged skills (either slot): seconds the skill was held (charged) before it was let go. */
   charge2?: number;
+  /** Milliseconds behind the server that this player sees other heroes (ping + smoothing): hits on heroes are judged where they saw them. */
+  lag?: number;
   /** Where the client has moved its own hero. The server follows it, within the hero's speed. */
   x?: number;
   y?: number;
@@ -2038,6 +2041,8 @@ export function ringStage(stage: string): boolean {
 /** Where heroes can go on a stage: the open field (false), the boxing ring (true) or a Classic map. */
 export type Area = boolean | ClassicMap;
 export function areaOf(stage: string, map = 0): Area {
+  if (stage === "world") return OPEN_WORLD;
+  if (stage === "dungeon") return DUNGEON;
   return stage === "classic" ? classicMap(map) : ringStage(stage);
 }
 
@@ -2109,7 +2114,7 @@ export function inLava(x: number, y: number, lavaRadius: number): boolean {
 }
 
 // Stages
-export type StageId = "lava" | "jungle" | "dojo" | "boss" | "pvp" | "duel" | "pve" | "classic";
+export type StageId = "lava" | "jungle" | "dojo" | "boss" | "pvp" | "duel" | "pve" | "classic" | "world" | "dungeon";
 
 export interface StageDef {
   name: string;
@@ -2124,12 +2129,16 @@ export const STAGES: Record<StageId, StageDef> = {
   pvp: { name: "PvP Arena", blurb: "Players fight each other in a small boxing ring. First to 3 kills wins. Online only." },
   duel: { name: "Bot Duel", blurb: "1v1 in the boxing ring against a bot playing the hero you pick. First to 3 KOs. Solo." },
   pve: { name: "PvE Squad", blurb: "1 to 4 players team up against one bot. Pick its hero and difficulty. First to 3 KOs. Solo or online." },
+  world: { name: "Open World", blurb: "Meet everyone in a big meadow village: chat, look up players, ask for duels, and take the portal to the dungeon together." },
+  dungeon: { name: "Dungeon", blurb: "Rooms full of monsters and a boss at the end. Beat it and the way back opens." },
   classic: { name: "Classic 3v3", blurb: "Red vs Blue, 3 heroes a side, on 6 maps with walls, tall grass and water. Bots fill empty slots. 3 lives each; the last team standing wins. Solo or online." },
 };
 
 /** Stages taken out of the game (user request 2026-10-05: the Boss Room); their code is kept. */
 const REMOVED_STAGES: StageId[] = ["boss", "lava", "jungle", "dojo"];
-export const STAGE_IDS = (Object.keys(STAGES) as StageId[]).filter((id) => !REMOVED_STAGES.includes(id));
+/** The Open World and its dungeon have their own button, not a stage card. */
+const OWN_BUTTON: StageId[] = ["world", "dungeon"];
+export const STAGE_IDS = (Object.keys(STAGES) as StageId[]).filter((id) => !REMOVED_STAGES.includes(id) && !OWN_BUTTON.includes(id));
 
 /** Wave stages: which enemies come in each wave. */
 export function wavesOf(stage: string): Partial<Record<EnemyKind, number>>[] {
@@ -2137,7 +2146,7 @@ export function wavesOf(stage: string): Partial<Record<EnemyKind, number>>[] {
 }
 
 export function stageOf(id: string): StageId {
-  return (STAGE_IDS as string[]).includes(id) ? (id as StageId) : "classic";
+  return (STAGE_IDS as string[]).includes(id) || OWN_BUTTON.includes(id as StageId) ? (id as StageId) : "classic";
 }
 
 // Godzilla's atomic beam: a warning line, then a long beam that slowly turns toward its target.

@@ -47,7 +47,7 @@ function versus(): HTMLCanvasElement {
 /** Stage cards: a tiny preview of the floor with that stage's boss on it. */
 function buildStagePicker() {
   const container = document.getElementById("stages")!;
-  const previews: Record<StageId, { floor: string[]; boss: HTMLCanvasElement }> = {
+  const previews: Partial<Record<StageId, { floor: string[]; boss: HTMLCanvasElement }>> = {
     lava: { floor: ["#2b2026", "#e5501b", "#ff8a1f"], boss: renderPixelSprite(WARDEN) },
     jungle: { floor: ["#3e4a36", "#43503a", "#5aa23a"], boss: renderPixelSprite(KINGKONG) },
     dojo: { floor: ["#8a5a32", "#9a6a40", "#4a2e18"], boss: renderPixelSprite(SWORD_GOD) },
@@ -70,7 +70,7 @@ function buildStagePicker() {
     preview.width = 48;
     preview.height = 32;
     const ctx = preview.getContext("2d")!;
-    const { floor, boss } = previews[id];
+    const { floor, boss } = previews[id]!;
     for (let y = 0; y < 32; y += 4) {
       for (let x = 0; x < 48; x += 4) {
         // Lava creeps in from the edges; the boss room is plain concrete.
@@ -208,12 +208,20 @@ form.addEventListener("submit", async (event) => {
     errorText.textContent = "Bot Duel is played solo. Press PLAY SOLO.";
     return;
   }
+  await startGame(selectedStage, solo, solo ? "" : roomInput.value.trim().slice(0, 8).toUpperCase());
+});
+
+// OPEN WORLD: everyone online meets in one big village (solo build: walk it alone and take the dungeon portal).
+document.getElementById("open-world")?.addEventListener("click", () => startGame("world", soloOnly, ""));
+
+/** Start (or move to) a game: a stage, solo or online, and a room number ("" = any open room). */
+async function startGame(stage: StageId, solo: boolean, code: string) {
   const name = nameInput.value.trim().slice(0, 16) || "Player";
   localStorageSet("riftborn-name", name);
   errorText.textContent = "";
   menu.classList.add("hidden");
   const touch = isTouchDevice();
-  if (touch) await goFullscreenLandscape();
+  if (touch && !document.fullscreenElement) await goFullscreenLandscape();
   await document.fonts?.ready;
 
   // Match the game's shape to the screen (always landscape) so phones are not letterboxed.
@@ -221,7 +229,16 @@ form.addEventListener("submit", async (event) => {
   const aspect = Math.max(innerWidth, innerHeight) / Math.min(innerWidth, innerHeight);
   const width = Math.round(Math.min(1300, Math.max(720, height * aspect)));
 
-  game?.destroy(true);
+  if (game) {
+    // Moving on from another room (a portal or a duel): leave it first.
+    game.registry.set("leaving", true);
+    try {
+      (game.registry.get("room") as { leave?: () => unknown } | undefined)?.leave?.();
+    } catch {
+      // already gone
+    }
+    game.destroy(true);
+  }
   game = new Phaser.Game({
     type: Phaser.AUTO,
     parent: "game",
@@ -236,12 +253,17 @@ form.addEventListener("submit", async (event) => {
   game.registry.set("playerName", name);
   game.registry.set("solo", solo);
   game.registry.set("hero", selectedHero);
-  game.registry.set("stage", selectedStage);
+  game.registry.set("stage", stage);
   game.registry.set("botHero", selectedBot);
   // Same mode + same room number = same room; no number = any open room of that mode.
-  game.registry.set("roomCode", solo ? "" : roomInput.value.trim().slice(0, 8).toUpperCase());
+  game.registry.set("roomCode", code);
   backButton.classList.remove("hidden");
   const mine = game;
+  // The Open World's portal, the dungeon's way out, or an accepted duel: off to that room.
+  game.events.on("switch-room", (to: { stage: StageId; code: string }) => {
+    if (mine !== game) return;
+    setTimeout(() => startGame(to.stage, solo, to.code), 0);
+  });
   game.events.on("connection-error", (err: Error) => {
     if (mine !== game || mine.registry.get("leaving")) return; // we pressed BACK
     errorText.textContent = `Could not reach the rift: ${err?.message ?? err}. Is the server running?`;
@@ -250,7 +272,7 @@ form.addEventListener("submit", async (event) => {
     game?.destroy(true);
     game = undefined;
   });
-});
+}
 
 /** On phones, go fullscreen and lock to landscape where the browser allows it. */
 async function goFullscreenLandscape() {

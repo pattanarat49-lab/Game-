@@ -86,6 +86,7 @@ import {
   CLASSIC_RESPAWN,
   CLASSIC_TEAM_SIZE,
 } from "./game";
+import { DUNGEON, OPEN_WORLD, PORTAL_COUNTDOWN, PORTAL_RADIUS } from "./world";
 import { BLOCK, CLASSIC_MAPS, ClassicMap, MAP_X, MAP_Y, Team, bushPatches, classicMap, distanceField, seesInto, mapLineClear, stepAlong } from "./maps";
 
 export const TICK_MS = 1000 / 30;
@@ -167,6 +168,12 @@ const EYEBEAM_TICK = 0.1; // seconds between HEAT VISION hits
 const DOMAIN_RADIUS = 110; // DOMAIN EXPANSION: how big the closed-off duel circle is
 const PIANO_GAP = 0.12; // seconds between PIANO notes
 const PIANO_NOTE_SPEED = 260;
+/** A new room number for a dungeon run or a duel (letters and digits nobody types by hand). */
+export function newRoomCode(): string {
+  return `R${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
+}
+const DUNGEON_AGGRO = 230; // how close a hero must come before a dungeon monster notices
+const MAX_LAG_COMP = 0.25; // seconds: the most an online hit is judged in the past
 const KUNAI_SPEED = 1100; // MARKED KUNAI throw speed (before the shot slow-down)
 const KUNAI_WINDOW = 6; // seconds to warp to the MARKED KUNAI before the cooldown starts
 const BLOOD_WINDOW = 8; // seconds the BLOOD TRAP blood waits to be called back
@@ -226,6 +233,10 @@ export interface SimPlayer {
   team: number;
   /** Classic 3v3: lives left; at 0 the hero stays down until the match ends. */
   lives: number;
+  /** Classic 3v3: joined after the match began; picks a hero, then takes a bot's place. */
+  late: boolean;
+  /** Open World: the player's record as JSON (games, wins, recent results). */
+  stats: string;
   /** Seconds left in which falling brings the hero straight back up (REVIVE). */
   revive: number;
   /** Seconds left behind a barrier that blocks all damage (IMMORTAL). */
@@ -448,6 +459,8 @@ interface PlayerBrain {
   /** Position the client says it moved to (client-side movement), and how far the server lets it go. */
   target?: { x: number; y: number; t: number };
   moveBudget: number;
+  /** Seconds behind the server this player sees other heroes (from the client; 0 for bots). */
+  lag?: number;
   /** Extra distance a knockback lets the client move us, and the push the server applies itself to clones. */
   kbExtra: number;
   kbx: number;
@@ -466,6 +479,19 @@ interface EnemyBrain {
   cutTimer?: number;
   /** A placed block: who built it. */
   owner?: string;
+  /** Dungeon: where it stands guard, whether it has noticed a hero, and its way through the corridors. */
+  home?: { x: number; y: number };
+  awake?: boolean;
+  path?: Int16Array;
+  pathTo?: number;
+  pathTimer?: number;
+}
+
+/** Someone has to change rooms: the Open World's portal, the dungeon's way out, or an accepted duel. */
+export interface Warp {
+  ids: string[];
+  stage: StageId;
+  code: string;
 }
 
 interface ZoneBrain {
@@ -553,6 +579,9 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
   /** A fighter was knocked out in the ring: reset the round on the next tick. */
   private roundOver = false;
   private clock = 0; // seconds of simulation, for per-target hit cooldowns
+  /** Lag compensation: where each hero was over the last moments, and whose attack is being judged right now (with their lag). */
+  private trail = new WeakMap<P, { t: number; x: number; y: number }[]>();
+  private judgeLag = 0;
   private bulletBrains = new Map<string, BulletBrain>();
   private history: Snapshot[] = [];
   private historyTimer = 0;
@@ -565,7 +594,97 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
   ) {
     state.stage = stage;
     this.startIntermission(0);
+    if (stage === "world" || stage === "dungeon") {
+      state.phase = "fight";
+      state.lavaRadius = 5000;
+      if (stage === "dungeon") this.fillDungeon();
+    }
   }
+
+  /** Room changes waiting to be sent out (the server tells each player's device where to go). */
+  readonly warps: Warp[] = [];
+
+  /** Open World: when everyone at the portal is ready, a short countdown, then they all warp to a new dungeon. */
+  private updateWorld(dt: number) {
+    const s = this.state;
+    const at: string[] = [];
+    s.players.forEach((p, id) => {
+      if (p.owner || p.dead) return;
+      if (Math.hypot(p.x - OPEN_WORLD.portal.x, p.y - OPEN_WORLD.portal.y) <= PORTAL_RADIUS + 12) at.push(id);
+      else p.ready = false; // walked away from the portal
+    });
+    const ready = at.filter((id) => s.players.get(id)!.ready);
+    if (at.length && ready.length === at.length) {
+      if (s.phaseTimer <= 0) s.phaseTimer = PORTAL_COUNTDOWN;
+      s.phaseTimer -= dt;
+      s.notice = `PORTAL OPENS IN ${Math.max(1, Math.ceil(s.phaseTimer))}`;
+      if (s.phaseTimer <= 0) {
+        this.warps.push({ ids: at, stage: "dungeon", code: newRoomCode() });
+        for (const id of at) s.players.get(id)!.ready = false;
+        s.notice = "";
+      }
+    } else {
+      s.phaseTimer = 0;
+      s.notice = "";
+    }
+  }
+
+  /** Dungeon: monsters stand guard in every room and corridor; the boss waits in the last room. */
+  private fillDungeon() {
+    for (const room of DUNGEON.rooms) {
+      room.monsters.forEach((kind, i) => {
+        const a = (i / room.monsters.length) * Math.PI * 2;
+        const cx = ((room.c0 + room.c1 + 1) / 2) * BLOCK;
+        const cy = ((room.r0 + room.r1 + 1) / 2) * BLOCK;
+        const rx = ((room.c1 - room.c0) / 2 - 1.5) * BLOCK;
+        const ry = ((room.r1 - room.r0) / 2 - 1.5) * BLOCK;
+        this.spawnEnemyAt(kind as EnemyKind, cx + Math.cos(a) * rx * 0.6, cy + Math.sin(a) * ry * 0.6);
+      });
+    }
+    for (const g of DUNGEON.guards) this.spawnEnemyAt(g.kind as EnemyKind, g.x, g.y);
+    this.spawnEnemyAt("warden", DUNGEON.boss.x, DUNGEON.boss.y);
+    this.state.notice = "Find and defeat the Pyre Warden";
+  }
+
+  private spawnEnemyAt(kind: EnemyKind, x: number, y: number) {
+    this.spawnEnemy(kind);
+    let last: E | undefined;
+    let lastId = "";
+    this.state.enemies.forEach((e, id) => {
+      last = e;
+      lastId = id;
+    });
+    if (!last) return;
+    const e = last as E;
+    [e.x, e.y] = [x, y];
+    const brain = this.enemyBrains.get(lastId)!;
+    brain.home = { x, y };
+    brain.awake = false;
+  }
+
+  /** Dungeon: once the boss falls the way out opens; stepping into it takes a hero back to the Open World. */
+  private updateDungeon() {
+    const s = this.state;
+    let boss = false;
+    s.enemies.forEach((e) => {
+      if (e.kind === "warden") boss = true;
+    });
+    if (boss) return;
+    if (!this.dungeonCleared) {
+      this.dungeonCleared = true;
+      s.notice = "BOSS DEFEATED! The portal home is open (top left room)";
+      this.addZone("exitportal", DUNGEON.exit.x, DUNGEON.exit.y, PORTAL_RADIUS, Infinity, { owner: "", every: Infinity, damage: 0 });
+    }
+    s.players.forEach((p, id) => {
+      if (p.owner || p.dead || this.leaving.has(id)) return;
+      if (Math.hypot(p.x - DUNGEON.exit.x, p.y - DUNGEON.exit.y) <= PORTAL_RADIUS) {
+        this.leaving.add(id);
+        this.warps.push({ ids: [id], stage: "world", code: "" });
+      }
+    });
+  }
+  private dungeonCleared = false;
+  private leaving = new Set<string>();
 
   /** Hero-against-hero stages are fought inside the boxing ring's ropes. */
   private get ring() {
@@ -580,6 +699,16 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
   /** Where heroes can move: the field, the ring's ropes, or the Classic map's walls and water. */
   private get area() {
     return areaOf(this.state.stage, this.state.map);
+  }
+
+  /** The playing field's size: the usual 960x720, or a bigger map (the Open World, the dungeon). */
+  private get W() {
+    const a = this.area;
+    return typeof a === "object" ? Math.max(WORLD_W, a.ox + a.cols * BLOCK) : WORLD_W;
+  }
+  private get H() {
+    const a = this.area;
+    return typeof a === "object" ? Math.max(WORLD_H, a.oy + a.rows * BLOCK) : WORLD_H;
   }
 
   private move(x: number, y: number, dx: number, dy: number, r: number) {
@@ -602,7 +731,46 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
     player.hp = def.maxHp;
     this.state.players.set(id, player);
     this.brains.set(id, this.newBrain());
+    if (this.classic && (this.state.phase === "intermission" || this.state.phase === "fight")) {
+      // Joined a match already under way: wait off the field on the side with fewer people, pick a hero, then replace a bot.
+      const real: Record<number, number> = { 1: 0, 2: 0 };
+      this.state.players.forEach((q, qid) => {
+        if (!q.owner && qid !== id && !this.brains.get(qid)?.bot) real[q.team] = (real[q.team] ?? 0) + 1;
+      });
+      player.team = real[1] <= real[2] ? 1 : 2;
+      player.late = true;
+      player.dead = true;
+      player.lives = 0;
+      player.respawnIn = 0;
+    }
     return player;
+  }
+
+  /** Classic 3v3: a late joiner takes over a bot on their side (its lives and spot), or the other side's if theirs has none. */
+  private joinLate(id: string) {
+    const p = this.state.players.get(id);
+    if (!p || !p.late) return;
+    let bot: string | undefined;
+    for (const team of [p.team, 3 - p.team]) {
+      this.state.players.forEach((q, qid) => {
+        if (!bot && !q.owner && q.team === team && this.brains.get(qid)?.bot && (q.lives > 0 || !q.dead)) bot = qid;
+      });
+      if (bot) break;
+    }
+    const b = bot ? this.state.players.get(bot) : undefined;
+    if (!b) return; // no bot left to replace: keep waiting
+    p.team = b.team;
+    p.lives = Math.max(1, b.lives);
+    p.score = b.score;
+    this.removePlayer(bot!);
+    p.late = false;
+    p.ready = false;
+    p.dead = false;
+    p.hp = p.maxHp;
+    this.placeAtSpawn(p);
+    const brain = this.brains.get(id);
+    if (brain) brain.target = undefined;
+    p.warp = (p.warp + 1) % 256;
   }
 
   /** Bot Duel: a computer-controlled hero that fights the other players. */
@@ -707,7 +875,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
   pickHero(id: string, hero: string) {
     const p = this.state.players.get(id);
     const def = HEROES[hero as keyof typeof HEROES];
-    if (!p || p.owner || p.ready || this.state.phase !== "select" || !def || !(HERO_IDS as string[]).includes(hero)) return;
+    if (!p || p.owner || p.ready || (this.state.phase !== "select" && !p.late) || !def || !(HERO_IDS as string[]).includes(hero)) return;
     p.hero = hero;
     p.maxHp = def.maxHp;
     p.hp = def.maxHp;
@@ -718,6 +886,8 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
   setReady(id: string, ready: boolean) {
     const p = this.state.players.get(id);
     if (p && !p.owner && this.state.phase === "select") p.ready = !!ready;
+    else if (p && !p.owner && this.state.stage === "world") p.ready = !!ready && Math.hypot(p.x - OPEN_WORLD.portal.x, p.y - OPEN_WORLD.portal.y) <= PORTAL_RADIUS + 12;
+    else if (p?.late && ready) this.joinLate(id);
   }
 
   /** PvP: back to player select; nobody is ready, everyone is healed and nothing is left on the floor. */
@@ -732,6 +902,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
     s.players.forEach((p, pid) => {
       if (p.owner || pid === "bot" || this.brains.get(pid)?.bot) return helpers.push(pid); // bots are added when the match starts
       p.ready = false;
+      p.late = false;
       p.dead = false;
       p.hp = p.maxHp;
       p.titan = p.barrier = p.revive = p.latch = p.beam = p.stun = 0;
@@ -883,8 +1054,27 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
    * (x, y) up to head height, as wide as the hero. This is the spot on it closest to (x, y).
    */
   private bodyPoint(v: P, x: number, y: number): { x: number; y: number } {
-    const top = v.y - BODY_HEIGHT * (v.big > 0 ? BIG_SCALE : 1);
-    return { x: v.x, y: Math.max(top, Math.min(v.y, y)) };
+    const at = this.seen(v);
+    const top = at.y - BODY_HEIGHT * (v.big > 0 ? BIG_SCALE : 1);
+    return { x: at.x, y: Math.max(top, Math.min(at.y, y)) };
+  }
+
+  /**
+   * Lag compensation: where the attacker saw this hero on their screen (a moment ago), or where it
+   * is now. Online, other heroes are drawn slightly in the past, so a hit lands where it was aimed.
+   */
+  private seen(v: P): { x: number; y: number } {
+    if (this.judgeLag <= 0) return v;
+    const list = this.trail.get(v);
+    if (!list?.length) return v;
+    const t = this.clock - this.judgeLag;
+    let at: { x: number; y: number } = list[0];
+    for (const s of list) {
+      if (s.t > t) break;
+      at = s;
+    }
+    // A teleport since then: judge the hero where it is now.
+    return Math.hypot(at.x - v.x, at.y - v.y) > 120 ? v : at;
   }
 
   /** How far (x, y) is from a hero's body (0 at its middle, not just its feet). */
@@ -896,7 +1086,8 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
   /** Does a shape test (taking a spot) touch the hero anywhere from feet to head? */
   private onBody(v: P, test: (x: number, y: number) => boolean): boolean {
     const h = BODY_HEIGHT * (v.big > 0 ? BIG_SCALE : 1);
-    for (let k = 0; k <= 2; k++) if (test(v.x, v.y - (h * k) / 2)) return true;
+    const at = this.seen(v);
+    for (let k = 0; k <= 2; k++) if (test(at.x, at.y - (h * k) / 2)) return true;
     return false;
   }
 
@@ -1657,6 +1848,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       skill2: !!input.skill2,
       charge2: Math.min(CHARGE_FULL, Math.max(0, Number(input.charge2) || 0)),
     };
+    brain.lag = Math.min(MAX_LAG_COMP, Math.max(0, Number(input.lag) || 0) / 1000);
     const p = this.state.players.get(id);
     if (p && Number.isFinite(input.x) && Number.isFinite(input.y) && input.warp === p.warp) {
       brain.target = { x: Number(input.x), y: Number(input.y), t: Number(input.t) || 0 };
@@ -1683,6 +1875,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
           if (!p.owner && movesInStoppedTime(p.hero)) movers.add(pid);
         });
         this.updatePlayers(dt, movers);
+        this.afterPlayers();
         this.updateBullets(dt, movers);
         this.updateZones(dt, movers);
         return;
@@ -1698,6 +1891,8 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
     }
 
     if (s.stage === "boss") this.updateBossRoom(dt);
+    else if (s.stage === "world") this.updateWorld(dt);
+    else if (s.stage === "dungeon") this.updateDungeon();
     else if (this.ring) this.updatePvp(dt);
     else if (s.phase === "intermission") {
       s.phaseTimer -= dt;
@@ -1723,6 +1918,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
     }
 
     this.updatePlayers(dt);
+    this.afterPlayers();
     this.updateEnemies(dt);
     this.updateBullets(dt);
     this.updateZones(dt);
@@ -1880,18 +2076,32 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
   // ------------------------------------------------------------- players
 
   /** Move and fight for every player. With `only`, just that one (time is stopped). */
+  /** Lag compensation: stop judging as one player saw it, and remember where every hero is now. */
+  private afterPlayers() {
+    this.judgeLag = 0;
+    this.state.players.forEach((p) => {
+      let list = this.trail.get(p);
+      if (!list) this.trail.set(p, (list = []));
+      list.push({ t: this.clock, x: p.x, y: p.y });
+      while (list.length > 2 && list[1].t < this.clock - MAX_LAG_COMP - 0.05) list.shift();
+    });
+  }
+
   private updatePlayers(dt: number, only?: Set<string>) {
     const s = this.state;
     s.players.forEach((p, id) => {
       if (only && !only.has(id)) return;
       const brain = this.brains.get(id);
       if (!brain) return;
+      this.judgeLag = this.brains.get(this.rootOf(id))?.lag ?? 0; // this hero's hits are judged as its player saw the others
       if (brain.bot) this.botThink(id, p, brain, dt);
       // ALIEN TRANSFORM: back to human when the time is up (or on falling).
       if (!p.owner && heroOf(p.hero).formOf && (p.dead || p.buff <= 0)) this.endForm(p, brain);
       const hero = heroOf(p.hero);
       if (this.tickStates(id, p, brain, hero, dt)) return; // eaten, possessing, ...
-      const input = this.steerInput(id, p, brain, hero);
+      const steered = this.steerInput(id, p, brain, hero);
+      // The Open World is peaceful: walking and dashing only.
+      const input = this.state.stage === "world" ? { ...steered, shoot: false, skill: false, skill2: false } : steered;
       brain.hurtTimer = Math.max(0, brain.hurtTimer - dt);
       brain.attackTimer = Math.max(0, brain.attackTimer - dt);
       brain.kbExtra = Math.max(0, brain.kbExtra - KNOCKBACK_DISTANCE * 2 * dt);
@@ -3044,8 +3254,8 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
         break;
       case "hurricane": {
         // The storm gathers a little way ahead, where you aim.
-        const x = Math.min(WORLD_W - 20, Math.max(20, p.x + Math.cos(p.aim) * 120));
-        const y = Math.min(WORLD_H - 20, Math.max(20, p.y + Math.sin(p.aim) * 120));
+        const x = Math.min(this.W - 20, Math.max(20, p.x + Math.cos(p.aim) * 120));
+        const y = Math.min(this.H - 20, Math.max(20, p.y + Math.sin(p.aim) * 120));
         this.addZone("hurricane", x, y, skill.radius, skill.duration ?? 3.5, { owner: id, every: 0.35, damage: skill.damage });
         break;
       }
@@ -3413,7 +3623,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
           const off = (i - (n - 1) / 2) * 16;
           const x = cx - Math.sin(p.aim) * off;
           const y = cy + Math.cos(p.aim) * off;
-          if (this.blocked(x, y) || x < 8 || y < 8 || x > WORLD_W - 8 || y > WORLD_H - 8) continue;
+          if (this.blocked(x, y) || x < 8 || y < 8 || x > this.W - 8 || y > this.H - 8) continue;
           const e = this.make.enemy();
           e.kind = "rockwall";
           e.hp = e.maxHp = ENEMIES.rockwall.hp;
@@ -3544,8 +3754,8 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
         break;
       case "city": {
         // CREATOR: a whole city appears around Yaotsu.
-        const x = Math.min(WORLD_W - 60, Math.max(60, p.x));
-        const y = Math.min(WORLD_H - 60, Math.max(60, p.y));
+        const x = Math.min(this.W - 60, Math.max(60, p.x));
+        const y = Math.min(this.H - 60, Math.max(60, p.y));
         this.addZone("city", x, y, skill.radius, skill.duration ?? 15, { owner: id, every: 0.5, damage: skill.damage });
         break;
       }
@@ -3585,7 +3795,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
         for (let d = 4; d <= skill.radius; d += 4) {
           const x = p.x + cos * d;
           const y = p.y + sin * d;
-          if (this.blocked(x, y) || x < 0 || y < 0 || x > WORLD_W || y > WORLD_H) break;
+          if (this.blocked(x, y) || x < 0 || y < 0 || x > this.W || y > this.H) break;
           [ax, ay] = [x, y];
         }
         const len = Math.hypot(ax - p.x, ay - p.y);
@@ -3704,8 +3914,8 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
         const vy = Math.sin(p.aim) * CASTLE_SPEED;
         const x = p.x - Math.cos(p.aim) * 30;
         const y = p.y - Math.sin(p.aim) * 30;
-        const tx = vx > 0 ? (WORLD_W + skill.radius - x) / vx : vx < 0 ? (-skill.radius - x) / vx : Infinity;
-        const ty = vy > 0 ? (WORLD_H + skill.radius - y) / vy : vy < 0 ? (-skill.radius - y) / vy : Infinity;
+        const tx = vx > 0 ? (this.W + skill.radius - x) / vx : vx < 0 ? (-skill.radius - x) / vx : Infinity;
+        const ty = vy > 0 ? (this.H + skill.radius - y) / vy : vy < 0 ? (-skill.radius - y) / vy : Infinity;
         const life = Math.min(14, tx, ty);
         const zid = this.addZone("castle", x, y, skill.radius, life, { owner: id, every: 0, damage: skill.damage });
         Object.assign(this.zoneBrains.get(zid)!, { vx, vy, stun: skill.duration ?? 1, hit: new Set<string>() });
@@ -4585,6 +4795,16 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
   }
 
   private placeAtSpawn(p: P) {
+    const s = this.state;
+    if (s.stage === "world" || s.stage === "dungeon") {
+      const spot = s.stage === "world" ? OPEN_WORLD.spawn : DUNGEON.spawn;
+      const a = Math.random() * Math.PI * 2;
+      const r = Math.random() * 40;
+      const at = this.move(spot.x, spot.y, Math.cos(a) * r, Math.sin(a) * r, PLAYER_RADIUS);
+      [p.x, p.y] = [at.x, at.y];
+      p.warp = (p.warp + 1) % 256;
+      return;
+    }
     if (this.classic) {
       // Classic 3v3: each side has three spawn circles; take them in join order.
       const map = classicMap(this.state.map);
@@ -4656,8 +4876,8 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       for (let tries = 0; tries < 20; tries++) {
         const a = Math.random() * Math.PI * 2;
         const r = Math.min(this.state.lavaRadius, 340) * (0.7 + Math.random() * 0.25);
-        e.x = Math.min(WORLD_W - 20, Math.max(20, CENTER_X + Math.cos(a) * r));
-        e.y = Math.min(WORLD_H - 20, Math.max(20, CENTER_Y + Math.sin(a) * r));
+        e.x = Math.min(this.W - 20, Math.max(20, CENTER_X + Math.cos(a) * r));
+        e.y = Math.min(this.H - 20, Math.max(20, CENTER_Y + Math.sin(a) * r));
         if (!this.blocked(e.x, e.y)) break;
       }
     }
@@ -4745,6 +4965,39 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
     return best;
   }
 
+  /**
+   * Dungeon monsters wait where they stand until a hero comes close and in sight, then hunt
+   * along the corridors. Returns true while it is asleep or walking round a wall this tick.
+   */
+  private dungeonEnemy(e: E, brain: EnemyBrain, def: (typeof ENEMIES)[EnemyKind], p: P, dist: number, dt: number): boolean {
+    if (!brain.awake) {
+      if (dist > DUNGEON_AGGRO || !mapLineClear(DUNGEON, e.x, e.y, p.x, p.y)) return true;
+      brain.awake = true;
+      // Waking one wakes its friends close by.
+      this.state.enemies.forEach((o) => {
+        const ob = this.enemyBrains.get(this.enemyId(o));
+        if (ob && !ob.awake && Math.hypot(o.x - e.x, o.y - e.y) < 140) ob.awake = true;
+      });
+    }
+    if (mapLineClear(DUNGEON, e.x, e.y, p.x, p.y)) return false; // in sight: the usual chase and shooting
+    const to = Math.floor(p.x / BLOCK) + Math.floor(p.y / BLOCK) * 1000;
+    brain.pathTimer = (brain.pathTimer ?? 0) - dt;
+    if (!brain.path || brain.pathTo !== to || brain.pathTimer <= 0) [brain.path, brain.pathTo, brain.pathTimer] = [distanceField(DUNGEON, p.x, p.y), to, 0.6];
+    const step = stepAlong(brain.path, e.x, e.y, DUNGEON);
+    const speed = e.root > 0 ? 0 : def.speed * MOVE_SCALE * (e.big > 0 ? BIG_SLOW : 1) * (e.slow > 0 ? BURN_SLOW : 1);
+    const moved = this.move(e.x, e.y, step.x * speed * dt, step.y * speed * dt, def.radius);
+    [e.x, e.y] = [moved.x, moved.y];
+    return true;
+  }
+
+  private enemyId(e: E): string {
+    let found = "";
+    this.state.enemies.forEach((o, id) => {
+      if (o === e) found = id;
+    });
+    return found;
+  }
+
   private updateEnemies(dt: number) {
     this.state.enemies.forEach((e, id) => {
       const def = ENEMIES[e.kind as EnemyKind];
@@ -4772,6 +5025,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       const dx = p.x - e.x;
       const dy = p.y - e.y;
       const dist = Math.hypot(dx, dy) || 1;
+      if (this.state.stage === "dungeon" && this.dungeonEnemy(e, brain, def, p, dist, dt)) return;
 
       const human = this.state.reality > 0;
       if (human) {
@@ -5038,7 +5292,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
         // DIRECT VOLLEY: off the walls it goes, and may hit everyone again.
         const nx = b.x + b.vx * dt;
         const ny = b.y + b.vy * dt;
-        const out = (x: number, y: number) => x < 4 || y < 4 || x > WORLD_W - 4 || y > WORLD_H - 4 || this.blocked(x, y);
+        const out = (x: number, y: number) => x < 4 || y < 4 || x > this.W - 4 || y > this.H - 4 || this.blocked(x, y);
         if (out(nx, ny)) {
           if (out(nx, b.y)) b.vx = -b.vx;
           if (out(b.x, ny)) b.vy = -b.vy;
@@ -5052,7 +5306,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       brain.life -= dt;
       // Sword waves and missiles fly over rocks; bullets do not.
       const blocked = b.kind !== "wave" && b.kind !== "godslash" && b.kind !== "missile" && !brain.bounce && this.blocked(b.x, b.y);
-      if (brain.life <= 0 || b.x < 0 || b.y < 0 || b.x > WORLD_W || b.y > WORLD_H || blocked) {
+      if (brain.life <= 0 || b.x < 0 || b.y < 0 || b.x > this.W || b.y > this.H || blocked) {
         if (brain.blast > 0) this.sweep(brain.owner ?? "", b.x, b.y, 0, brain.blast, Math.PI * 2, brain.damage);
         this.endBullet(id);
         return;
@@ -5162,7 +5416,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
     // A wall stops the fist (no more bouncing): it snaps straight back.
     const nx = b.x + b.vx * dt;
     const ny = b.y + b.vy * dt;
-    if (nx < 4 || ny < 4 || nx > WORLD_W - 4 || ny > WORLD_H - 4 || this.blocked(nx, ny)) {
+    if (nx < 4 || ny < 4 || nx > this.W - 4 || ny > this.H - 4 || this.blocked(nx, ny)) {
       brain.age = brain.back ?? 0;
       b.vx = 0;
       b.vy = 0;
@@ -5245,7 +5499,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       bot.pathTimer = (bot.pathTimer ?? 0) - dt;
       const to = -10000 - Math.floor((goal.x - MAP_X) / BLOCK) - Math.floor((goal.y - MAP_Y) / BLOCK) * 100;
       if (!bot.path || bot.pathTo !== to || bot.pathTimer <= 0) [bot.path, bot.pathTo, bot.pathTimer] = [distanceField(map, goal.x, goal.y), to, 2];
-      const step = stepAlong(bot.path, p.x, p.y);
+      const step = stepAlong(bot.path, p.x, p.y, map);
       input.left = step.x < -0.3;
       input.right = step.x > 0.3;
       input.up = step.y < -0.3;
@@ -5283,7 +5537,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       bot.pathTimer = (bot.pathTimer ?? 0) - dt;
       const to = Math.floor((foe.x - MAP_X) / BLOCK) + Math.floor((foe.y - MAP_Y) / BLOCK) * 1000;
       if (!bot.path || bot.pathTo !== to || bot.pathTimer <= 0) [bot.path, bot.pathTo, bot.pathTimer] = [distanceField(map, foe.x, foe.y), to, 0.5];
-      const step = stepAlong(bot.path, p.x, p.y);
+      const step = stepAlong(bot.path, p.x, p.y, map);
       if (step.x || step.y) [mx, my] = [step.x, step.y];
     }
     input.left = mx < -0.3;

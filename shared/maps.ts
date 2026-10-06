@@ -41,6 +41,11 @@ export interface ClassicMap {
   theme: MapTheme;
   tiles: Uint8Array; // row by row
   spawns: Record<Team, { x: number; y: number }[]>;
+  /** Size in blocks and where the top-left corner sits in the world (Classic maps: MAP_COLS_C x MAP_ROWS_C at MAP_X, MAP_Y). */
+  cols: number;
+  rows: number;
+  ox: number;
+  oy: number;
 }
 
 const CODES: Record<string, number> = { ".": T_FLOOR, "#": T_WALL, C: T_CRATE, c: T_CRATE, F: T_FENCE, B: T_BUSH, W: T_WATER, r: T_FLOOR };
@@ -61,11 +66,16 @@ function build(name: string, theme: MapTheme, top: string[], middle: string): Cl
   // Blue's spawns are Red's turned round; list them left to right like Red's.
   spawns[1].sort((a, b) => a.x - b.x);
   spawns[2].sort((a, b) => a.x - b.x);
-  return { name, theme, tiles, spawns };
+  return { name, theme, tiles, spawns, cols: MAP_COLS_C, rows: MAP_ROWS_C, ox: MAP_X, oy: MAP_Y };
 }
 
 export function tileCenter(col: number, row: number) {
   return { x: MAP_X + (col + 0.5) * BLOCK, y: MAP_Y + (row + 0.5) * BLOCK };
+}
+
+/** The centre of a block on any map. */
+export function blockCenter(m: ClassicMap, col: number, row: number) {
+  return { x: m.ox + (col + 0.5) * BLOCK, y: m.oy + (row + 0.5) * BLOCK };
 }
 
 export const CLASSIC_MAPS: ClassicMap[] = [
@@ -221,10 +231,10 @@ export function classicMap(i: number): ClassicMap {
 
 /** The tile at a world spot; everything outside the map counts as wall. */
 export function tileAt(m: ClassicMap, x: number, y: number): number {
-  const c = Math.floor((x - MAP_X) / BLOCK);
-  const r = Math.floor((y - MAP_Y) / BLOCK);
-  if (c < 0 || r < 0 || c >= MAP_COLS_C || r >= MAP_ROWS_C) return T_WALL;
-  return m.tiles[r * MAP_COLS_C + c];
+  const c = Math.floor((x - m.ox) / BLOCK);
+  const r = Math.floor((y - m.oy) / BLOCK);
+  if (c < 0 || r < 0 || c >= m.cols || r >= m.rows) return T_WALL;
+  return m.tiles[r * m.cols + c];
 }
 
 function solidTile(t: number) {
@@ -245,16 +255,16 @@ export function inBush(m: ClassicMap, x: number, y: number): boolean {
 function pushOut(m: ClassicMap, x: number, y: number, r: number): { x: number; y: number } {
   for (let pass = 0; pass < 3; pass++) {
     let moved = false;
-    const c0 = Math.floor((x - r - MAP_X) / BLOCK);
-    const c1 = Math.floor((x + r - MAP_X) / BLOCK);
-    const r0 = Math.floor((y - r - MAP_Y) / BLOCK);
-    const r1 = Math.floor((y + r - MAP_Y) / BLOCK);
+    const c0 = Math.floor((x - r - m.ox) / BLOCK);
+    const c1 = Math.floor((x + r - m.ox) / BLOCK);
+    const r0 = Math.floor((y - r - m.oy) / BLOCK);
+    const r1 = Math.floor((y + r - m.oy) / BLOCK);
     for (let row = r0; row <= r1; row++) {
       for (let col = c0; col <= c1; col++) {
-        const t = col < 0 || row < 0 || col >= MAP_COLS_C || row >= MAP_ROWS_C ? T_WALL : m.tiles[row * MAP_COLS_C + col];
+        const t = col < 0 || row < 0 || col >= m.cols || row >= m.rows ? T_WALL : m.tiles[row * m.cols + col];
         if (!solidTile(t)) continue;
-        const left = MAP_X + col * BLOCK;
-        const top = MAP_Y + row * BLOCK;
+        const left = m.ox + col * BLOCK;
+        const top = m.oy + row * BLOCK;
         const cx = Math.max(left, Math.min(left + BLOCK, x));
         const cy = Math.max(top, Math.min(top + BLOCK, y));
         const dx = x - cx;
@@ -283,16 +293,16 @@ function pushOut(m: ClassicMap, x: number, y: number, r: number): { x: number; y
 
 /** The nearest walkable block centre to a spot (for anything that lands deep inside walls). */
 function nearestOpen(m: ClassicMap, x: number, y: number): { x: number; y: number } {
-  const c = Math.max(0, Math.min(MAP_COLS_C - 1, Math.floor((x - MAP_X) / BLOCK)));
-  const r = Math.max(0, Math.min(MAP_ROWS_C - 1, Math.floor((y - MAP_Y) / BLOCK)));
+  const c = Math.max(0, Math.min(m.cols - 1, Math.floor((x - m.ox) / BLOCK)));
+  const r = Math.max(0, Math.min(m.rows - 1, Math.floor((y - m.oy) / BLOCK)));
   for (let ring = 0; ring < 34; ring++) {
     let best: { x: number; y: number } | undefined;
     let bestD = Infinity;
     for (let row = r - ring; row <= r + ring; row++) {
       for (let col = c - ring; col <= c + ring; col++) {
         if (Math.max(Math.abs(row - r), Math.abs(col - c)) !== ring) continue;
-        if (col < 0 || row < 0 || col >= MAP_COLS_C || row >= MAP_ROWS_C || solidTile(m.tiles[row * MAP_COLS_C + col])) continue;
-        const p = tileCenter(col, row);
+        if (col < 0 || row < 0 || col >= m.cols || row >= m.rows || solidTile(m.tiles[row * m.cols + col])) continue;
+        const p = blockCenter(m, col, row);
         const d = Math.hypot(p.x - x, p.y - y);
         if (d < bestD) [best, bestD] = [p, d];
       }
@@ -320,19 +330,19 @@ export function mapLineClear(m: ClassicMap, x0: number, y0: number, x1: number, 
 
 /** Walking distance (in blocks) from every block to the target's block; -1 where it can't be reached. */
 export function distanceField(m: ClassicMap, x: number, y: number): Int16Array {
-  const dist = new Int16Array(MAP_COLS_C * MAP_ROWS_C).fill(-1);
-  const c = Math.floor((x - MAP_X) / BLOCK);
-  const r = Math.floor((y - MAP_Y) / BLOCK);
-  if (c < 0 || r < 0 || c >= MAP_COLS_C || r >= MAP_ROWS_C) return dist;
-  const queue = [r * MAP_COLS_C + c];
+  const dist = new Int16Array(m.cols * m.rows).fill(-1);
+  const c = Math.floor((x - m.ox) / BLOCK);
+  const r = Math.floor((y - m.oy) / BLOCK);
+  if (c < 0 || r < 0 || c >= m.cols || r >= m.rows) return dist;
+  const queue = [r * m.cols + c];
   dist[queue[0]] = 0;
   for (let q = 0; q < queue.length; q++) {
     const at = queue[q];
-    const ac = at % MAP_COLS_C;
-    const ar = (at - ac) / MAP_COLS_C;
+    const ac = at % m.cols;
+    const ar = (at - ac) / m.cols;
     for (const [nc, nr] of [[ac + 1, ar], [ac - 1, ar], [ac, ar + 1], [ac, ar - 1]]) {
-      if (nc < 0 || nr < 0 || nc >= MAP_COLS_C || nr >= MAP_ROWS_C) continue;
-      const ni = nr * MAP_COLS_C + nc;
+      if (nc < 0 || nr < 0 || nc >= m.cols || nr >= m.rows) continue;
+      const ni = nr * m.cols + nc;
       if (dist[ni] >= 0 || solidTile(m.tiles[ni])) continue;
       dist[ni] = dist[at] + 1;
       queue.push(ni);
@@ -342,20 +352,20 @@ export function distanceField(m: ClassicMap, x: number, y: number): Int16Array {
 }
 
 /** Which way to walk from (x, y) to get closer along a distance field (a unit vector, or 0,0). */
-export function stepAlong(dist: Int16Array, x: number, y: number): { x: number; y: number } {
-  const c = Math.floor((x - MAP_X) / BLOCK);
-  const r = Math.floor((y - MAP_Y) / BLOCK);
-  const here = c >= 0 && r >= 0 && c < MAP_COLS_C && r < MAP_ROWS_C ? dist[r * MAP_COLS_C + c] : -1;
+export function stepAlong(dist: Int16Array, x: number, y: number, m: ClassicMap = CLASSIC_MAPS[0]): { x: number; y: number } {
+  const c = Math.floor((x - m.ox) / BLOCK);
+  const r = Math.floor((y - m.oy) / BLOCK);
+  const here = c >= 0 && r >= 0 && c < m.cols && r < m.rows ? dist[r * m.cols + c] : -1;
   let best: { x: number; y: number } | undefined;
   let bestD = here < 0 ? 9999 : here;
   for (const [dc, dr] of [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]]) {
     const nc = c + dc;
     const nr = r + dr;
-    if (nc < 0 || nr < 0 || nc >= MAP_COLS_C || nr >= MAP_ROWS_C) continue;
-    const d = dist[nr * MAP_COLS_C + nc];
+    if (nc < 0 || nr < 0 || nc >= m.cols || nr >= m.rows) continue;
+    const d = dist[nr * m.cols + nc];
     // Diagonals only when both sides are open, so we don't snag on corners.
-    if (d < 0 || (dc && dr && (dist[r * MAP_COLS_C + nc] < 0 || dist[nr * MAP_COLS_C + c] < 0))) continue;
-    if (d < bestD) [bestD, best] = [d, tileCenter(nc, nr)];
+    if (d < 0 || (dc && dr && (dist[r * m.cols + nc] < 0 || dist[nr * m.cols + c] < 0))) continue;
+    if (d < bestD) [bestD, best] = [d, blockCenter(m, nc, nr)];
   }
   if (!best) return { x: 0, y: 0 };
   const len = Math.hypot(best.x - x, best.y - y) || 1;
@@ -376,11 +386,11 @@ export function bushPatch(m: ClassicMap, x: number, y: number): number {
       ids[i] = next;
       for (let q = 0; q < queue.length; q++) {
         const at = queue[q];
-        const c = at % MAP_COLS_C;
-        const r = (at - c) / MAP_COLS_C;
+        const c = at % m.cols;
+        const r = (at - c) / m.cols;
         for (const [nc, nr] of [[c + 1, r], [c - 1, r], [c, r + 1], [c, r - 1]]) {
-          if (nc < 0 || nr < 0 || nc >= MAP_COLS_C || nr >= MAP_ROWS_C) continue;
-          const ni = nr * MAP_COLS_C + nc;
+          if (nc < 0 || nr < 0 || nc >= m.cols || nr >= m.rows) continue;
+          const ni = nr * m.cols + nc;
           if (m.tiles[ni] === T_BUSH && ids[ni] < 0) {
             ids[ni] = next;
             queue.push(ni);
@@ -392,7 +402,7 @@ export function bushPatch(m: ClassicMap, x: number, y: number): number {
     regionCache.set(m, ids);
   }
   if (tileAt(m, x, y) !== T_BUSH) return -1;
-  return ids[Math.floor((y - MAP_Y) / BLOCK) * MAP_COLS_C + Math.floor((x - MAP_X) / BLOCK)];
+  return ids[Math.floor((y - m.oy) / BLOCK) * m.cols + Math.floor((x - m.ox) / BLOCK)];
 }
 
 /** Can someone at (ax, ay) see a hero at (bx, by)? Not into grass, unless both stand in the same patch. */
@@ -412,7 +422,7 @@ export function bushPatches(m: ClassicMap): { x: number; y: number }[][] {
   patches = [];
   ids.forEach((id, i) => {
     if (id < 0) return;
-    (patches![id] ??= []).push(tileCenter(i % MAP_COLS_C, Math.floor(i / MAP_COLS_C)));
+    (patches![id] ??= []).push(blockCenter(m, i % m.cols, Math.floor(i / m.cols)));
   });
   patchTilesCache.set(m, patches);
   return patches;

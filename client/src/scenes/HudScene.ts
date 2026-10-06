@@ -107,7 +107,23 @@ export class HudScene extends Phaser.Scene {
 
     const waveLabel = state.wave >= WAVE_COUNT ? "BOSS" : `${state.wave}/${WAVE_COUNT}`;
     let banner = "";
-    if (state.stage === "classic") {
+    if (state.stage === "world") {
+      // Open World: who is around, and the portal's countdown.
+      this.waveText.setText(`OPEN WORLD  ${realPlayers(state)} ONLINE`);
+      // The portal's countdown shows on its own panel.
+    } else if (state.stage === "dungeon") {
+      this.waveText.setText(`DUNGEON  MONSTERS ${state.enemies.size}`);
+      state.enemies.forEach((e: any) => {
+        if (e.kind !== "warden" || e.hp >= e.maxHp) return; // the boss bar once the fight is on
+        const w = Math.min(500, this.scale.width - 480);
+        const x = (this.scale.width - w) / 2;
+        this.bars.fillStyle(0x000000, 0.7).fillRect(x - 4, 36, w + 8, 14);
+        this.bars.fillStyle(0x3a2a1a, 1).fillRect(x, 40, w, 6);
+        this.bars.fillStyle(0xff7a3a, 1).fillRect(x, 40, w * Math.max(0, e.hp / e.maxHp), 6);
+      });
+      banner = me?.dead ? `YOU FELL\nBack at the entrance in ${Math.ceil(me.respawnIn)}` : "";
+      this.special.setText(String(state.notice ?? "").startsWith("BOSS DEFEATED") ? "BOSS DEFEATED!\nThe portal home is open (top left room)" : "").setColor("#9ad8ff");
+    } else if (state.stage === "classic") {
       // Classic 3v3: the two teams' KOs.
       // Classic 3v3: lives left on each side; the last team standing wins.
       const left: Record<number, number> = { 1: 0, 2: 0 };
@@ -203,7 +219,7 @@ export class HudScene extends Phaser.Scene {
       const by = state.players.get(state.timeStopBy);
       [special, color] = [`TIME STOP!\n${by?.name ?? ""} ${state.timeStop.toFixed(1)}s`, "#9fd8ff"];
     }
-    this.special.setText(special).setColor(color);
+    if (state.stage !== "dungeon" || special) this.special.setText(special).setColor(color);
 
     const rows: string[] = [];
     let count = 0;
@@ -214,7 +230,8 @@ export class HudScene extends Phaser.Scene {
       const side = state.stage === "classic" ? (p.team === 1 ? "R " : "B ") : "";
       rows.push(`${marker}${side}${p.name}  ${p.score}${ringStage(state.stage) ? " KO" : ""}`);
     });
-    this.scores.setText(`UNTITLED VERSUS ${count}/${state.stage === "classic" ? 6 : 4}\n${rows.join("\n")}`);
+    const shown = rows.length > 8 ? [...rows.slice(0, 8), `  +${rows.length - 8} more`] : rows;
+    this.scores.setText(`UNTITLED VERSUS ${count}${state.stage === "world" ? "" : `/${state.stage === "classic" ? 6 : 4}`}\n${shown.join("\n")}`);
     let i = 0;
     state.players.forEach((p: any) => {
       if (p.owner) return;

@@ -59,6 +59,10 @@ import { Lobby } from "../lobby";
 import { drawClassicGround } from "../classicMap";
 import { MAP_H, MAP_Y, classicMap, inBush, seesInto } from "../../../shared/maps";
 import { RiftSim, TITAN_ATTACK_COOLDOWN } from "../../../shared/sim";
+import { WorldView } from "../worldView";
+import { recordResult, statsJson } from "../stats";
+import { DUNGEON, OPEN_WORLD } from "../../../shared/world";
+import { BLOCK } from "../../../shared/maps";
 import { attackArtLayout, attackFrame, facingOf, frontOnly, hasHeroArt, heroArtLayout, SWING_TIME } from "../heroArt";
 
 interface PlayerView {
@@ -145,6 +149,7 @@ const SUMMON_SCALE: Record<string, number> = { flamedragon: 1.4, quad: 1.25, ech
 const PLAYER_MARKERS = [0x3b7dd8, 0xd84b3b, 0x3bd87a, 0xc93bd8];
 /** Classic 3v3: the camera pulls back so heroes see more of the map. */
 const CLASSIC_ZOOM = 1.4;
+const WORLD_ZOOM = 1.2; // the Open World: a wider view, heroes small against the map
 /** Classic 3v3: Red and Blue. */
 const TEAM_MARKERS: Record<number, number> = { 1: 0xff3a4a, 2: 0x3a8aff };
 
@@ -192,10 +197,15 @@ class Track {
     if (this.list.length > 30) this.list.shift();
   }
 
+  /** How far in the past (ms) this entity is drawn. */
+  delay(): number {
+    return Math.min(300, Math.max(50, this.gap * 1.5 + this.late * 2 + 10));
+  }
+
   at(now: number): { x: number; y: number } | undefined {
     const list = this.list;
     if (list.length === 0) return undefined;
-    const t = now - Math.min(300, Math.max(50, this.gap * 1.5 + this.late * 2 + 10));
+    const t = now - this.delay();
     while (list.length > 2 && list[1].t <= t) list.shift();
     const [a, b] = list;
     if (!b || t <= a.t) return { x: a.x, y: a.y };
@@ -289,6 +299,11 @@ export class GameScene extends Phaser.Scene {
   private zoneTexts = new Map<string, Phaser.GameObjects.Text>(); // countdowns over zones (the Trojan Horse)
   private wasTimeStopped = false;
   private classicGround?: Phaser.GameObjects.Image;
+  /** The Open World or the dungeon: its map, portals, chat and player profiles. */
+  private world?: WorldView;
+  /** The last phase seen, to note a match's result once (for the player's record). */
+  private lastPhase = "";
+  private dungeonCleared = false;
 
   constructor() {
     super("Game");
@@ -296,8 +311,9 @@ export class GameScene extends Phaser.Scene {
 
   async create() {
     const stage = stageOf(this.registry.get("stage"));
+    const open = stage === "world" || stage === "dungeon";
     if (stage === "classic") this.classicGround = this.add.image(0, 0, this.classicTexture(0)).setOrigin(0).setDepth(-10);
-    else this.add.image(0, 0, `ground_${stage}`).setOrigin(0).setDepth(-10);
+    else if (!open) this.add.image(0, 0, `ground_${stage}`).setOrigin(0).setDepth(-10);
     if (stage === "dojo") {
       // Straw training dummies stand where the other stages have pillars.
       for (const rock of ROCKS) this.add.image(rock.x, rock.y + rock.r * 0.4, "dummy").setOrigin(0.5, 1).setScale(rock.r / 8).setDepth(rock.y);
@@ -331,22 +347,27 @@ export class GameScene extends Phaser.Scene {
     this.cameraTarget = this.add.zone(CENTER_X, CENTER_Y, 1, 1);
     const cam = this.cameras.main;
     if (stage === "classic") cam.setBounds(0, MAP_Y - 64, WORLD_W, MAP_H + 128); // room above and below for names and the HUD
-    else cam.setBounds(0, 0, WORLD_W, WORLD_H);
-    cam.setZoom(stage === "classic" ? CLASSIC_ZOOM : 2);
+    else if (open) {
+      const m = stage === "world" ? OPEN_WORLD : DUNGEON;
+      cam.setBounds(0, 0, m.cols * BLOCK, m.rows * BLOCK);
+      this.cameras.main.setBackgroundColor(stage === "world" ? "#2a6232" : "#09070c");
+    } else cam.setBounds(0, 0, WORLD_W, WORLD_H);
+    cam.setZoom(stage === "classic" ? CLASSIC_ZOOM : stage === "world" ? WORLD_ZOOM : 2);
     // Lock the camera to our hero; smoothing on top of rounded pixels makes sprites shimmer.
     cam.startFollow(this.cameraTarget, true, 1, 1);
     cam.setRoundPixels(true);
 
     if (this.registry.get("solo")) {
-      this.room = new LocalRoom(this.registry.get("playerName"), this.registry.get("hero"), stage, this.registry.get("botHero"));
+      this.room = new LocalRoom(this.registry.get("playerName"), this.registry.get("hero"), stage, this.registry.get("botHero"), statsJson());
       this.registry.set("room", this.room);
       if (stage === "pve" || stage === "classic") this.openLobby(stage);
+      if (open) this.openWorld(stage, false);
       this.scene.launch("Hud");
       return;
     }
     try {
       const client = new Client(serverUrl());
-      this.room = await client.joinOrCreate(ROOM_NAME, { name: this.registry.get("playerName"), hero: this.registry.get("hero"), stage, code: this.registry.get("roomCode") ?? "" });
+      this.room = await client.joinOrCreate(ROOM_NAME, { name: this.registry.get("playerName"), hero: this.registry.get("hero"), stage, code: this.registry.get("roomCode") ?? "", stats: statsJson() });
       this.registry.set("room", this.room);
     } catch (err) {
       console.error(err);
@@ -365,7 +386,41 @@ export class GameScene extends Phaser.Scene {
     this.room.onLeave(() => this.game.events.emit("connection-error", new Error("Disconnected from server")));
     this.room.onStateChange((state: any) => this.recordSnapshot(state));
     if (selectStage(stage)) this.openLobby(stage);
+    if (open) this.openWorld(stage, true);
     this.scene.launch("Hud");
+  }
+
+  /** The Open World or the dungeon: map, portals, chat, profiles; a portal or a duel moves us to another room. */
+  private openWorld(stage: "world" | "dungeon", online: boolean) {
+    this.world = new WorldView(
+      this,
+      stage,
+      this.room,
+      (id) => this.players.get(id)?.body,
+      (next, code) => this.game.events.emit("switch-room", { stage: next, code }),
+      online,
+    );
+  }
+
+  /** Note how a match went for the player's record (shown to others in the Open World). */
+  private trackResult(state: any) {
+    const phase = state.phase as string;
+    const me = state.players.get(this.room!.sessionId);
+    const hero = me ? heroOf(me.hero).name : "";
+    if (phase === "victory" && this.lastPhase !== "victory" && me) {
+      const stage = state.stage as string;
+      const mode = stage === "pvp" ? "PvP" : stage === "duel" ? "Bot Duel" : stage === "pve" ? "PvE Squad" : stage === "classic" ? "3v3" : "";
+      let won: boolean | null = null;
+      if (stage === "classic") won = state.winner === "NO" ? null : state.winner === (me.team === 1 ? "RED" : "BLUE");
+      else if (stage === "pve") won = state.winner === "TEAM";
+      else won = state.winner === me.name;
+      if (mode) recordResult({ mode, won, hero, at: Date.now() });
+    }
+    if (state.stage === "dungeon" && !this.dungeonCleared && String(state.notice ?? "").startsWith("BOSS DEFEATED")) {
+      this.dungeonCleared = true;
+      recordResult({ mode: "Dungeon", won: true, hero, at: Date.now() });
+    }
+    this.lastPhase = phase;
   }
 
   /** PvP and PvE Squad player select screen (everyone picks, then READY). */
@@ -420,8 +475,8 @@ export class GameScene extends Phaser.Scene {
 
     this.lobby?.update(state, room.sessionId);
     this.tickPopups(dt);
-    const selecting = state.phase === "select";
     const me = state.players.get(room.sessionId);
+    const selecting = state.phase === "select" || !!me?.late;
     // (An ALIEN TRANSFORM is still the same hero: the HUD stays, so held sticks and buttons carry on.)
     const baseHero = me ? heroOf(me.hero).formOf ?? me.hero : undefined;
     if (me && baseHero !== this.registry.get("hero") && !selecting) {
@@ -430,7 +485,8 @@ export class GameScene extends Phaser.Scene {
       this.scene.get("Hud").scene.restart();
     }
     // Nobody moves or attacks while picking heroes.
-    const input = selecting ? { ...EMPTY_INPUT, aim: this.aim } : this.readInput();
+    let input = selecting || this.world?.typing ? { ...EMPTY_INPUT, aim: this.aim } : this.readInput();
+    if (state.stage === "world") input = { ...input, shoot: false, skill: false, skill2: false }; // the Open World is peaceful
     this.predictLocal(input, dt);
     this.predictEffects(input, dt);
     this.sendInput(input, dt);
@@ -442,6 +498,8 @@ export class GameScene extends Phaser.Scene {
     this.drawAimGuide(state);
     this.drawLava(state.lavaRadius);
     this.drawZones(state, dt);
+    this.world?.update(state);
+    this.trackResult(state);
   }
 
   // --------------------------------------------------------------- input
@@ -567,6 +625,12 @@ export class GameScene extends Phaser.Scene {
       msg.y = Math.round(this.predicted.y * 10) / 10;
       msg.warp = me.warp;
       msg.t = Math.round(performance.now());
+    }
+    // How far behind the server we see other heroes, so the server judges our hits where we aimed them.
+    if (!(this.room instanceof LocalRoom)) {
+      let drawn = 0;
+      for (const [key, track] of this.tracks) if (key.startsWith("p") && key !== `p${this.room!.sessionId}`) drawn = Math.max(drawn, track.delay());
+      msg.lag = Math.round(this.pingMs + drawn);
     }
     this.room!.send("input", msg);
     this.lastButtons = buttons;

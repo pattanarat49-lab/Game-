@@ -338,7 +338,9 @@ export class Lobby {
 
   /** Called every frame with the room state: shows the screen during PvP player select. */
   update(state: any, myId: string) {
-    const show = (state?.stage === "pvp" || state?.stage === "pve" || state?.stage === "classic") && state.phase === "select";
+    // Classic 3v3 late joiners pick their hero here too, while the match goes on.
+    const late = !!state?.players?.get(myId)?.late;
+    const show = (state?.stage === "pvp" || state?.stage === "pve" || state?.stage === "classic") && (state.phase === "select" || late);
     this.root.hidden = !show;
     if (!show) return;
     if (this.pve) return this.updatePve(state, myId);
@@ -455,7 +457,10 @@ export class Lobby {
     state.players.forEach((p: any) => {
       if (!p.owner && !p.ready) waiting++;
     });
-    this.notice.textContent = state.notice || (ready && waiting ? `Waiting for ${waiting} player${waiting > 1 ? "s" : ""} to get ready...` : "");
+    this.notice.textContent = me?.late
+      ? "Match in progress: pick a hero and press READY to take a bot's place"
+      : state.notice || (ready && waiting ? `Waiting for ${waiting} player${waiting > 1 ? "s" : ""} to get ready...` : "");
+    this.mapButtons.forEach((b) => (b.disabled = !!me?.late));
   }
 
   private fill(side: Side, p: any, empty: string) {

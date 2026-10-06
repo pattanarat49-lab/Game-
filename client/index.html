@@ -353,6 +353,19 @@
           transform: rotate(90deg);
         }
       }
+      #open-world {
+        display: block;
+        margin: 4px auto 12px;
+        padding: 12px 28px;
+        font-size: 14px;
+        background: #2fae6a;
+        color: #fff;
+        border: 3px solid #1d7a48;
+        border-radius: 6px;
+        box-shadow: 0 4px 0 #145a34;
+        letter-spacing: 1px;
+      }
+      #open-world:hover { background: #38c47a; }
       #cover {
         display: block;
         margin: 0 auto -4px;
@@ -371,6 +384,7 @@
     <div id="menu">
       <img id="cover" alt="" width="110" height="110" />
       <h1>UNTITLED VERSUS</h1>
+      <button type="button" id="open-world">OPEN WORLD</button>
       <p id="intro">The multiverse is collapsing. Pick a stage and a hero.</p>
       <p class="step">CHOOSE A STAGE</p>
       <div id="stages" role="group" aria-label="Choose a stage"></div>
