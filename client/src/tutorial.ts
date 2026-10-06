@@ -15,15 +15,15 @@ const CSS = `
 #tut { position: fixed; left: 50%; top: 58px; transform: translateX(-50%); z-index: 22; width: min(92vw, 520px);
   background: rgba(14, 10, 24, 0.9); border: 3px solid #ffd23f; border-radius: 6px; padding: 10px 14px;
   font-family: "Press Start 2P", monospace; color: #fff; text-align: center; }
-#tut .k { font-size: 8px; color: #c9b8c0; margin-bottom: 6px; }
-#tut .t { font-size: 13px; color: #ffd23f; margin-bottom: 8px; }
-#tut .x { font-size: 10px; line-height: 1.7; }
-#tut .x b { color: #7dff8a; font-weight: normal; }
-#tut .row { display: flex; gap: 8px; justify-content: center; margin-top: 10px; }
+#tut .tut-k { font-size: 8px; color: #c9b8c0; margin-bottom: 6px; }
+#tut .tut-t { font-size: 13px; color: #ffd23f; margin-bottom: 8px; }
+#tut .tut-x { font-size: 10px; line-height: 1.7; }
+#tut .tut-x b { color: #7dff8a; font-weight: normal; }
+#tut .tut-row { display: flex; gap: 8px; justify-content: center; margin-top: 10px; }
 #tut button { font: inherit; font-size: 9px; padding: 7px 12px; border-radius: 3px; cursor: pointer; color: #fff; background: #3a2e46; border: 2px solid #4a3e56; }
-#tut button.go { background: #2fae6a; border-color: #1d7a48; font-size: 11px; padding: 9px 18px; }
-#tut.yay { border-color: #7dff8a; }
-@media (max-height: 460px) { #tut { top: 40px; padding: 6px 10px; } #tut .t { font-size: 11px; margin-bottom: 4px; } #tut .x { font-size: 8px; } }
+#tut button.tut-go { background: #2fae6a; border-color: #1d7a48; font-size: 11px; padding: 9px 18px; }
+#tut.tut-yay { border-color: #7dff8a; }
+@media (max-height: 460px) { #tut { top: 40px; padding: 6px 10px; } #tut .tut-t { font-size: 11px; margin-bottom: 4px; } #tut .tut-x { font-size: 8px; } }
 `;
 
 export class TutorialView {
@@ -119,15 +119,15 @@ export class TutorialView {
 
   private draw() {
     if (this.i >= this.steps.length) {
-      this.root.className = "yay";
-      this.root.innerHTML = `<div class="t">TUTORIAL COMPLETE!</div><div class="x">You know the basics. Win games to earn spins and unlock more heroes!</div><div class="row"><button class="go">LET'S PLAY</button></div>`;
-      this.root.querySelector(".go")!.addEventListener("click", () => this.finish(false));
+      this.root.className = "tut-yay";
+      this.root.innerHTML = `<div class="tut-t">TUTORIAL COMPLETE!</div><div class="tut-x">You know the basics. Win games to earn spins and unlock more heroes!</div><div class="tut-row"><button class="tut-go">LET'S PLAY</button></div>`;
+      this.root.querySelector(".tut-go")!.addEventListener("click", () => this.finish(false));
       return;
     }
     const s = this.steps[this.i];
     this.root.className = "";
-    this.root.innerHTML = `<div class="k">STEP ${this.i + 1} / ${this.steps.length}</div><div class="t">${s.title}</div><div class="x">${s.text}</div><div class="row"><button class="skip">SKIP TUTORIAL</button></div>`;
-    this.root.querySelector(".skip")!.addEventListener("click", () => this.finish(true));
+    this.root.innerHTML = `<div class="tut-k">STEP ${this.i + 1} / ${this.steps.length}</div><div class="tut-t">${s.title}</div><div class="tut-x">${s.text}</div><div class="tut-row"><button class="tut-skip">SKIP TUTORIAL</button></div>`;
+    this.root.querySelector(".tut-skip")!.addEventListener("click", () => this.finish(true));
   }
 
   private finish(skipped: boolean) {

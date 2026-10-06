@@ -16,11 +16,11 @@ const CSS = `
 @media (max-width: 560px) { .ul-grid { grid-template-columns: repeat(4, 1fr); } }
 .ul-card { position: relative; background: #1e1626; border: 3px solid #3a2e46; border-radius: 6px; padding: 6px 4px; cursor: pointer; color: #fff; font: inherit; }
 .ul-card canvas { width: 70%; height: auto; image-rendering: pixelated; display: block; margin: 0 auto 4px; }
-.ul-card .n { font-size: 8px; line-height: 1.4; min-height: 2.8em; }
-.ul-card .c { font-size: 7px; padding: 2px 4px; border-radius: 2px; color: #120b0f; display: inline-block; margin-top: 3px; }
-.ul-card .s { font-size: 8px; color: #ffd23f; margin-top: 3px; }
+.ul-card .ul-n { font-size: 8px; line-height: 1.4; min-height: 2.8em; }
+.ul-card .ul-c { font-size: 7px; padding: 2px 4px; border-radius: 2px; color: #120b0f; display: inline-block; margin-top: 3px; }
+.ul-card .ul-s { font-size: 8px; color: #ffd23f; margin-top: 3px; }
 .ul-card.on { border-color: #7dff8a; background: #173a22; }
-.ul-card .i { position: absolute; top: 3px; right: 3px; font: inherit; font-size: 7px; padding: 2px 4px; background: #3a2e46; color: #fff; border: 1px solid #6b5842; border-radius: 2px; cursor: pointer; }
+.ul-card .ul-i { position: absolute; top: 3px; right: 3px; font: inherit; font-size: 7px; padding: 2px 4px; background: #3a2e46; color: #fff; border: 1px solid #6b5842; border-radius: 2px; cursor: pointer; }
 .ul-btn { font: inherit; font-size: 12px; padding: 11px 22px; border-radius: 4px; cursor: pointer; color: #fff; background: #2fae6a; border: 3px solid #1d7a48; }
 .ul-btn:disabled { background: #3a2e46; border-color: #4a3e56; color: #8a7a96; cursor: default; }
 .ul-btn.alt { background: #3a2e46; border-color: #4a3e56; font-size: 10px; }
@@ -52,7 +52,7 @@ function card(id: string): HTMLButtonElement {
   b.append(heroPortrait(id));
   b.insertAdjacentHTML(
     "beforeend",
-    `<div class="n">${hero.name}</div><span class="c" style="background:${cls.color}">${cls.name}</span><div class="s">${"★".repeat(Math.min(5, hero.stars))}</div><span class="i" role="button">INFO</span>`,
+    `<div class="ul-n">${hero.name}</div><span class="ul-c" style="background:${cls.color}">${cls.name}</span><div class="ul-s">${"★".repeat(Math.min(5, hero.stars))}</div><span class="ul-i" role="button">INFO</span>`,
   );
   return b;
 }
@@ -77,7 +77,7 @@ export function showStarterPicker(offer: string[], confirm: (picks: string[]) =>
     for (const id of offer) {
       const c = card(id);
       c.addEventListener("click", (e) => {
-        if ((e.target as HTMLElement).classList.contains("i")) return showHeroInfo(id);
+        if ((e.target as HTMLElement).classList.contains("ul-i")) return showHeroInfo(id);
         const at = picked.indexOf(id);
         if (at >= 0) picked.splice(at, 1);
         else if (picked.length < 3) picked.push(id);
@@ -106,13 +106,13 @@ export function showSlot(spins: () => number, spin: () => Promise<string>, owned
   addCss();
   const back = document.createElement("div");
   back.className = "ul-back dim";
-  back.id = "slot";
-  back.innerHTML = `<div class="ul-box"><h2>HERO SLOT</h2><p class="left"></p><div class="ul-slot"><div class="ul-reel"></div><div class="ul-mark"></div></div><div class="ul-won"></div><div class="ul-err"></div><div class="ul-row"><button class="ul-btn spin">SPIN!</button><button class="ul-btn alt close">CLOSE</button></div></div>`;
+  back.id = "hero-slot";
+  back.innerHTML = `<div class="ul-box"><h2>HERO SLOT</h2><p class="ul-left"></p><div class="ul-slot"><div class="ul-reel"></div><div class="ul-mark"></div></div><div class="ul-won"></div><div class="ul-err"></div><div class="ul-row"><button class="ul-btn ul-spin">SPIN!</button><button class="ul-btn alt ul-close">CLOSE</button></div></div>`;
   const reel = back.querySelector(".ul-reel") as HTMLDivElement;
   const won = back.querySelector(".ul-won")!;
   const err = back.querySelector(".ul-err")!;
-  const left = back.querySelector(".left")!;
-  const spinBtn = back.querySelector(".spin") as HTMLButtonElement;
+  const left = back.querySelector(".ul-left")!;
+  const spinBtn = back.querySelector(".ul-spin") as HTMLButtonElement;
   let rolling = false;
   const refresh = () => {
     const n = spins();
@@ -166,7 +166,7 @@ export function showSlot(spins: () => number, spin: () => Promise<string>, owned
       refresh();
     }, 3300);
   });
-  back.querySelector(".close")!.addEventListener("click", () => !rolling && back.remove());
+  back.querySelector(".ul-close")!.addEventListener("click", () => !rolling && back.remove());
   back.addEventListener("click", (e) => e.target === back && !rolling && back.remove());
   document.body.append(back);
   refresh();
