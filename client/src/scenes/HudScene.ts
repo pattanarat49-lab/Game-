@@ -1,5 +1,5 @@
 import Phaser from "phaser";
-import { BOT_LEVELS, DASH_COOLDOWN, PVP_KILLS_TO_WIN, WAVE_COUNT, heroOf, ringStage } from "../../../shared/game";
+import { BOT_LEVELS, CLASSIC_KOS_TO_WIN, DASH_COOLDOWN, PVP_KILLS_TO_WIN, WAVE_COUNT, heroOf, ringStage } from "../../../shared/game";
 import { PLAYER_COATS } from "../art";
 import type { GameScene } from "./GameScene";
 import { TouchControls, isTouchDevice } from "../touch";
@@ -107,7 +107,13 @@ export class HudScene extends Phaser.Scene {
 
     const waveLabel = state.wave >= WAVE_COUNT ? "BOSS" : `${state.wave}/${WAVE_COUNT}`;
     let banner = "";
-    if (ringStage(state.stage)) {
+    if (state.stage === "classic") {
+      // Classic 3v3: the two teams' KOs.
+      this.waveText.setText(`CLASSIC 3V3  RED ${state.scoreA ?? 0} - ${state.scoreB ?? 0} BLUE  FIRST TO ${CLASSIC_KOS_TO_WIN}`);
+      if (state.phase === "victory") banner = `${state.winner} TEAM WINS!\nBack to select in ${Math.ceil(state.phaseTimer)}`;
+      else if (state.phase === "intermission") banner = `${me?.team === 1 ? "YOU ARE RED" : "YOU ARE BLUE"}\nFIGHT! in ${Math.ceil(state.phaseTimer)}`;
+      else if (me?.dead) banner = `YOU FELL\nBack in ${Math.ceil(me.respawnIn)}`;
+    } else if (ringStage(state.stage)) {
       const pve = state.stage === "pve";
       const level = pve ? `  ${BOT_LEVELS[state.botLevel ?? 2]?.name ?? ""}` : "";
       this.waveText.setText(`${pve ? "PVE SQUAD" : state.stage === "duel" ? "BOT DUEL" : "PVP ARENA"}  FIRST TO ${PVP_KILLS_TO_WIN} ${pve ? "ROUNDS" : "KILLS"}${level}`);
@@ -197,9 +203,10 @@ export class HudScene extends Phaser.Scene {
       if (p.owner) return; // Loki's clones are not players
       count++;
       const marker = id === room!.sessionId ? ">" : " ";
-      rows.push(`${marker}${p.name}  ${p.score}${ringStage(state.stage) ? " KO" : ""}`);
+      const side = state.stage === "classic" ? (p.team === 1 ? "R " : "B ") : "";
+      rows.push(`${marker}${side}${p.name}  ${p.score}${ringStage(state.stage) ? " KO" : ""}`);
     });
-    this.scores.setText(`RIFTBORN ${count}/4\n${rows.join("\n")}`);
+    this.scores.setText(`RIFTBORN ${count}/${state.stage === "classic" ? 6 : 4}\n${rows.join("\n")}`);
     let i = 0;
     state.players.forEach((p: any) => {
       if (p.owner) return;

@@ -1,4 +1,5 @@
 import { NEW_HEROES, NewHeroId, newHeroDefs } from "./heroes2";
+import { ClassicMap, classicMap, mapBlocksShot, moveOnMap } from "./maps";
 // Game rules shared by the client (prediction, rendering) and the server (authority).
 
 export const TILE = 16;
@@ -1992,12 +1993,23 @@ export const RING = { x: CENTER_X, y: CENTER_Y, half: 150 };
 
 /** Stages fought in the boxing ring (hero against hero). */
 export function ringStage(stage: string): boolean {
-  return stage === "pvp" || stage === "duel" || stage === "pve";
+  return stage === "pvp" || stage === "duel" || stage === "pve" || stage === "classic";
 }
+
+/** Where heroes can go on a stage: the open field (false), the boxing ring (true) or a Classic map. */
+export type Area = boolean | ClassicMap;
+export function areaOf(stage: string, map = 0): Area {
+  return stage === "classic" ? classicMap(map) : ringStage(stage);
+}
+
+/** Classic 3v3: Red against Blue on a map with walls, grass and water. Heroes come back after a short wait. */
+export const CLASSIC_TEAM_SIZE = 3;
+export const CLASSIC_KOS_TO_WIN = 10;
+export const CLASSIC_RESPAWN = 3;
 
 /** Stages that open on the player select screen. */
 export function selectStage(stage: string): boolean {
-  return stage === "pvp" || stage === "pve";
+  return stage === "pvp" || stage === "pve" || stage === "classic";
 }
 
 /** PvE Squad bot difficulty, Easy to Nightmare. Hard is the Bot Duel bot as it always was. */
@@ -2022,7 +2034,8 @@ export const DEFAULT_BOT_LEVEL = 2;
  * Move a circle by (dx, dy), keeping it inside the world and out of rocks; in the boxing ring
  * (`ring`), inside the ropes instead.
  */
-export function moveCircle(x: number, y: number, dx: number, dy: number, r: number, ring = false): { x: number; y: number } {
+export function moveCircle(x: number, y: number, dx: number, dy: number, r: number, ring: Area = false): { x: number; y: number } {
+  if (typeof ring === "object") return moveOnMap(ring, x, y, dx, dy, r);
   if (ring) {
     return {
       x: Math.min(RING.x + RING.half - r, Math.max(RING.x - RING.half + r, x + dx)),
@@ -2045,7 +2058,8 @@ export function moveCircle(x: number, y: number, dx: number, dy: number, r: numb
 }
 
 /** True if a shot at (x, y) hits a rock (or, in the boxing ring, the ropes). */
-export function hitsRock(x: number, y: number, ring = false): boolean {
+export function hitsRock(x: number, y: number, ring: Area = false): boolean {
+  if (typeof ring === "object") return mapBlocksShot(ring, x, y);
   if (ring) return Math.abs(x - RING.x) > RING.half || Math.abs(y - RING.y) > RING.half;
   return ROCKS.some((rock) => Math.hypot(x - rock.x, y - rock.y) < rock.r);
 }
@@ -2055,7 +2069,7 @@ export function inLava(x: number, y: number, lavaRadius: number): boolean {
 }
 
 // Stages
-export type StageId = "lava" | "jungle" | "dojo" | "boss" | "pvp" | "duel" | "pve";
+export type StageId = "lava" | "jungle" | "dojo" | "boss" | "pvp" | "duel" | "pve" | "classic";
 
 export interface StageDef {
   name: string;
@@ -2070,6 +2084,7 @@ export const STAGES: Record<StageId, StageDef> = {
   pvp: { name: "PvP Arena", blurb: "Players fight each other in a small boxing ring. First to 3 kills wins. Online only." },
   duel: { name: "Bot Duel", blurb: "1v1 in the boxing ring against a bot playing the hero you pick. First to 3 KOs. Solo." },
   pve: { name: "PvE Squad", blurb: "1 to 4 players team up against one bot. Pick its hero and difficulty. First to 3 KOs. Solo or online." },
+  classic: { name: "Classic 3v3", blurb: "Red vs Blue, 3 heroes a side, on 6 maps with walls, tall grass and water. Bots fill empty slots. First team to 10 KOs wins. Solo or online." },
 };
 
 /** Stages taken out of the game (user request 2026-10-05: the Boss Room); their code is kept. */

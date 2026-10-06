@@ -40,6 +40,8 @@ export class Player extends Schema {
   @type("float32") slow = 0;
   /** SHADOW WHIP: legs tied, cannot walk for this many seconds. */
   @type("float32") root = 0;
+  /** Classic 3v3: 1 = Red, 2 = Blue. */
+  @type("uint8") team = 0;
 }
 
 export class Enemy extends Schema {
@@ -98,6 +100,10 @@ export class RiftState extends Schema {
   /** PvE Squad: the bot's hero and difficulty. */
   @type("string") botHero = "superman";
   @type("uint8") botLevel = 2;
+  /** Classic 3v3: the map, and Red's and Blue's KOs. */
+  @type("uint8") map = 0;
+  @type("uint8") scoreA = 0;
+  @type("uint8") scoreB = 0;
   /** Server clock (ms) at this update, so clients can space updates evenly however they arrive. */
   @type("float64") time = 0;
 }

@@ -29,6 +29,7 @@ import {
   SWORD_GOD,
   stageOf,
   ringStage,
+  areaOf,
   selectStage,
   EMPTY_INPUT,
   heroOf,
@@ -54,11 +55,18 @@ import type { HudScene } from "./HudScene";
 import { LocalRoom } from "../localRoom";
 import { drawFxAura, drawFxZone, fxBuffStep, fxGuide, fxShotTexture } from "../fx";
 import { Lobby } from "../lobby";
+import { drawClassicGround } from "../classicMap";
+import { BLOCK, MAP_H, MAP_W, MAP_X, MAP_Y, classicMap, inBush } from "../../../shared/maps";
 import { RiftSim, TITAN_ATTACK_COOLDOWN } from "../../../shared/sim";
 import { attackArtLayout, attackFrame, facingOf, frontOnly, hasHeroArt, heroArtLayout, SWING_TIME } from "../heroArt";
 
 interface PlayerView {
   body: Phaser.GameObjects.Image;
+  /** Classic 3v3: attacking from tall grass shows the hero for a moment. */
+  revealSeq?: number;
+  revealSkill?: number;
+  revealSkill2?: number;
+  revealUntil?: number;
   /** Where another player's dash began, until we see which way it goes (for the dash burst). */
   dashFrom?: { x: number; y: number; t: number };
   wasDashing?: boolean;
@@ -139,6 +147,8 @@ const BULLET_TEXTURE: Record<string, string> = {
 /** Summons drawn bigger than their pixel art. */
 const SUMMON_SCALE: Record<string, number> = { flamedragon: 1.4, quad: 1.25, echo: 0.85 };
 const PLAYER_MARKERS = [0x3b7dd8, 0xd84b3b, 0x3bd87a, 0xc93bd8];
+/** Classic 3v3: Red and Blue. */
+const TEAM_MARKERS: Record<number, number> = { 1: 0xff3a4a, 2: 0x3a8aff };
 
 interface EnemyView {
   sprite: Phaser.GameObjects.Image;
@@ -280,6 +290,7 @@ export class GameScene extends Phaser.Scene {
   private zoneImages = new Map<string, Phaser.GameObjects.Image>();
   private zoneTexts = new Map<string, Phaser.GameObjects.Text>(); // countdowns over zones (the Trojan Horse)
   private wasTimeStopped = false;
+  private classicGround?: Phaser.GameObjects.Image;
 
   constructor() {
     super("Game");
@@ -287,7 +298,8 @@ export class GameScene extends Phaser.Scene {
 
   async create() {
     const stage = stageOf(this.registry.get("stage"));
-    this.add.image(0, 0, `ground_${stage}`).setOrigin(0).setDepth(-10);
+    if (stage === "classic") this.classicGround = this.add.image(0, 0, this.classicTexture(0)).setOrigin(0).setDepth(-10);
+    else this.add.image(0, 0, `ground_${stage}`).setOrigin(0).setDepth(-10);
     if (stage === "dojo") {
       // Straw training dummies stand where the other stages have pillars.
       for (const rock of ROCKS) this.add.image(rock.x, rock.y + rock.r * 0.4, "dummy").setOrigin(0.5, 1).setScale(rock.r / 8).setDepth(rock.y);
@@ -320,7 +332,8 @@ export class GameScene extends Phaser.Scene {
 
     this.cameraTarget = this.add.zone(CENTER_X, CENTER_Y, 1, 1);
     const cam = this.cameras.main;
-    cam.setBounds(0, 0, WORLD_W, WORLD_H);
+    if (stage === "classic") cam.setBounds(MAP_X - 24, MAP_Y - 64, MAP_W + 48, MAP_H + 128); // room above and below for names and the HUD
+    else cam.setBounds(0, 0, WORLD_W, WORLD_H);
     cam.setZoom(2);
     // Lock the camera to our hero; smoothing on top of rounded pixels makes sprites shimmer.
     cam.startFollow(this.cameraTarget, true, 1, 1);
@@ -328,7 +341,7 @@ export class GameScene extends Phaser.Scene {
 
     if (this.registry.get("solo")) {
       this.room = new LocalRoom(this.registry.get("playerName"), this.registry.get("hero"), stage, this.registry.get("botHero"));
-      if (stage === "pve") this.openLobby(stage);
+      if (stage === "pve" || stage === "classic") this.openLobby(stage);
       this.scene.launch("Hud");
       return;
     }
@@ -364,12 +377,21 @@ export class GameScene extends Phaser.Scene {
         setReady: (ready) => room.send("ready", ready),
         botHero: (hero) => room.send("bothero", hero),
         botLevel: (level) => room.send("botlevel", level),
+        team: (team) => room.send("team", team),
+        map: (map) => room.send("map", map),
       },
-      stage === "pve" ? "pve" : "pvp",
+      stage === "pve" ? "pve" : stage === "classic" ? "classic" : "pvp",
     );
     this.lobby = lobby;
     this.events.once(Phaser.Scenes.Events.DESTROY, () => lobby.destroy());
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => lobby.destroy());
+  }
+
+  /** Classic 3v3: the floor texture for a map (drawn once, then kept). */
+  private classicTexture(map: number): string {
+    const key = `ground_classic_${map}`;
+    if (!this.textures.exists(key)) this.textures.addCanvas(key, drawClassicGround(classicMap(map)));
+    return key;
   }
 
   update(_time: number, deltaMs: number) {
@@ -378,6 +400,11 @@ export class GameScene extends Phaser.Scene {
     const dt = Math.min(deltaMs, 100) / 1000;
     const state = room.state;
     if (room instanceof LocalRoom) room.step(dt);
+    if (this.classicGround) {
+      // The map picked on the select screen.
+      const key = this.classicTexture(state.map ?? 0);
+      if (this.classicGround.texture.key !== key) this.classicGround.setTexture(key);
+    }
 
     this.lobby?.update(state, room.sessionId);
     this.tickPopups(dt);
@@ -548,7 +575,7 @@ export class GameScene extends Phaser.Scene {
           this.kbSeq = me.kbSeq;
         }
         if (Math.abs(this.kbVel.x) + Math.abs(this.kbVel.y) > 1) {
-          this.predicted = moveCircle(this.predicted.x, this.predicted.y, this.kbVel.x * dt, this.kbVel.y * dt, PLAYER_RADIUS, ringStage(state.stage));
+          this.predicted = moveCircle(this.predicted.x, this.predicted.y, this.kbVel.x * dt, this.kbVel.y * dt, PLAYER_RADIUS, areaOf(state.stage, state.map));
           const fade = Math.exp(-KNOCKBACK_DECAY * dt);
           this.kbVel.x *= fade;
           this.kbVel.y *= fade;
@@ -582,7 +609,7 @@ export class GameScene extends Phaser.Scene {
         this.kbVel.x *= fade;
         this.kbVel.y *= fade;
       }
-      this.predicted = moveCircle(this.predicted.x, this.predicted.y, vx * dt, vy * dt, PLAYER_RADIUS, ringStage(state.stage));
+      this.predicted = moveCircle(this.predicted.x, this.predicted.y, vx * dt, vy * dt, PLAYER_RADIUS, areaOf(state.stage, state.map));
 
       // Safety net: if the server keeps us somewhere else, ease back to it.
       const err = Math.hypot(me.x - this.predicted.x, me.y - this.predicted.y);
@@ -783,7 +810,34 @@ export class GameScene extends Phaser.Scene {
         body.setAlpha(isMe ? 0.3 : 0);
         view.weapon?.setVisible(isMe);
       }
-      view.label.setVisible(!unseen && !(p.owner && (p.hero === "gunbot" || p.hero === "gladiator")));
+      // Classic 3v3: tall grass hides a rival unless we are right next to it (or it just attacked);
+      // our own side shows faintly inside it.
+      let bushed = false;
+      if (state.stage === "classic" && !p.dead) {
+        const map = classicMap(state.map ?? 0);
+        if (p.attackSeq !== view.revealSeq || p.skillSeq !== view.revealSkill || p.skill2Seq !== view.revealSkill2) {
+          [view.revealSeq, view.revealSkill, view.revealSkill2] = [p.attackSeq, p.skillSeq, p.skill2Seq];
+          view.revealUntil = this.time.now + 700;
+        }
+        if (inBush(map, p.x, p.y)) {
+          const mine = state.players.get(this.room!.sessionId);
+          const team = p.owner ? state.players.get(p.owner)?.team : p.team;
+          const near = mine && Math.hypot(mine.x - p.x, mine.y - p.y) < BLOCK * 2.5;
+          if (team === mine?.team) body.setAlpha(Math.min(body.alpha, 0.55));
+          else if (!near && this.time.now > (view.revealUntil ?? 0)) bushed = true;
+        }
+      }
+      if (bushed) {
+        body.setAlpha(0);
+        view.weapon?.setVisible(false);
+      }
+      const hiddenNow = unseen || bushed;
+      if (state.stage === "classic") {
+        const team = p.owner ? state.players.get(p.owner)?.team : p.team;
+        const color = team === 1 ? "#ff8a94" : team === 2 ? "#8ac4ff" : "#ffffff";
+        if (view.label.style.color !== color) view.label.setColor(color);
+      }
+      view.label.setVisible(!hiddenNow && !(p.owner && (p.hero === "gunbot" || p.hero === "gladiator")));
       // MOTORCYCLE: the bike under him while he rides.
       const riding = !p.dead && p.active2 > 0 && skill2?.kind === "bike";
       if (riding && !view.bike) view.bike = this.add.image(body.x, body.y, "motorbike").setOrigin(0.5, 1);
@@ -826,7 +880,7 @@ export class GameScene extends Phaser.Scene {
       else body.clearTint();
 
       view.bar.clear();
-      if (!p.dead && !unseen) {
+      if (!p.dead && !hiddenNow) {
         if (p.active2 > 0 && skill2?.kind === "excalibur") {
           // EXCALIBUR: light swords circling him (the same spots the server cuts with).
           for (let i = 0; i < (skill2.count ?? 4); i++) {
@@ -847,7 +901,8 @@ export class GameScene extends Phaser.Scene {
             view.bar.lineStyle(3, 0xf0b88a, 1).lineBetween(body.x, body.y - 6 * k, fist.x, fist.y);
           });
         }
-        view.bar.fillStyle(PLAYER_MARKERS[p.color % 4], 0.5).fillEllipse(body.x, body.y + 1, 14 * k, 5 * k);
+        const team = state.stage === "classic" ? (p.owner ? state.players.get(p.owner)?.team : p.team) : 0;
+        view.bar.fillStyle(team ? TEAM_MARKERS[team] : PLAYER_MARKERS[p.color % 4], team ? 0.8 : 0.5).fillEllipse(body.x, body.y + 1, 14 * k, 5 * k);
         view.bar.fillStyle(0x000000, 0.7).fillRect(body.x - 12, body.y + 3 + 2 * k, 24, 2);
         view.bar.fillStyle(0x4cd964, 1).fillRect(body.x - 12, body.y + 3 + 2 * k, 24 * (p.hp / p.maxHp), 2);
         if (p.big > 0) {

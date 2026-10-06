@@ -7,6 +7,8 @@
 import { BOT_LEVELS, HEROES, HERO_CLASSES, HERO_IDS, HeroId, heroClass, heroOf, heroRatings } from "../../shared/game";
 import { heroPortrait, paintPortrait } from "./heroArt";
 import { showHeroInfo } from "./heroInfo";
+import { CLASSIC_MAPS } from "../../shared/maps";
+import { drawMapThumb } from "./classicMap";
 
 const CSS = `
 #lobby { position: fixed; inset: 0; z-index: 20; display: flex; flex-direction: column; align-items: center;
@@ -89,6 +91,25 @@ const CSS = `
 #lobby .levels button.on.l1 { background: #ffd23f; }
 #lobby .levels button.on.l2 { background: #ff8a3a; }
 #lobby .levels button.on.l3 { background: #ff3a4a; color: #fff; }
+#lobby .maps { display: flex; gap: 4px; align-items: center; flex-wrap: wrap; justify-content: center; }
+#lobby .maps button { padding: 2px; border: 3px solid #2a2440; border-radius: 4px; background: #15121e; cursor: pointer; line-height: 0; }
+#lobby .maps button.on { border-color: #ffd23f; box-shadow: 0 0 8px #ffd23f; }
+#lobby .maps canvas { height: min(9vh, 60px); width: auto; image-rendering: pixelated; }
+#lobby .mapname { font-size: clamp(7px, 1.6vh, 11px); color: #ffd23f; min-width: 12em; text-align: center; }
+#lobby .col.red .side { border-color: #5a1a24; }
+#lobby .col.blue .side { border-color: #1a2a5a; }
+#lobby .col.red .side.you, #lobby .col.blue .side.you { border-color: #ffffff; }
+#lobby .col.red .tag { color: #ff3a4a; text-shadow: 2px 2px 0 #5a0a14; }
+#lobby .col.blue .tag { color: #3a9aff; text-shadow: 2px 2px 0 #0a2a5a; }
+#lobby .join { font: inherit; font-size: clamp(6px, 1.4vh, 10px); padding: 0.6vh 0.4vw; cursor: pointer; border-radius: 4px; color: #fff; border: 2px solid #1a0f14; }
+#lobby .join.red { background: #c82a3a; }
+#lobby .join.blue { background: #2a6ad8; }
+#lobby .join:disabled { opacity: 0.4; cursor: default; }
+#lobby.classic .col .side { gap: 0.1vh; padding: 0.3vh 0.3vw; }
+#lobby.classic .col .side .tag { font-size: clamp(9px, 2.4vh, 18px); }
+#lobby.classic .col .side canvas { width: min(6vh, 6vw); }
+#lobby.classic .col .side .rates, #lobby.classic .col .side .cls { display: none; }
+#lobby.classic .col { gap: 0.6vh; }
 `;
 
 interface Side {
@@ -107,6 +128,8 @@ export interface LobbyActions {
   setReady: (ready: boolean) => void;
   botHero?: (hero: HeroId) => void;
   botLevel?: (level: number) => void;
+  team?: (team: number) => void;
+  map?: (map: number) => void;
 }
 
 const SLOT_TAGS = ["1P", "2P", "3P", "4P"];
@@ -123,15 +146,21 @@ export class Lobby {
   private pick: (hero: HeroId) => void;
   private setReady: (ready: boolean) => void;
   private pve: boolean;
+  private classic: boolean;
+  private mapButtons: HTMLButtonElement[] = [];
+  private mapName?: HTMLElement;
+  private joinButtons: HTMLButtonElement[] = [];
+  private teamSlots: Record<number, Side[]> = { 1: [], 2: [] };
   private botSlot?: { button: HTMLButtonElement; art: HTMLCanvasElement; name: HTMLElement; shown?: string };
   private levelButtons: HTMLButtonElement[] = [];
   /** PvE: tapping a hero picks it for the bot instead of for me. */
   private botMode = false;
 
-  constructor(private actions: LobbyActions, mode: "pvp" | "pve" = "pvp") {
+  constructor(private actions: LobbyActions, mode: "pvp" | "pve" | "classic" = "pvp") {
     this.pick = actions.pick;
     this.setReady = actions.setReady;
     this.pve = mode === "pve";
+    this.classic = mode === "classic";
     if (!document.getElementById("lobby-style")) {
       const style = document.createElement("style");
       style.id = "lobby-style";
@@ -141,7 +170,8 @@ export class Lobby {
     this.root = document.createElement("div");
     this.root.id = "lobby";
     this.root.hidden = true;
-    const sub = this.pve ? "PVE SQUAD - 1 TO 4 PLAYERS VS BOT" : "PVP ARENA - 1 VS 1";
+    const sub = this.pve ? "PVE SQUAD - 1 TO 4 PLAYERS VS BOT" : this.classic ? "CLASSIC 3V3 - RED VS BLUE" : "PVP ARENA - 1 VS 1";
+    if (this.classic) this.root.classList.add("classic");
     this.root.innerHTML = `<div class="title">PLAYER SELECT<small>${sub}</small></div><div class="row"></div><div class="bottom"></div>`;
     const row = this.root.querySelector(".row")!;
     // Class filter over the hero grid.
@@ -162,6 +192,7 @@ export class Lobby {
     row.before(classes);
     this.p1 = this.side("p1", "1P");
     if (this.pve) this.buildBotBox();
+    if (this.classic) this.buildMapBox();
     const grid = document.createElement("div");
     grid.className = "grid";
     for (const id of HERO_IDS) {
@@ -190,6 +221,25 @@ export class Lobby {
       right.className = "col";
       right.append(this.slots[1].root, this.slots[3].root);
       row.append(left, grid, right);
+    } else if (this.classic) {
+      const cols = [1, 2].map((team) => {
+        const col = document.createElement("div");
+        col.className = `col ${team === 1 ? "red" : "blue"}`;
+        const join = document.createElement("button");
+        join.type = "button";
+        join.className = `join ${team === 1 ? "red" : "blue"}`;
+        join.textContent = team === 1 ? "JOIN RED" : "JOIN BLUE";
+        join.addEventListener("click", () => this.actions.team?.(team));
+        this.joinButtons[team] = join;
+        col.append(join);
+        for (let i = 0; i < 3; i++) {
+          const side = this.side("", team === 1 ? "RED" : "BLUE");
+          this.teamSlots[team].push(side);
+          col.append(side.root);
+        }
+        return col;
+      });
+      row.append(cols[0], grid, cols[1]);
     } else row.append(this.p1.root, grid, this.p2.root);
     const bottom = this.root.querySelector(".bottom")!;
     this.notice = document.createElement("div");
@@ -200,7 +250,9 @@ export class Lobby {
     this.readyBtn.addEventListener("click", () => this.setReady(!this.me?.ready));
     const hint = document.createElement("div");
     hint.className = "hint";
-    hint.textContent = this.pve
+    hint.textContent = this.classic
+      ? "Pick a side, a hero and a map, then READY. Empty slots are filled by bots."
+      : this.pve
       ? "Pick a hero, then READY. Tap the BOT slot, then a hero, to choose who the bot plays."
       : "Pick a hero, then press READY. The fight starts when both players are ready.";
     bottom.append(this.notice, this.readyBtn, hint);
@@ -232,6 +284,44 @@ export class Lobby {
     this.root.querySelector(".title")!.after(box);
   }
 
+  /** Classic 3v3: the six maps to pick from, and how strong the bots are. */
+  private buildMapBox() {
+    const box = document.createElement("div");
+    box.className = "botbox";
+    const maps = document.createElement("div");
+    maps.className = "maps";
+    CLASSIC_MAPS.forEach((m, i) => {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.title = m.name;
+      b.append(drawMapThumb(m, 2));
+      b.addEventListener("click", () => this.actions.map?.(i));
+      maps.append(b);
+      this.mapButtons.push(b);
+    });
+    const right = document.createElement("div");
+    right.style.cssText = "display:flex;flex-direction:column;align-items:center;gap:0.6vh";
+    this.mapName = document.createElement("div");
+    this.mapName.className = "mapname";
+    const levels = document.createElement("div");
+    levels.className = "levels";
+    BOT_LEVELS.forEach((lv, i) => {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = `l${i}`;
+      b.textContent = lv.name;
+      b.addEventListener("click", () => this.actions.botLevel?.(i));
+      levels.append(b);
+      this.levelButtons.push(b);
+    });
+    const botsLabel = document.createElement("div");
+    botsLabel.className = "hint";
+    botsLabel.textContent = "BOTS";
+    right.append(this.mapName, botsLabel, levels);
+    box.append(maps, right);
+    this.root.querySelector(".title")!.after(box);
+  }
+
   private side(cls: string, tag: string): Side {
     const root = document.createElement("div");
     root.className = `side ${cls}`;
@@ -248,10 +338,11 @@ export class Lobby {
 
   /** Called every frame with the room state: shows the screen during PvP player select. */
   update(state: any, myId: string) {
-    const show = (state?.stage === "pvp" || state?.stage === "pve") && state.phase === "select";
+    const show = (state?.stage === "pvp" || state?.stage === "pve" || state?.stage === "classic") && state.phase === "select";
     this.root.hidden = !show;
     if (!show) return;
     if (this.pve) return this.updatePve(state, myId);
+    if (this.classic) return this.updateClassic(state, myId);
     const me = state.players.get(myId);
     let foe: any;
     state.players.forEach((p: any, id: string) => {
@@ -323,6 +414,48 @@ export class Lobby {
     this.notice.textContent = this.botMode
       ? "Tap a hero for the BOT to play"
       : state.notice || (ready && waiting ? `Waiting for ${waiting} player${waiting > 1 ? "s" : ""} to get ready...` : "");
+  }
+
+  /** Classic 3v3: Red's and Blue's players, the map and the bots' difficulty. */
+  private updateClassic(state: any, myId: string) {
+    const teams: Record<number, [string, any][]> = { 1: [], 2: [] };
+    state.players.forEach((p: any, id: string) => {
+      if (!p.owner && teams[p.team]) teams[p.team].push([id, p]);
+    });
+    const me = state.players.get(myId);
+    this.me = me ? { hero: me.hero, ready: me.ready } : undefined;
+    for (const team of [1, 2]) {
+      this.teamSlots[team].forEach((side, i) => {
+        const [id, p] = teams[team][i] ?? [];
+        this.fill(side, p, "BOT");
+        side.root.classList.toggle("you", id === myId);
+        side.who.textContent = p ? `${p.name}${id === myId ? " (YOU)" : ""}` : "BOT (random)";
+      });
+      this.joinButtons[team].disabled = me?.team === team || teams[team].length >= 3 || !!me?.ready;
+    }
+    const map = state.map ?? 0;
+    this.mapButtons.forEach((b, i) => b.classList.toggle("on", i === map));
+    if (this.mapName) this.mapName.textContent = CLASSIC_MAPS[map]?.name ?? "";
+    this.levelButtons.forEach((b, i) => b.classList.toggle("on", i === (state.botLevel ?? 2)));
+    for (const [id, tile] of this.tiles) {
+      const mine = me?.hero === id;
+      tile.classList.toggle("me", mine);
+      tile.disabled = !!me?.ready;
+      const marks = mine ? '<span class="mark p1">YOU</span>' : "";
+      if (tile.dataset.marks !== marks) {
+        tile.dataset.marks = marks;
+        tile.querySelectorAll(".mark").forEach((m) => m.remove());
+        tile.insertAdjacentHTML("beforeend", marks);
+      }
+    }
+    const ready = !!me?.ready;
+    this.readyBtn.textContent = ready ? "CANCEL READY" : "READY";
+    this.readyBtn.classList.toggle("cancel", ready);
+    let waiting = 0;
+    state.players.forEach((p: any) => {
+      if (!p.owner && !p.ready) waiting++;
+    });
+    this.notice.textContent = state.notice || (ready && waiting ? `Waiting for ${waiting} player${waiting > 1 ? "s" : ""} to get ready...` : "");
   }
 
   private fill(side: Side, p: any, empty: string) {

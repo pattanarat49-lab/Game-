@@ -25,6 +25,9 @@ export class LocalRoom {
     notice: "",
     botHero: "superman",
     botLevel: 2,
+    map: 0,
+    scoreA: 0,
+    scoreB: 0,
   };
   private sim: RiftSim<SimPlayer, SimEnemy, SimBullet>;
 
@@ -69,6 +72,7 @@ export class LocalRoom {
         big: 0,
         slow: 0,
         root: 0,
+        team: 0,
       }),
       enemy: () => ({ kind: "cinderling", x: 0, y: 0, hp: 0, maxHp: 0, hitFlash: 0, beamState: 0, beamAngle: 0, move: 0, stun: 0, big: 0, slow: 0, root: 0 }),
       bullet: () => ({ kind: "snipe", x: 0, y: 0, vx: 0, vy: 0, hostile: false }),
@@ -89,6 +93,8 @@ export class LocalRoom {
     else if (type === "ready") this.sim.setReady(this.sessionId, !!data);
     else if (type === "bothero") this.sim.setBot(String(data));
     else if (type === "botlevel") this.sim.setBot(undefined, Number(data));
+    else if (type === "team") this.sim.setTeam(this.sessionId, Number(data));
+    else if (type === "map") this.sim.setMap(Number(data));
   }
 
   onLeave(_cb: () => void) {

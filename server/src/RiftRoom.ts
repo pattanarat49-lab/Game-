@@ -1,5 +1,5 @@
 import { Client, Room } from "colyseus";
-import { MAX_PLAYERS, PlayerInput, stageOf } from "../../shared/game";
+import { CLASSIC_TEAM_SIZE, MAX_PLAYERS, PlayerInput, stageOf } from "../../shared/game";
 import { RiftSim, TICK_MS } from "../../shared/sim";
 import { Bullet, Enemy, Player, RiftState, Zone } from "./schema";
 
@@ -23,7 +23,11 @@ export class RiftRoom extends Room<RiftState> {
     // PvE Squad player select: anyone picks the bot's hero and difficulty.
     this.onMessage("bothero", (_client, hero: string) => this.sim.setBot(String(hero)));
     this.onMessage("botlevel", (_client, level: number) => this.sim.setBot(undefined, Number(level)));
+    // Classic 3v3: pick a side and the map.
+    this.onMessage("team", (client, team: number) => this.sim.setTeam(client.sessionId, Number(team)));
+    this.onMessage("map", (_client, map: number) => this.sim.setMap(Number(map)));
     if (this.state.stage === "pvp") this.maxClients = 2; // the PvP Arena is a 1v1
+    if (this.state.stage === "classic") this.maxClients = CLASSIC_TEAM_SIZE * 2;
     // ~30 updates a second so other players and enemies move smoothly.
     this.setPatchRate(TICK_MS);
     this.setSimulationInterval((deltaMs) => {
