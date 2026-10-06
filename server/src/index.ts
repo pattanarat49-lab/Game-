@@ -18,4 +18,4 @@ app.get("/health", (_req, res) => res.send("ok"));
 const gameServer = new Server({ transport: new WebSocketTransport({ server: createServer(app) }) });
 // Players only share a room with others who picked the same stage.
 gameServer.define(ROOM_NAME, RiftRoom).filterBy(["stage", "code"]); // same mode + same room number meet
-gameServer.listen(port).then(() => console.log(`Riftborn server listening on http://localhost:${port}`));
+gameServer.listen(port).then(() => console.log(`Untitled Versus server listening on http://localhost:${port}`));

@@ -205,7 +205,7 @@ form.addEventListener("submit", async (event) => {
     errorText.textContent = "Bot Duel is played solo. Press PLAY SOLO.";
     return;
   }
-  const name = nameInput.value.trim().slice(0, 16) || "Riftborn";
+  const name = nameInput.value.trim().slice(0, 16) || "Player";
   localStorageSet("riftborn-name", name);
   errorText.textContent = "";
   menu.classList.add("hidden");

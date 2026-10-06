@@ -37,7 +37,7 @@ export class RiftRoom extends Room<RiftState> {
   }
 
   onJoin(client: Client, options: { name?: string; hero?: string }) {
-    const player = this.sim.addPlayer(client.sessionId, String(options?.name || "Riftborn"), String(options?.hero || ""));
+    const player = this.sim.addPlayer(client.sessionId, String(options?.name || "Player"), String(options?.hero || ""));
     console.log(`${player.name} (${player.hero}) entered Emberfall (${this.sim.realPlayerCount()}/${MAX_PLAYERS})`);
   }
 

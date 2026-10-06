@@ -214,7 +214,7 @@ export class HudScene extends Phaser.Scene {
       const side = state.stage === "classic" ? (p.team === 1 ? "R " : "B ") : "";
       rows.push(`${marker}${side}${p.name}  ${p.score}${ringStage(state.stage) ? " KO" : ""}`);
     });
-    this.scores.setText(`RIFTBORN ${count}/${state.stage === "classic" ? 6 : 4}\n${rows.join("\n")}`);
+    this.scores.setText(`UNTITLED VERSUS ${count}/${state.stage === "classic" ? 6 : 4}\n${rows.join("\n")}`);
     let i = 0;
     state.players.forEach((p: any) => {
       if (p.owner) return;

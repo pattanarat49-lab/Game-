@@ -512,7 +512,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
   addPlayer(id: string, name: string, hero: string): P {
     const def = heroOf(hero);
     const player = this.make.player();
-    player.name = name.slice(0, 16) || "Riftborn";
+    player.name = name.slice(0, 16) || "Player";
     player.hero = (HERO_IDS as string[]).includes(hero) ? hero : "superman";
     player.color = this.realPlayerCount() % 4;
     if (this.classic) player.team = this.openTeam();
