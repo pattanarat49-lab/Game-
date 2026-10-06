@@ -442,7 +442,7 @@ const BASE_HEROES: Record<BaseHeroId, HeroDef> = {
   saitama: {
     name: "Plain Hero",
     role: "Hobby hero",
-    blurb: "FINAL BLOW ends any fight, but takes 15s to come back.",
+    blurb: "Plain punches. FINAL BLOW: one short punch that knocks out whatever is right in front of him, but takes 30s to come back.",
     stars: 3,
     maxHp: 135,
     speed: 105,
@@ -518,7 +518,7 @@ const BASE_HEROES: Record<BaseHeroId, HeroDef> = {
   gojo: {
     name: "Void Sorcerer",
     role: "Sorcerer",
-    blurb: "Fights up close. VOID REALM opens a starry void around him that hits every enemy inside it. PURPLE BEAM (E): one huge purple beam that hits everything in a long line for heavy damage.",
+    blurb: "Fights up close. VOID REALM opens a starry void in a small circle around him that hits every enemy inside it. PURPLE BEAM (E): one huge purple beam that hits everything in a long line for heavy damage.",
     stars: 4,
     maxHp: 140,
     speed: 115,
@@ -536,7 +536,7 @@ const BASE_HEROES: Record<BaseHeroId, HeroDef> = {
   starplatinum: {
     name: "Chrono Brawler",
     role: "Time brawler",
-    blurb: "Punches incredibly fast. TIME STOP freezes the whole map for 4s; only he can move. STAR SHOT (E): fires 5 shots in a straight line.",
+    blurb: "Punches incredibly fast. TIME STOP freezes the whole map for 4s; only he (and the Time Emperor) can move. STAR SHOT (E): fires 5 shots in a straight line.",
     stars: 4,
     maxHp: 150,
     speed: 110,
@@ -849,7 +849,7 @@ const BASE_HEROES: Record<BaseHeroId, HeroDef> = {
   zenitsu: {
     name: "Thunder Sleeper",
     role: "Lightning swordsman",
-    blurb: "A jumpy swordsman who only shines when it counts. THUNDER DASH: a lightning-fast dash that cuts the whole lane; if it hits, dash once more within 2s before the cooldown. SEVENTH FORM (E): a huge lightning dash cutting a wide lane, which keeps crackling with lightning for 3s.",
+    blurb: "A jumpy swordsman who only shines when it counts. THUNDER DASH: a lightning-fast dash that cuts the whole lane; every hit lets him dash again within 2s, so he can chain dashes; when the 2s run out, the cooldown starts. SEVENTH FORM (E): a huge lightning dash cutting a wide lane, which keeps crackling with lightning for 3s.",
     stars: 4,
     maxHp: 115,
     speed: 135,
@@ -869,7 +869,7 @@ const BASE_HEROES: Record<BaseHeroId, HeroDef> = {
   theworld: {
     name: "Time Emperor",
     role: "Time tyrant",
-    blurb: "Punches incredibly fast. TRUCK SMASH drops a truck on the spot he aimed at 2s later. He and the Chrono Brawler can move in each other's stopped time. TIME STOP (E): stops time for 4s.",
+    blurb: "Punches incredibly fast. TRUCK SMASH drops a truck on the spot he aimed at 2s later. He and the Chrono Brawler can move in each other's stopped time. TIME STOP (E): stops time for 4s; only he (and the Chrono Brawler) can move.",
     stars: 4,
     maxHp: 150,
     speed: 110,
@@ -1479,7 +1479,7 @@ const BASE_HEROES: Record<BaseHeroId, HeroDef> = {
   omni: {
     name: "Omni Kid",
     role: "Alien shifter",
-    blurb: "A kid with an alien watch. ALIEN TRANSFORM: hold and aim at the alien you want on the wheel, release to turn into it for 10s (no skills while an alien, except Echo Mite's MITOSIS): Blaze Alien (flamethrower that burns and slows), Quad Brute (fast, huge HP, crushing punches that knock far) Echo Mite (long-range sonic blasts; MITOSIS splits every copy in two, sharing HP) or Speed Raptor (10x speed, running into foes hurts them). Turning back restores the HP he had before the transform. SNACK (E): eat to heal 10% HP.",
+    blurb: "A kid with an alien watch. ALIEN TRANSFORM: hold and aim at the alien you want on the wheel, release to turn into it for 10s (no skills while an alien, except Echo Mite's MITOSIS): Blaze Alien (flamethrower that burns and slows), Quad Brute (huge HP, crushing punches that knock far), Echo Mite (long-range sonic blasts; MITOSIS splits every copy in two, sharing HP) or Speed Raptor (10x speed, running into foes hurts them). Turning back restores the HP he had before the transform. SNACK (E): eat to heal 10% HP.",
     stars: 4,
     maxHp: 110,
     speed: 112,

@@ -59,6 +59,7 @@ function addStyles() {
   .hi-sname { color: #ffd23f; }
   .hi-cd { color: #a0a0b0; font-size: 9px; margin-left: 6px; }
   .hi-text { color: #e8dde2; }
+  .hi-note { color: #a0a0b0; font-size: 8px; margin-top: 10px; }
   .hi-close { position: absolute; top: 8px; right: 8px; background: #3a2418; color: #fff; border: 2px solid #ffd23f; font-family: inherit; font-size: 10px; padding: 4px 8px; cursor: pointer; }
   `;
   document.head.append(st);
@@ -93,7 +94,8 @@ export function showHeroInfo(id: string) {
     <div class="hi-text">${esc(ATTACK_NAME[hero.attack] ?? hero.attack)}${ranged ? "" : hero.lineAttack ? " (straight kick)" : ""}. ${esc(parts.basic)}</div>
     <div class="hi-sec">SKILLS</div>
     ${skillBlock("Q", hero.skill, parts.q)}
-    ${skillBlock("E", hero.skill2, parts.e)}`;
+    ${skillBlock("E", hero.skill2, parts.e)}
+    <div class="hi-note">Against other heroes (PvP, Duel, Squad, Classic) damage and % heals are much lower than against monsters.</div>`;
   box.querySelector(".hi-pic")!.append(heroPortrait(id));
   back.append(box);
   const close = () => back.remove();
