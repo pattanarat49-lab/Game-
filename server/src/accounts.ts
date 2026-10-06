@@ -262,7 +262,7 @@ function unlockRoutes(app: Express) {
   // The 10 random heroes a new player picks 3 starters from (the same 10 until they pick).
   app.post("/api/starters", (req, res) =>
     withAccount(req, res, (_a, d) => {
-      if ((d.owned ?? []).length) return { offer: [] };
+      if (ownedHeroes(_a).length) return { offer: [] };
       if (!d.offer?.every((h) => (HERO_IDS as string[]).includes(h))) d.offer = shuffled([...HERO_IDS]).slice(0, STARTER_OFFER);
       return { offer: d.offer };
     }),
@@ -270,7 +270,7 @@ function unlockRoutes(app: Express) {
   app.post("/api/starters/pick", (req, res) =>
     withAccount(req, res, (_a, d) => {
       const picks = [...new Set((Array.isArray(req.body?.heroes) ? req.body.heroes : []).map(String))] as string[];
-      if ((d.owned ?? []).length) return void res.status(409).json({ error: "Starters already picked" });
+      if (ownedHeroes(_a).length) return void res.status(409).json({ error: "Starters already picked" });
       if (picks.length !== STARTER_PICKS || !picks.every((h) => d.offer?.includes(h))) return void res.status(400).json({ error: `Pick ${STARTER_PICKS} of the heroes shown` });
       d.owned = picks;
       delete d.offer;
