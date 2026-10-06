@@ -79,6 +79,7 @@ import {
   ringStage,
   areaOf,
   CLASSIC_LIVES,
+  HERO_HIT_SCALE,
   CLASSIC_RESPAWN,
   CLASSIC_TEAM_SIZE,
 } from "./game";
@@ -1197,7 +1198,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
           if (q.dead) return;
           const mine = qid === id;
           if (!mine && (!st.radius || this.isFoe(id, qid) || Math.hypot(q.x - p.x, q.y - p.y) > st.radius)) return;
-          q.hp = Math.min(q.maxHp, q.hp + q.maxHp * st.pct);
+          this.healBy(q, q.maxHp * st.pct);
         });
         this.addZone(`fx:heal:${st.color}`, p.x, p.y, st.radius ?? 30, 0.6, { owner: id, every: Infinity, damage: 0 });
         break;
@@ -1708,8 +1709,8 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       p.buff = Math.max(0, p.buff - dt);
       const auto = this.autoMove(id, p, brain, hero, dt); // ERROR / DRAGOON DIVE move him themselves
       p.active2 = Math.max(0, p.active2 - dt);
-      if (p.active2 > 0 && hero.skill2?.kind === "gaia") p.hp = Math.min(p.maxHp, p.hp + p.maxHp * hero.skill2.damage * dt);
-      for (const b of fxBuffs(p)) if (b.regen) p.hp = Math.min(p.maxHp, p.hp + p.maxHp * b.regen * dt);
+      if (p.active2 > 0 && hero.skill2?.kind === "gaia") this.healBy(p, p.maxHp * hero.skill2.damage * dt);
+      for (const b of fxBuffs(p)) if (b.regen) this.healBy(p, p.maxHp * b.regen * dt);
       if (brain.fxQueue?.length) this.runFxQueue(id, p, brain, dt);
       if (brain.walls) {
         brain.walls.left -= dt;
@@ -1727,7 +1728,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       if (p.barrier > 0) {
         // IMMORTAL: untouchable, and healing fast. (THE MAGICIAN's doves are just untouchable.)
         p.barrier = Math.max(0, p.barrier - dt);
-        if (hero.skill.kind === "immortal") p.hp = Math.min(p.maxHp, p.hp + p.maxHp * hero.skill.damage * dt);
+        if (hero.skill.kind === "immortal") this.healBy(p, p.maxHp * hero.skill.damage * dt);
       }
       const doves = (p.barrier > 0 && hero.skill2?.kind === "doves") || auto;
 
@@ -2003,7 +2004,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
         this.mitosis(id, p, skill);
         break;
       case "eat":
-        p.hp = Math.min(p.maxHp, p.hp + p.maxHp * skill.damage);
+        this.healBy(p, p.maxHp * skill.damage);
         break;
       case "diamond":
         p.buff = skill.duration ?? 10;
@@ -2046,7 +2047,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
         s.players.forEach((q, qid) => {
           if (q.dead || Math.hypot(q.x - p.x, q.y - p.y) > skill.radius) return;
           if (this.rootOf(qid) !== id && this.isFoe(id, qid)) return; // no healing your rivals
-          q.hp = Math.min(q.maxHp, q.hp + q.maxHp * skill.damage);
+          this.healBy(q, q.maxHp * skill.damage);
         });
         break;
       case "line":
@@ -2288,7 +2289,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
         const n = this.foesAround(id, p.x, p.y, skill.radius);
         this.sweep(id, p.x, p.y, 0, skill.radius, Math.PI * 2, skill.damage, true);
         p.mode = Math.min(skill.count ?? 5, p.mode + n);
-        p.hp = Math.min(p.maxHp, p.hp + p.maxHp * (skill.width ?? 0.06) * n);
+        this.healBy(p, p.maxHp * (skill.width ?? 0.06) * n);
         this.addZone("reap", p.x, p.y, skill.radius, 0.35, { owner: id, every: Infinity, damage: 0 });
         break;
       }
@@ -2899,7 +2900,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       if (Math.hypot(z.x - p.x, z.y - p.y) <= skill.radius) near++;
     });
     p.mode = n;
-    if (near > 0 && !p.dead) p.hp = Math.min(p.maxHp, p.hp + p.maxHp * skill.damage * near * dt);
+    if (near > 0 && !p.dead) this.healBy(p, p.maxHp * skill.damage * near * dt);
   }
 
   /** ROCK BARRAGE: one punch down the lane. A foe with a wall right behind it is stunned; the rest fly back. */
@@ -3233,7 +3234,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
           s.players.forEach((q, qid) => {
             if (q.dead || Math.hypot(q.x - z.x, q.y - z.y) > z.radius) return;
             if (this.rootOf(qid) !== this.rootOf(brain.owner) && this.isFoe(brain.owner, qid)) return;
-            q.hp = Math.min(q.maxHp, q.hp + q.maxHp * brain.damage);
+            this.healBy(q, q.maxHp * brain.damage);
           });
         } else if (brain.fxHit) {
           // A combo field: hurts (and slows, roots...) foes inside, heals friends inside.
@@ -3242,7 +3243,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
           if (fx.heal) {
             s.players.forEach((q, qid) => {
               if (q.dead || Math.hypot(q.x - z.x, q.y - z.y) > z.radius || this.isFoe(brain.owner, qid)) return;
-              q.hp = Math.min(q.maxHp, q.hp + q.maxHp * fx.heal!);
+              this.healBy(q, q.maxHp * fx.heal!);
             });
           }
         } else if (z.kind === "embers" || z.kind === "quake" || z.kind === "blizzard") {
@@ -3258,7 +3259,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
           if (z.kind === "city") {
             // Yaotsu heals inside their own city.
             const p = s.players.get(brain.owner);
-            if (p && !p.dead && Math.hypot(p.x - z.x, p.y - z.y) <= z.radius) p.hp = Math.min(p.maxHp, p.hp + p.maxHp * brain.damage * brain.every);
+            if (p && !p.dead && Math.hypot(p.x - z.x, p.y - z.y) <= z.radius) this.healBy(p, p.maxHp * brain.damage * brain.every);
           }
           // Everyone hostile inside the illusion loses a share of their max HP.
           const share = brain.damage * brain.every;
@@ -3410,12 +3411,17 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
     return this.ring && this.state.phase === "fight";
   }
 
+  /** Heal a hero; between heroes healing is scaled down with damage (HERO_HIT_SCALE) so it keeps pace. */
+  private healBy(q: P, amount: number) {
+    q.hp = Math.min(q.maxHp, q.hp + amount * (this.ring ? HERO_HIT_SCALE : 1));
+  }
+
   private damagePlayer(id: string, amount: number, ignoreIframes = false, attacker?: string, raw = false) {
     const p = this.state.players.get(id);
     const brain = this.brains.get(id);
     if (!p || !brain || p.dead || p.dashing) return;
     if (heroOf(p.hero).invincible || p.barrier > 0) return;
-    if (attacker && attacker !== ENEMY && !raw) amount *= this.dmgMul(attacker);
+    if (attacker && attacker !== ENEMY && !raw) amount *= this.dmgMul(attacker) * HERO_HIT_SCALE;
     // HARDEN: each stack takes a share off every hit.
     const hard = heroOf(p.hero).skill;
     if (hard.kind === "harden" && !raw) amount *= Math.max(0, 1 - hard.damage * p.mode);
