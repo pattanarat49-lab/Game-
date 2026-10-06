@@ -78,6 +78,11 @@ function hero(cls: HeroClass, name: string, role: string, maxHp: number, basic: 
 /** Queen's Bond's CURSED QUEEN: calls out the big curse (HP = this share of his max HP) for `duration`. */
 const RIKA_SKILL: SkillDef = { kind: "summon", name: "CURSED QUEEN", cooldown: 16, damage: 1, radius: 0, count: 1, duration: 10, pet: "rika" as SkillDef["pet"], desc: "calls out his giant curse queen for 10s: she follows him and smashes his foes with huge claws that knock them back." };
 
+/** ODM GEAR (same as the Giant Shifter's): a wire into the wall ahead, and he zips along it. */
+const ODM_TEXT = "fires a wire into the wall (or rock) ahead and zips along it at high speed (0.5s cooldown).";
+const ODM: SkillDef = { kind: "grapple", name: "ODM GEAR", cooldown: 0.5, damage: 0, radius: 260, desc: ODM_TEXT };
+const odm: Skill = ["ODM GEAR", 0.5, ODM_TEXT, []];
+
 const ROSTER = {
   // ---------------------------------------------------------------- sheet 1
   nagi: hero("carry", "Ball Prodigy", "Striker", 95, shoot("ball", 22, 0.55, 220), "Kicks footballs.",
@@ -323,18 +328,13 @@ const ROSTER = {
       { do: "dash", len: 160, width: 30, color: "c0c0c0", dmg: 30 },
       { do: "ring", radius: 45, look: "spin", color: "ffffff", dmg: 30 },
     ]],
-    ["WIRE SPIRAL", 9, "zips behind the nearest foe on wires and cuts three times.", [
-      { do: "blink", to: "behind", range: 220, color: "c0c0c0" },
-      { do: "lane", times: 3, gap: 0.12, len: 60, width: 50, look: "slash", color: "ffffff", dmg: 22 },
-    ]]),
+    odm, { skill2: ODM }),
   mikasa: hero("assassin", "Scarf Soldier", "Elite soldier", 95, blade(26, 0.4), "Twin-blade cuts.",
     ["THUNDER SPEAR", 8, "a spear sticks in the nearest foe, then explodes.", [
       { do: "lock", range: 230, look: "bolt", color: "ffd040", dmg: 20 },
       { do: "drop", at: "target", delay: 0.5, radius: 45, look: "pillar", color: "ffd040", dmg: 60 },
     ]],
-    ["DOUBLE RUSH", 6, "two quick dashes through the lane.", [
-      { do: "dash", times: 2, gap: 0.25, len: 110, width: 26, color: "c02020", dmg: 32 },
-    ]]),
+    odm, { skill2: ODM }),
   tanjiro: hero("fighter", "Flowing Blade", "Demon slayer", 105, blade(28, 0.45), "Katana cuts.",
     ["WATER WHEEL", 6, "a rolling wave of a cut down the lane.", [
       { do: "lane", len: 160, width: 36, look: "wave", color: "3aa8ff", dmg: 55 },
@@ -1051,7 +1051,7 @@ const TUNED: Record<string, [bal: number, win: number, stars: number]> = {
   law: [1.94, 48.5, 3],
   lelouch: [2.78, 48.0, 3],
   leorio: [3.0, 51.5, 4],
-  levi: [2.52, 50.0, 4],
+  levi: [3.13, 52.0, 4],
   light: [4.43, 51.5, 4],
   madara: [3.0, 51.5, 4],
   mahito: [3.49, 50.0, 4],
@@ -1060,7 +1060,7 @@ const TUNED: Record<string, [bal: number, win: number, stars: number]> = {
   marco: [1.63, 49.5, 3],
   megumi: [3.06, 49.5, 3],
   mihawk: [1.86, 51.5, 4],
-  mikasa: [2.46, 50.0, 4],
+  mikasa: [2.63, 49.5, 3],
   minato: [3.0, 49.3, 3],
   mob: [2.31, 48.5, 3],
   momo: [4.83, 50.5, 4],
