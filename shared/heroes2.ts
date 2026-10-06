@@ -103,7 +103,7 @@ const NAME_WRITTEN_SKILL: SkillDef = { kind: "deathnote", name: "NAME WRITTEN", 
 const BLOOD_HAMMER_SKILL: SkillDef = { kind: "bloodhammer", name: "BLOOD HAMMER", cooldown: 12, damage: 0, radius: 0, duration: 7, desc: "pays 10% of her HP for a hammer of blood: her swings hit twice as hard and reach twice as far for 7s." };
 const BLOOD_TRAP_SKILL: SkillDef = { kind: "bloodtrap", name: "BLOOD TRAP", cooldown: 8, damage: 60.2, radius: 160, desc: "pays 5% of her HP and leaves a trail of blood wherever she walks for 4s; press again to pull all the blood back to her at once: every drop that passes through a foe hits it." };
 const EATER_SKILL: SkillDef = { kind: "eater", name: "EATER", cooldown: 11, damage: 0, radius: 160, desc: "swallows the ally he aims at (within 160): inside him it takes no damage at all, for as long as it likes; it comes back out when it presses any button." };
-const MARKED_KUNAI_SKILL: SkillDef = { kind: "kunai", name: "MARKED KUNAI", cooldown: 8, damage: 20, radius: 250, width: 0.6, count: 3, desc: "throws three spread kunai that stick where they land (walls stop them); for 6s, press again to flash to the kunai he aims at, up to 3 times. Then the cooldown starts." };
+const MARKED_KUNAI_SKILL: SkillDef = { kind: "kunai", name: "MARKED KUNAI", cooldown: 8, damage: 20, radius: 250, width: 0.6, count: 3, desc: "throws three spread kunai that fly out, hurting every foe they pass through, and stick in where they stop (walls stop them); for 6s, press again to flash to the kunai a line points at (aim to pick it), up to 3 times. Then the cooldown starts." };
 
 const ROSTER = {
   // ---------------------------------------------------------------- sheet 1

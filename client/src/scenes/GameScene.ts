@@ -1907,6 +1907,38 @@ export class GameScene extends Phaser.Scene {
   }
 
   /** A faint guide showing where your attack will land, so aiming with a thumb is easy. */
+  /** MARKED KUNAI: while warps are left, a line to the kunai the next press warps to (the one nearest the aim). */
+  private drawKunaiPick(g: Phaser.GameObjects.Graphics, state: any, x: number, y: number): boolean {
+    const mine: { x: number; y: number }[] = [];
+    state.zones.forEach((z: any) => {
+      const parts = String(z.kind).split(":");
+      if (parts[0] === "kunai" && parts[2] === this.room!.sessionId) mine.push({ x: z.x, y: z.y });
+    });
+    if (!mine.length) return false;
+    let pick = mine[0];
+    let best = Infinity;
+    for (const k of mine) {
+      let diff = Math.atan2(k.y - y, k.x - x) - this.aim;
+      diff = Math.abs(Math.atan2(Math.sin(diff), Math.cos(diff)));
+      if (diff < best) [best, pick] = [diff, k];
+    }
+    for (const k of mine) {
+      const chosen = k === pick;
+      const d = Math.hypot(k.x - x, k.y - y);
+      const ux = (k.x - x) / (d || 1);
+      const uy = (k.y - y) / (d || 1);
+      // Dashed line: bright to the chosen kunai, faint to the others.
+      for (let t = 10; t < d - 6; t += 10) {
+        g.lineStyle(chosen ? 2 : 1, 0xffe040, chosen ? 0.9 : 0.25).lineBetween(x + ux * t, y + uy * t, x + ux * Math.min(t + 6, d - 6), y + uy * Math.min(t + 6, d - 6));
+      }
+      if (chosen) {
+        const pulse = 0.5 + 0.5 * Math.sin(this.time.now / 100);
+        g.lineStyle(2, 0xffe040, 0.6 + 0.4 * pulse).strokeCircle(k.x, k.y, 13);
+      }
+    }
+    return true;
+  }
+
   private drawAimGuide(state: any) {
     this.chargeLabel?.setVisible(false);
     const g = this.aimGuide;
@@ -1920,6 +1952,7 @@ export class GameScene extends Phaser.Scene {
     const aiming = this.aimingSkill();
     const skill = aiming === 2 ? hero.skill2 : aiming === 1 ? hero.skill : undefined;
     this.drawFormWheel(skill?.kind === "omnitrix" ? me.hero : undefined, x, y);
+    if (hero.skill2?.kind === "kunai" && me.mode > 0 && this.drawKunaiPick(g, state, x, y + 5)) return;
     if (skill) {
       this.drawSkillGuide(g, skill, hero.range, x, y);
       if (isChargeSkill(skill) && this.charging2) this.drawChargeGauge(g, x, y);

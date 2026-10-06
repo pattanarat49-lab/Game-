@@ -167,6 +167,7 @@ const EYEBEAM_TICK = 0.1; // seconds between HEAT VISION hits
 const DOMAIN_RADIUS = 110; // DOMAIN EXPANSION: how big the closed-off duel circle is
 const PIANO_GAP = 0.12; // seconds between PIANO notes
 const PIANO_NOTE_SPEED = 260;
+const KUNAI_SPEED = 1100; // MARKED KUNAI throw speed (before the shot slow-down)
 const KUNAI_WINDOW = 6; // seconds to warp to the MARKED KUNAI before the cooldown starts
 const BLOOD_WINDOW = 8; // seconds the BLOOD TRAP blood waits to be called back
 const BLOOD_LAY_TIME = 4; // seconds she keeps laying blood after the first press
@@ -420,7 +421,7 @@ interface PlayerBrain {
   /** SWALLOW: a foe's skill, ready to use once. */
   stolen?: SkillDef;
   /** MARKED KUNAI: the kunai zones, warps left, and seconds left to use them. */
-  kunai?: { zones: string[]; warps: number; left: number };
+  kunai?: { zones: string[]; warps: number; left: number; flying: { x: number; y: number; a: number; t: number }[] };
   /** BLOOD TRAP: blood drops laid down the way, and seconds left to lay more / call them back. */
   blood?: { zones: string[]; lay: number; left: number };
   /** SWIFT: the next basic attack fires three arrows in a row. */
@@ -2292,6 +2293,12 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
     if (brain.pushes?.length) this.updatePushes(id, p, brain, dt);
     if (brain.piano) this.playPiano(id, p, brain, hero, dt);
     if (brain.kunai) {
+      // Kunai still in the air stick in where they land.
+      for (const k of brain.kunai.flying) {
+        k.t -= dt;
+        if (k.t <= 0) brain.kunai.zones.push(this.addZone(`kunai:${k.a.toFixed(2)}:${id}`, k.x, k.y, 8, brain.kunai.left + 0.5, { owner: id, every: Infinity, damage: 0 }));
+      }
+      brain.kunai.flying = brain.kunai.flying.filter((k) => k.t > 0);
       brain.kunai.left -= dt;
       if (brain.kunai.left <= 0) this.endKunai(id, p, brain, hero);
     }
@@ -2746,21 +2753,22 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
         brain.kunai.warps--;
       }
       p.mode = brain.kunai.warps;
-      if (brain.kunai.warps <= 0 || !brain.kunai.zones.length) this.endKunai(id, p, brain, heroOf(p.hero));
+      if (brain.kunai.warps <= 0 || (!brain.kunai.zones.length && !brain.kunai.flying.length)) this.endKunai(id, p, brain, heroOf(p.hero));
       else p.skill2Cooldown = 0.3;
       return;
     }
-    const zones: string[] = [];
+    // Three real kunai fly out in a spread, hurting whoever they pass through, and stick in where they stop.
+    const flying: { x: number; y: number; a: number; t: number }[] = [];
     const n = skill.count ?? 3;
     for (let i = 0; i < n; i++) {
       const a = p.aim + (n > 1 ? (i / (n - 1) - 0.5) * (skill.width ?? 0.6) : 0);
       const end = this.move(p.x, p.y, Math.cos(a) * skill.radius, Math.sin(a) * skill.radius, 4);
       const d = Math.hypot(end.x - p.x, end.y - p.y);
-      this.lineHit(id, p.x, p.y, a, d, 12, skill.damage);
-      this.fxLaneZone(id, "chain", "ffe040", p.x, p.y, a, d, 3, 0.25);
-      zones.push(this.addZone(`kunai:${a.toFixed(2)}`, end.x, end.y, 8, KUNAI_WINDOW + 0.5, { owner: id, every: Infinity, damage: 0 }));
+      const speed = KUNAI_SPEED * SHOT_SPEED_SCALE * HERO_SHOT_SCALE; // how fast spawnBullet really flies it
+      this.spawnBullet("knife", p.x, p.y, a, KUNAI_SPEED, { owner: id, damage: skill.damage, pierce: 99, life: d / KUNAI_SPEED });
+      flying.push({ x: end.x, y: end.y, a, t: d / speed });
     }
-    brain.kunai = { zones, warps: 3, left: KUNAI_WINDOW };
+    brain.kunai = { zones: [], warps: 3, left: KUNAI_WINDOW, flying };
     p.mode = 3;
     p.skill2Cooldown = 0.3;
   }
