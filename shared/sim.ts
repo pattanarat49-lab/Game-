@@ -2071,7 +2071,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
         if (p.titan > 0) {
           // A 50m Titan's blows crush everything around it.
           brain.attackTimer = TITAN_ATTACK_COOLDOWN;
-          this.sweep(id, p.x, p.y, 0, hero.skill.radius, Math.PI * 2, hero.skill.damage, true);
+          this.sweep(id, p.x, p.y, 0, hero.skill.radius, Math.PI * 2, hero.skill.damage, "cut");
         } else if (hero.gun && p.mode === 1) {
           // Machine gun: a stream of small, slightly scattered bullets.
           const gun = hero.gun;
@@ -2081,10 +2081,10 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
         } else if (hero.sword && p.buff > 0) {
           // DIAMOND SWORD: big, fast swings.
           brain.attackTimer = hero.sword.attackCooldown;
-          this.sweep(id, p.x, p.y, input.aim, hero.sword.range, hero.sword.arc, hero.sword.damage, true);
+          this.sweep(id, p.x, p.y, input.aim, hero.sword.range, hero.sword.arc, hero.sword.damage, "cut");
         } else if (hero.lineAttack) {
           // A straight kick down a lane.
-          this.lineHit(id, p.x, p.y, input.aim, hero.range, hero.lineAttack, hero.damage, 0, 1);
+          this.lineHit(id, p.x, p.y, input.aim, hero.range, hero.lineAttack, hero.damage, 0, 0);
         } else if (hero.attack === "rifle") {
           this.spawnBullet("snipe", p.x, p.y, input.aim, hero.shotSpeed, { owner: id, damage: hero.damage, pierce: hero.pierce, life: hero.range / hero.shotSpeed });
         } else if (hero.attack === "magic" && hero.skill.kind === "boost") {
@@ -2129,7 +2129,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
           this.sweep(id, p.x, p.y, input.aim, hero.range, hero.arc, hero.damage * hero.skill.damage, 2, hero.skill.duration ?? 1);
         } else {
           const hammer = p.buff > 0 && hero.skill.kind === "bloodhammer" ? 2 : 1; // BLOOD HAMMER: twice as hard and as long
-          this.sweep(id, p.x, p.y, input.aim, hero.range * hammer, hero.arc, hero.damage * hammer, hero.knock ?? true);
+          this.sweep(id, p.x, p.y, input.aim, hero.range * hammer, hero.arc, hero.damage * hammer, hero.knock ?? "cut");
         }
       }
 
@@ -4328,9 +4328,9 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
     });
   }
   /** Hit every enemy inside a slice of a circle (a punch, a sword swing, or a full circle). */
-  /** `knock`: true for a normal melee knockback, or a number for that many times as far. */
-  private sweep(owner: string, x: number, y: number, aim: number, range: number, arc: number, damage: number, knock: boolean | number = false, stun = 0) {
-    const kb = knock === true ? 1 : Number(knock) || 0;
+  /** `knock`: true for a normal melee knockback, a number for that many times as far, or "cut" to only cut down shots (basic attacks: no knockback). */
+  private sweep(owner: string, x: number, y: number, aim: number, range: number, arc: number, damage: number, knock: boolean | number | "cut" = false, stun = 0) {
+    const kb = knock === true ? 1 : knock === "cut" ? 0 : Number(knock) || 0;
     if (knock) this.cutBullets(owner, x, y, aim, range, arc);
     this.state.enemies.forEach((e, eid) => {
       const def = ENEMIES[e.kind as EnemyKind];

@@ -33,7 +33,7 @@ export const HERO_SHOT_SCALE = 0.75;
 export const HERO_WALK = 90;
 export const DASH_SPEED = 340;
 export const DASH_TIME = 0.15;
-// Melee basic attacks (punch and sword heroes) knock enemies and rival players back. Bosses don't budge.
+// Knockback for skills that throw foes back (basic attacks no longer knock back, user request 2026-10-06). Bosses don't budge.
 export const KNOCKBACK_DISTANCE = 46; // pixels the push carries a target in total
 export const KNOCKBACK_DECAY = 12; // how fast the push dies out (per second)
 export const DASH_COOLDOWN = 0.5;
