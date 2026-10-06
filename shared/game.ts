@@ -2004,7 +2004,8 @@ export function areaOf(stage: string, map = 0): Area {
 
 /** Classic 3v3: Red against Blue on a map with walls, grass and water. Heroes come back after a short wait. */
 export const CLASSIC_TEAM_SIZE = 3;
-export const CLASSIC_KOS_TO_WIN = 10;
+/** Classic 3v3: lives per hero; out of lives means out of the match. The last team standing wins. */
+export const CLASSIC_LIVES = 3;
 export const CLASSIC_RESPAWN = 3;
 
 /** Stages that open on the player select screen. */
@@ -2084,7 +2085,7 @@ export const STAGES: Record<StageId, StageDef> = {
   pvp: { name: "PvP Arena", blurb: "Players fight each other in a small boxing ring. First to 3 kills wins. Online only." },
   duel: { name: "Bot Duel", blurb: "1v1 in the boxing ring against a bot playing the hero you pick. First to 3 KOs. Solo." },
   pve: { name: "PvE Squad", blurb: "1 to 4 players team up against one bot. Pick its hero and difficulty. First to 3 KOs. Solo or online." },
-  classic: { name: "Classic 3v3", blurb: "Red vs Blue, 3 heroes a side, on 6 maps with walls, tall grass and water. Bots fill empty slots. First team to 10 KOs wins. Solo or online." },
+  classic: { name: "Classic 3v3", blurb: "Red vs Blue, 3 heroes a side, on 6 maps with walls, tall grass and water. Bots fill empty slots. 3 lives each; the last team standing wins. Solo or online." },
 };
 
 /** Stages taken out of the game (user request 2026-10-05: the Boss Room); their code is kept. */

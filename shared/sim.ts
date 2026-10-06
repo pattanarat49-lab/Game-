@@ -78,7 +78,7 @@ import {
   moveCircle,
   ringStage,
   areaOf,
-  CLASSIC_KOS_TO_WIN,
+  CLASSIC_LIVES,
   CLASSIC_RESPAWN,
   CLASSIC_TEAM_SIZE,
 } from "./game";
@@ -204,6 +204,8 @@ export interface SimPlayer {
   mode: number;
   /** Classic 3v3: 1 = Red, 2 = Blue (0 elsewhere). */
   team: number;
+  /** Classic 3v3: lives left; at 0 the hero stays down until the match ends. */
+  lives: number;
   /** Seconds left in which falling brings the hero straight back up (REVIVE). */
   revive: number;
   /** Seconds left behind a barrier that blocks all damage (IMMORTAL). */
@@ -734,6 +736,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
     if (this.classic) {
       // Classic 3v3: bots playing random heroes fill the empty slots on both sides.
       s.scoreA = s.scoreB = 0;
+      s.players.forEach((p) => (p.lives = CLASSIC_LIVES));
       const n = this.teamCounts();
       let k = 0;
       for (const team of [1, 2]) {
@@ -741,6 +744,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
           const hero = HERO_IDS[Math.floor(Math.random() * HERO_IDS.length)];
           const bot = this.addBot(hero, `bot${++k}`, s.botLevel);
           bot.team = team;
+          bot.lives = CLASSIC_LIVES;
           this.placeAtSpawn(bot);
         }
       }
@@ -1682,7 +1686,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
         brain.volleyLeft = 0;
         brain.zip = undefined;
         p.respawnIn = Math.max(0, p.respawnIn - dt);
-        if (p.respawnIn <= 0 && s.stage !== "pve") {
+        if (p.respawnIn <= 0 && s.stage !== "pve" && !(this.classic && p.lives <= 0)) {
           p.dead = false;
           p.hp = this.classic ? p.maxHp : Math.round(p.maxHp / 2);
           this.placeAtSpawn(p);
@@ -3472,10 +3476,16 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
     if (killer && killer.team !== fallen.team) killer.score++;
     if (fallen.team === 1) s.scoreB++;
     else s.scoreA++;
-    if (Math.max(s.scoreA, s.scoreB) >= CLASSIC_KOS_TO_WIN) {
+    fallen.lives = Math.max(0, fallen.lives - 1);
+    // A team is out when every one of its heroes is down with no lives left.
+    const standing: Record<number, number> = { 1: 0, 2: 0 };
+    s.players.forEach((p) => {
+      if (!p.owner && (p.lives > 0 || !p.dead)) standing[p.team] = (standing[p.team] ?? 0) + 1;
+    });
+    if (!standing[1] || !standing[2]) {
       s.phase = "victory";
       s.phaseTimer = 8;
-      s.winner = s.scoreA > s.scoreB ? "RED" : "BLUE";
+      s.winner = standing[1] ? "RED" : standing[2] ? "BLUE" : "NO";
     }
   }
 
@@ -4124,7 +4134,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
     this.state.players.forEach((v, vid) => {
       if (v.dead || !this.isFoe(id, vid) || this.hidden(v)) return;
       const d = Math.hypot(v.x - p.x, v.y - p.y);
-      if (map && inBush(map, v.x, v.y) && d > BLOCK * 2.5) return; // Classic: can't see into tall grass from afar
+      if (map && inBush(map, v.x, v.y)) return; // Classic: nobody can see into tall grass
       if (d < dist) [dist, foe] = [d, v];
     });
     if (map && !foe && !p.dead && this.pvpLive()) {

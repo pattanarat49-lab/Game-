@@ -42,6 +42,8 @@ export class Player extends Schema {
   @type("float32") root = 0;
   /** Classic 3v3: 1 = Red, 2 = Blue. */
   @type("uint8") team = 0;
+  /** Classic 3v3: lives left (shown as hearts over the head). */
+  @type("uint8") lives = 0;
 }
 
 export class Enemy extends Schema {

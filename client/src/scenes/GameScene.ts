@@ -30,6 +30,7 @@ import {
   stageOf,
   ringStage,
   areaOf,
+  CLASSIC_LIVES,
   selectStage,
   EMPTY_INPUT,
   heroOf,
@@ -56,17 +57,12 @@ import { LocalRoom } from "../localRoom";
 import { drawFxAura, drawFxZone, fxBuffStep, fxGuide, fxShotTexture } from "../fx";
 import { Lobby } from "../lobby";
 import { drawClassicGround } from "../classicMap";
-import { BLOCK, MAP_H, MAP_W, MAP_X, MAP_Y, classicMap, inBush } from "../../../shared/maps";
+import { MAP_H, MAP_Y, classicMap, inBush } from "../../../shared/maps";
 import { RiftSim, TITAN_ATTACK_COOLDOWN } from "../../../shared/sim";
 import { attackArtLayout, attackFrame, facingOf, frontOnly, hasHeroArt, heroArtLayout, SWING_TIME } from "../heroArt";
 
 interface PlayerView {
   body: Phaser.GameObjects.Image;
-  /** Classic 3v3: attacking from tall grass shows the hero for a moment. */
-  revealSeq?: number;
-  revealSkill?: number;
-  revealSkill2?: number;
-  revealUntil?: number;
   /** Where another player's dash began, until we see which way it goes (for the dash burst). */
   dashFrom?: { x: number; y: number; t: number };
   wasDashing?: boolean;
@@ -147,6 +143,8 @@ const BULLET_TEXTURE: Record<string, string> = {
 /** Summons drawn bigger than their pixel art. */
 const SUMMON_SCALE: Record<string, number> = { flamedragon: 1.4, quad: 1.25, echo: 0.85 };
 const PLAYER_MARKERS = [0x3b7dd8, 0xd84b3b, 0x3bd87a, 0xc93bd8];
+/** Classic 3v3: the camera pulls back so heroes see more of the map. */
+const CLASSIC_ZOOM = 1.4;
 /** Classic 3v3: Red and Blue. */
 const TEAM_MARKERS: Record<number, number> = { 1: 0xff3a4a, 2: 0x3a8aff };
 
@@ -332,9 +330,9 @@ export class GameScene extends Phaser.Scene {
 
     this.cameraTarget = this.add.zone(CENTER_X, CENTER_Y, 1, 1);
     const cam = this.cameras.main;
-    if (stage === "classic") cam.setBounds(MAP_X - 24, MAP_Y - 64, MAP_W + 48, MAP_H + 128); // room above and below for names and the HUD
+    if (stage === "classic") cam.setBounds(0, MAP_Y - 64, WORLD_W, MAP_H + 128); // room above and below for names and the HUD
     else cam.setBounds(0, 0, WORLD_W, WORLD_H);
-    cam.setZoom(2);
+    cam.setZoom(stage === "classic" ? CLASSIC_ZOOM : 2);
     // Lock the camera to our hero; smoothing on top of rounded pixels makes sprites shimmer.
     cam.startFollow(this.cameraTarget, true, 1, 1);
     cam.setRoundPixels(true);
@@ -385,6 +383,18 @@ export class GameScene extends Phaser.Scene {
     this.lobby = lobby;
     this.events.once(Phaser.Scenes.Events.DESTROY, () => lobby.destroy());
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => lobby.destroy());
+  }
+
+  /** Classic 3v3: a row of pixel hearts over the head, one per life left (spent ones grey). */
+  private drawLives(g: Phaser.GameObjects.Graphics, x: number, y: number, lives: number) {
+    const heart = ["0110110", "1111111", "1111111", "0111110", "0011100", "0001000"];
+    for (let i = 0; i < CLASSIC_LIVES; i++) {
+      const hx = Math.round(x + (i - (CLASSIC_LIVES - 1) / 2) * 9 - 3.5);
+      const hy = Math.round(y - 7);
+      g.fillStyle(0x000000, 0.6).fillRect(hx - 1, hy - 1, 9, 8);
+      g.fillStyle(i < lives ? 0xff3a5a : 0x5a5060, 1);
+      heart.forEach((row, ry) => [...row].forEach((c, rx) => c === "1" && g.fillRect(hx + rx, hy + ry, 1, 1)));
+    }
   }
 
   /** Classic 3v3: the floor texture for a map (drawn once, then kept). */
@@ -719,7 +729,8 @@ export class GameScene extends Phaser.Scene {
       // Heroes are drawn HERO_SCALE times their sprite; BIG LIGHT makes them bigger still.
       const k = HERO_SCALE * (p.big > 0 && !p.dead ? BIG_SCALE : 1);
       body.setDepth(body.y);
-      body.setAlpha(p.dead ? 0.25 : p.dashing ? 0.6 : 1);
+      const out = p.dead && state.stage === "classic" && !(p.lives > 0); // Classic: out of lives, gone from the map
+      body.setAlpha(out ? 0 : p.dead ? 0.25 : p.dashing ? 0.6 : 1);
       // Other players' dashes: a burst where the dash began, pointing the way they went (ours plays on the key press).
       if (!isMe) {
         if (p.dashing && !view.wasDashing && !p.dead) view.dashFrom = { x: body.x, y: body.y, t: this.time.now };
@@ -810,22 +821,13 @@ export class GameScene extends Phaser.Scene {
         body.setAlpha(isMe ? 0.3 : 0);
         view.weapon?.setVisible(isMe);
       }
-      // Classic 3v3: tall grass hides a rival unless we are right next to it (or it just attacked);
-      // our own side shows faintly inside it.
+      // Classic 3v3: tall grass hides a rival completely; our own side shows faintly inside it.
       let bushed = false;
-      if (state.stage === "classic" && !p.dead) {
-        const map = classicMap(state.map ?? 0);
-        if (p.attackSeq !== view.revealSeq || p.skillSeq !== view.revealSkill || p.skill2Seq !== view.revealSkill2) {
-          [view.revealSeq, view.revealSkill, view.revealSkill2] = [p.attackSeq, p.skillSeq, p.skill2Seq];
-          view.revealUntil = this.time.now + 700;
-        }
-        if (inBush(map, p.x, p.y)) {
-          const mine = state.players.get(this.room!.sessionId);
-          const team = p.owner ? state.players.get(p.owner)?.team : p.team;
-          const near = mine && Math.hypot(mine.x - p.x, mine.y - p.y) < BLOCK * 2.5;
-          if (team === mine?.team) body.setAlpha(Math.min(body.alpha, 0.55));
-          else if (!near && this.time.now > (view.revealUntil ?? 0)) bushed = true;
-        }
+      if (state.stage === "classic" && !p.dead && inBush(classicMap(state.map ?? 0), p.x, p.y)) {
+        const mine = state.players.get(this.room!.sessionId);
+        const team = p.owner ? state.players.get(p.owner)?.team : p.team;
+        if (team === mine?.team) body.setAlpha(Math.min(body.alpha, 0.55));
+        else bushed = true;
       }
       if (bushed) {
         body.setAlpha(0);
@@ -837,7 +839,7 @@ export class GameScene extends Phaser.Scene {
         const color = team === 1 ? "#ff8a94" : team === 2 ? "#8ac4ff" : "#ffffff";
         if (view.label.style.color !== color) view.label.setColor(color);
       }
-      view.label.setVisible(!hiddenNow && !(p.owner && (p.hero === "gunbot" || p.hero === "gladiator")));
+      view.label.setVisible(!hiddenNow && !out && !(p.owner && (p.hero === "gunbot" || p.hero === "gladiator")));
       // MOTORCYCLE: the bike under him while he rides.
       const riding = !p.dead && p.active2 > 0 && skill2?.kind === "bike";
       if (riding && !view.bike) view.bike = this.add.image(body.x, body.y, "motorbike").setOrigin(0.5, 1);
@@ -869,9 +871,9 @@ export class GameScene extends Phaser.Scene {
       if (p.hp < view.lastHp - 0.5) {
         view.hurtFlash = 0.15;
         const mine = id === this.room?.sessionId;
-        if (!p.owner || p.hp > 0) this.popDamage(body.x, body.y - 20, view.lastHp - p.hp, mine ? "#ff5a5a" : "#ffffff");
+        if ((!p.owner || p.hp > 0) && !hiddenNow) this.popDamage(body.x, body.y - 20, view.lastHp - p.hp, mine ? "#ff5a5a" : "#ffffff");
         if (mine) this.cameras.main.shake(80, 0.004);
-      } else if (p.hp > view.lastHp + 1 && p.hp - view.lastHp < p.maxHp * 0.5 && view.lastHp > 0 && !p.dead) this.popDamage(body.x, body.y - 20, p.hp - view.lastHp, "#5aff7a", "+");
+      } else if (p.hp > view.lastHp + 1 && p.hp - view.lastHp < p.maxHp * 0.5 && view.lastHp > 0 && !p.dead && !hiddenNow) this.popDamage(body.x, body.y - 20, p.hp - view.lastHp, "#5aff7a", "+");
       view.lastHp = p.hp;
       view.hurtFlash = Math.max(0, view.hurtFlash - dt);
       const stoppedHere = state.timeStop > 0 && state.timeStopBy !== id && !movesInStoppedTime(p.hero);
@@ -905,6 +907,7 @@ export class GameScene extends Phaser.Scene {
         view.bar.fillStyle(team ? TEAM_MARKERS[team] : PLAYER_MARKERS[p.color % 4], team ? 0.8 : 0.5).fillEllipse(body.x, body.y + 1, 14 * k, 5 * k);
         view.bar.fillStyle(0x000000, 0.7).fillRect(body.x - 12, body.y + 3 + 2 * k, 24, 2);
         view.bar.fillStyle(0x4cd964, 1).fillRect(body.x - 12, body.y + 3 + 2 * k, 24 * (p.hp / p.maxHp), 2);
+        if (state.stage === "classic" && !p.owner) this.drawLives(view.bar, body.x, view.label.y - 11, p.lives ?? 0);
         if (p.big > 0) {
           // BIG LIGHT: a soft yellow glow while enlarged.
           view.bar.lineStyle(1, 0xfff07a, 0.6).strokeEllipse(body.x, body.y + 1, 18 * k, 7 * k);

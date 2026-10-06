@@ -1,5 +1,5 @@
 import Phaser from "phaser";
-import { BOT_LEVELS, CLASSIC_KOS_TO_WIN, DASH_COOLDOWN, PVP_KILLS_TO_WIN, WAVE_COUNT, heroOf, ringStage } from "../../../shared/game";
+import { BOT_LEVELS, CLASSIC_LIVES, DASH_COOLDOWN, PVP_KILLS_TO_WIN, WAVE_COUNT, heroOf, ringStage } from "../../../shared/game";
 import { PLAYER_COATS } from "../art";
 import type { GameScene } from "./GameScene";
 import { TouchControls, isTouchDevice } from "../touch";
@@ -109,10 +109,18 @@ export class HudScene extends Phaser.Scene {
     let banner = "";
     if (state.stage === "classic") {
       // Classic 3v3: the two teams' KOs.
-      this.waveText.setText(`CLASSIC 3V3  RED ${state.scoreA ?? 0} - ${state.scoreB ?? 0} BLUE  FIRST TO ${CLASSIC_KOS_TO_WIN}`);
-      if (state.phase === "victory") banner = `${state.winner} TEAM WINS!\nBack to select in ${Math.ceil(state.phaseTimer)}`;
+      // Classic 3v3: lives left on each side; the last team standing wins.
+      const left: Record<number, number> = { 1: 0, 2: 0 };
+      state.players.forEach((p: any) => {
+        if (!p.owner) left[p.team] = (left[p.team] ?? 0) + (p.lives ?? 0);
+      });
+      const redMax = CLASSIC_LIVES * 3;
+      const blueMax = CLASSIC_LIVES * 3;
+      this.waveText.setText(`RED ${left[1]}/${redMax} LIVES  vs  BLUE ${left[2]}/${blueMax} LIVES`);
+      if (state.phase === "victory") banner = state.winner === "NO" ? `DRAW!\nBack to select in ${Math.ceil(state.phaseTimer)}` : `${state.winner} TEAM WINS!\nBack to select in ${Math.ceil(state.phaseTimer)}`;
       else if (state.phase === "intermission") banner = `${me?.team === 1 ? "YOU ARE RED" : "YOU ARE BLUE"}\nFIGHT! in ${Math.ceil(state.phaseTimer)}`;
-      else if (me?.dead) banner = `YOU FELL\nBack in ${Math.ceil(me.respawnIn)}`;
+      else if (me?.dead && !(me.lives > 0)) banner = "OUT OF LIVES\nCheer your team on!";
+      else if (me?.dead) banner = `YOU FELL  ${me.lives} ${me.lives === 1 ? "LIFE" : "LIVES"} LEFT\nBack in ${Math.ceil(me.respawnIn)}`;
     } else if (ringStage(state.stage)) {
       const pve = state.stage === "pve";
       const level = pve ? `  ${BOT_LEVELS[state.botLevel ?? 2]?.name ?? ""}` : "";
