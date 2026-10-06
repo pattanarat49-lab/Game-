@@ -331,20 +331,24 @@ const accUser = document.getElementById("acc-user") as HTMLInputElement;
 const accPass = document.getElementById("acc-pass") as HTMLInputElement;
 const accPass2 = document.getElementById("acc-pass2") as HTMLInputElement;
 const accError = document.getElementById("acc-error")!;
-const accGo = document.getElementById("acc-go")!;
+const accGo = document.getElementById("acc-go-text")!;
 let signupMode = false;
+let fitLogin = () => {}; // set by setupLoginScene
 
 function setSignupMode(on: boolean) {
   signupMode = on;
   accountForm.classList.toggle("signup", on);
-  document.getElementById("acc-title")!.textContent = on ? "CREATE NEW ACCOUNT" : "LOGIN";
-  accGo.textContent = on ? "CREATE ACCOUNT & PLAY" : "LOGIN";
-  accPass2.style.display = on ? "" : "none";
+  const title = document.getElementById("acc-title")!;
+  title.textContent = on ? "NEW ACCOUNT" : "LOGIN";
+  title.classList.toggle("small", on);
+  accGo.textContent = on ? "CREATE & PLAY" : "LOGIN";
+  document.getElementById("acc-pass2-row")!.style.display = on ? "" : "none";
   accPass.autocomplete = on ? "new-password" : "current-password";
   document.getElementById("acc-switch-text")!.textContent = on ? "Already have an account?" : "No account yet?";
-  document.getElementById("acc-switch")!.textContent = on ? "BACK TO LOGIN" : "CREATE NEW ACCOUNT";
+  document.getElementById("acc-switch-label")!.textContent = on ? "BACK TO LOGIN" : "CREATE NEW ACCOUNT";
   accError.textContent = "";
   accPass2.value = "";
+  fitLogin();
 }
 
 /** Signed out: the sign-in screen covers the menu. Signed in: the menu, with the name and LOG OUT. */
@@ -354,6 +358,7 @@ function drawAccount() {
   accountBar.innerHTML = "";
   nameInput.style.display = a ? "none" : "";
   if (!a) {
+    fitLogin(); // sized now that the panel is on screen
     setTimeout(() => accUser.focus(), 0);
     return;
   }
@@ -440,12 +445,12 @@ function applyPrefs() {
 }
 
 if (soloOnly) {
-  accountBar.remove(); // the solo build has no server to keep accounts on
+  accountBar.remove(); // the solo build has no server to keep accounts on (nor the login screen's video)
   accountModal.remove();
   // First visit: the tutorial (every hero is open in the solo build).
   if (!localStorageGet("uv-tutorial")) startTutorial();
 } else {
-  (document.getElementById("acc-cover") as HTMLImageElement).src = COVER_PNG;
+  setupLoginScene();
   setSignupMode(false);
   drawAccount();
   onAccountChange(() => {
@@ -477,4 +482,33 @@ if (soloOnly) {
       accError.textContent = (e as Error).message === "Failed to fetch" ? "Can't reach the server. Try again in a moment." : (e as Error).message;
     }
   });
+}
+
+/** The login screen's animated scene: a 1280x720 stage scaled to fill the screen while keeping the panel in view. */
+function setupLoginScene() {
+  const stage = document.getElementById("acc-stage")!;
+  const video = document.createElement("video");
+  Object.assign(video, { src: "/login-bg.mp4", muted: true, loop: true, autoplay: true, playsInline: true });
+  video.setAttribute("playsinline", "");
+  video.setAttribute("muted", "");
+  stage.prepend(video);
+  video.addEventListener("loadeddata", () => stage.querySelector(".poster")?.remove());
+  const form = document.getElementById("account-form")!;
+  const fit = () => {
+    const w = innerWidth;
+    const h = innerHeight;
+    // The panel (in 1280x720 scene pixels) must always be fully on screen; the logo above it when there is room.
+    const top = 186;
+    const bottom = top + form.offsetHeight + 12;
+    const s = Math.min(Math.max(w / 1280, h / 720), (w * 0.96) / 520, (h * 0.98) / (bottom - top + 16));
+    const vw = w / s;
+    const vh = h / s;
+    const left = vw >= 1280 ? (1280 - vw) / 2 : Math.min(Math.max(0, 642 - vw / 2), 1280 - vw);
+    const up = vh >= 720 ? (720 - vh) / 2 : Math.min(Math.max(0, bottom - vh), 720 - vh);
+    stage.style.transform = `scale(${s}) translate(${-left}px, ${-up}px)`;
+  };
+  fitLogin = fit;
+  void document.fonts?.ready.then(fit);
+  fit();
+  addEventListener("resize", fit);
 }

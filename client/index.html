@@ -374,18 +374,44 @@
       #account-bar button.main { background: #ffd23f; color: #1a1220; border-color: #b8901a; }
       #account-bar button.glow { animation: glow 1s ease-in-out infinite alternate; }
       @keyframes glow { to { box-shadow: 0 0 12px #ffd23f; } }
-      #account-modal { position: fixed; inset: 0; z-index: 40; display: flex; align-items: safe center; justify-content: center; background: #120b0f; overflow-y: auto; }
-      #acc-cover { display: block; margin: 0 auto; width: 84px; height: 84px; }
-      #acc-go { font: inherit; font-size: 12px; padding: 11px; border-radius: 3px; cursor: pointer; background: #2fae6a; color: #fff; border: 2px solid #1d7a48; }
-      #acc-switch-text { margin: 4px 0 0; font-size: 10px; color: #c9b8c0; }
-      #acc-switch { font: inherit; font-size: 10px; padding: 9px; border-radius: 3px; cursor: pointer; background: #3a6ad8; color: #fff; border: 2px solid #2a4a9a; }
-      #account-form.signup #acc-go { background: #3a6ad8; border-color: #2a4a9a; }
-      #account-form.signup #acc-switch { background: #3a2e46; border-color: #4a3e56; }
+      /* Login screen (2026-10-06): the user's animated night scene, with the panel drawn over the one in the video. */
+      #account-modal { position: fixed; inset: 0; z-index: 40; overflow: hidden; background: #0c0820; }
       #account-modal.hidden { display: none; }
-      #account-form { background: #1e1626; border: 3px solid #6b5842; border-radius: 6px; padding: 16px; width: min(88vw, 320px); display: flex; flex-direction: column; gap: 8px; text-align: center; }
-      #account-form h2 { margin: 0 0 4px; font-size: 14px; color: #ffd23f; font-weight: normal; }
-      #account-form input { width: 100%; box-sizing: border-box; font: inherit; font-size: 12px; padding: 9px; background: #120b0f; color: #fff; border: 2px solid #6b5842; border-radius: 3px; }
-      #acc-error { color: #ff6a5a; font-size: 10px; min-height: 1em; margin: 0; line-height: 1.5; }
+      #account-modal::before { content: ""; position: absolute; inset: -20px; background: url(/login-bg.jpg) center / cover; filter: blur(14px) brightness(0.6); }
+      #acc-stage { position: absolute; left: 0; top: 0; width: 1280px; height: 720px; transform-origin: 0 0; --u: 1px; }
+      #acc-stage video, #acc-stage .poster { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: fill; pointer-events: none; }
+      #account-form { position: absolute; left: calc(var(--u) * 393); top: calc(var(--u) * 186); width: calc(var(--u) * 500); box-sizing: border-box;
+        padding: calc(var(--u) * 26) calc(var(--u) * 30) calc(var(--u) * 30); display: flex; flex-direction: column; gap: calc(var(--u) * 14);
+        background: linear-gradient(#0f0c24, #0a0819); border: calc(var(--u) * 3) solid #c9932e; border-radius: calc(var(--u) * 4);
+        box-shadow: 0 0 0 calc(var(--u) * 2) #3a2a10, 0 0 calc(var(--u) * 30) rgba(255, 190, 80, 0.25); text-align: center; color: #fff; }
+      #account-form::before, #account-form::after { content: ""; position: absolute; width: calc(var(--u) * 18); height: calc(var(--u) * 18); border: calc(var(--u) * 4) solid #f2c14e; }
+      #account-form::before { left: calc(var(--u) * -8); top: calc(var(--u) * -8); border-right: 0; border-bottom: 0; }
+      #account-form::after { right: calc(var(--u) * -8); bottom: calc(var(--u) * -8); border-left: 0; border-top: 0; }
+      #acc-title { margin: 0 0 calc(var(--u) * 4); font-family: "Press Start 2P", monospace; font-weight: normal; font-size: calc(var(--u) * 38); color: #f5c542;
+        text-shadow: 0 calc(var(--u) * 4) 0 #8a5a12, 0 0 calc(var(--u) * 14) rgba(255, 200, 80, 0.45); letter-spacing: calc(var(--u) * 2); display: flex; align-items: center; justify-content: center; gap: calc(var(--u) * 18); }
+      #acc-title::before, #acc-title::after { content: ""; width: calc(var(--u) * 14); height: calc(var(--u) * 14); background: #f5c542; transform: rotate(45deg); box-shadow: 0 0 0 calc(var(--u) * 3) #0f0c24, 0 0 0 calc(var(--u) * 5) #c9932e; flex: none; }
+      #acc-title.small { font-size: calc(var(--u) * 24); }
+      .acc-field { position: relative; }
+      .acc-field svg { position: absolute; left: calc(var(--u) * 18); top: 50%; transform: translateY(-50%); width: calc(var(--u) * 24); height: calc(var(--u) * 24); fill: #f2c14e; pointer-events: none; }
+      #account-form input { width: 100%; box-sizing: border-box; height: calc(var(--u) * 54); padding: 0 calc(var(--u) * 16) 0 calc(var(--u) * 56);
+        font-family: "Press Start 2P", monospace; font-size: calc(var(--u) * 15); color: #fff; background: #0a0816; border: calc(var(--u) * 2) solid #b8862c; border-radius: calc(var(--u) * 8); outline: none; }
+      #account-form input::placeholder { color: #a9a3c0; }
+      #account-form input:focus { border-color: #ffd86a; box-shadow: 0 0 calc(var(--u) * 10) rgba(255, 210, 100, 0.35); }
+      .acc-btn { position: relative; display: flex; align-items: center; justify-content: center; gap: calc(var(--u) * 14); height: calc(var(--u) * 58); cursor: pointer;
+        font-family: "Press Start 2P", monospace; font-size: calc(var(--u) * 17); color: #fff; letter-spacing: calc(var(--u) * 1); border-radius: calc(var(--u) * 6); text-shadow: 0 calc(var(--u) * 2) 0 rgba(0, 0, 0, 0.35); }
+      .acc-btn svg { width: calc(var(--u) * 26); height: calc(var(--u) * 26); flex: none; }
+      #acc-go { background: linear-gradient(#3ee07a 0 45%, #22b95a 45%); border: calc(var(--u) * 3) solid #0e6b2f; box-shadow: inset 0 calc(var(--u) * 3) 0 #8dffb4, inset 0 calc(var(--u) * -4) 0 #128a3e; }
+      #acc-go svg { fill: #ffe066; }
+      #acc-switch { background: linear-gradient(#4f8cff 0 45%, #2f62e0 45%); border: calc(var(--u) * 3) solid #1b3a9a; box-shadow: inset 0 calc(var(--u) * 3) 0 #a8c6ff, inset 0 calc(var(--u) * -4) 0 #2448b8; }
+      #acc-switch svg { fill: #fff; }
+      .acc-btn:hover { filter: brightness(1.1); }
+      .acc-btn:active { transform: translateY(calc(var(--u) * 2)); }
+      #account-form.signup #acc-go { background: linear-gradient(#4f8cff 0 45%, #2f62e0 45%); border-color: #1b3a9a; box-shadow: inset 0 calc(var(--u) * 3) 0 #a8c6ff, inset 0 calc(var(--u) * -4) 0 #2448b8; }
+      #account-form.signup #acc-switch { background: linear-gradient(#5a4a78 0 45%, #43365c 45%); border-color: #2a2040; box-shadow: inset 0 calc(var(--u) * 3) 0 #8a78aa, inset 0 calc(var(--u) * -4) 0 #33284a; }
+      #acc-switch-text { margin: 0; display: flex; align-items: center; gap: calc(var(--u) * 14); font-family: "Press Start 2P", monospace; font-size: calc(var(--u) * 12); color: #c8c2dc; }
+      #acc-switch-text::before, #acc-switch-text::after { content: ""; flex: 1; height: calc(var(--u) * 2); background: linear-gradient(90deg, transparent, #6a6290); }
+      #acc-switch-text::after { background: linear-gradient(90deg, #6a6290, transparent); }
+      #acc-error { color: #ff7a6a; font-family: "Press Start 2P", monospace; font-size: calc(var(--u) * 12); min-height: calc(var(--u) * 14); margin: 0; line-height: 1.5; }
       #cover {
         display: block;
         margin: 0 auto -4px;
@@ -420,17 +446,19 @@
       <p id="error"></p>
     </div>
     <div id="account-modal" class="hidden">
-      <form id="account-form" autocomplete="on">
-        <img id="acc-cover" alt="" width="84" height="84" />
-        <h2 id="acc-title">LOGIN</h2>
-        <input id="acc-user" maxlength="16" placeholder="Username" autocomplete="username" autocapitalize="off" spellcheck="false" />
-        <input id="acc-pass" type="password" maxlength="64" placeholder="Password" autocomplete="current-password" />
-        <input id="acc-pass2" type="password" maxlength="64" placeholder="Confirm password" autocomplete="new-password" />
-        <p id="acc-error"></p>
-        <button type="submit" id="acc-go">LOGIN</button>
-        <p id="acc-switch-text">No account yet?</p>
-        <button type="button" id="acc-switch">CREATE NEW ACCOUNT</button>
-      </form>
+      <div id="acc-stage">
+        <img class="poster" src="/login-bg.jpg" alt="" />
+        <form id="account-form" autocomplete="on">
+          <h2 id="acc-title">LOGIN</h2>
+          <div class="acc-field"><svg viewBox="0 0 16 16"><path d="M5 1h6v1h1v5h-1v1H5V7H4V2h1zM2 11h1v-1h2V9h6v1h2v1h1v4H2z"/></svg><input id="acc-user" maxlength="16" placeholder="Username" autocomplete="username" autocapitalize="off" spellcheck="false" /></div>
+          <div class="acc-field"><svg viewBox="0 0 16 16"><path d="M5 1h6v1h1v5h1v8H3V7h1V2h1zm1 2v4h4V3zm1 7v3h2v-3z"/></svg><input id="acc-pass" type="password" maxlength="64" placeholder="Password" autocomplete="current-password" /></div>
+          <div class="acc-field" id="acc-pass2-row"><svg viewBox="0 0 16 16"><path d="M5 1h6v1h1v5h1v8H3V7h1V2h1zm1 2v4h4V3zm1 7v3h2v-3z"/></svg><input id="acc-pass2" type="password" maxlength="64" placeholder="Confirm password" autocomplete="new-password" /></div>
+          <p id="acc-error"></p>
+          <button type="submit" id="acc-go" class="acc-btn"><svg viewBox="0 0 16 16"><path d="M8 1h7v14H8v-2h5V3H8zM5 4h2v2h2v1h2v2H9v1H7v2H5v-2h1V9H1V7h5V6H5z"/></svg><span id="acc-go-text">LOGIN</span></button>
+          <p id="acc-switch-text">No account yet?</p>
+          <button type="button" id="acc-switch" class="acc-btn"><svg viewBox="0 0 16 16"><path d="M4 1h5v1h1v4H9v1H4V6H3V2h1zM1 10h1V9h9v1h1v4H1zM13 6h1v2h2v1h-2v2h-1V9h-2V8h2z"/></svg><span id="acc-switch-label">CREATE NEW ACCOUNT</span></button>
+        </form>
+      </div>
     </div>
     <button type="button" id="back-btn" class="hidden" aria-label="Back to menu">&#9664; BACK</button>
     <div id="rotate">
