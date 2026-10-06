@@ -134,3 +134,74 @@ export function paintPortrait(canvas: HTMLCanvasElement, hero: string) {
   };
   img.src = front;
 }
+
+/** Heroes that walk with stepping feet (trial: one hero first, the rest once the user likes it). */
+export const WALK_HEROES = new Set(["rider"]);
+/** Walk cycle: both feet down, left foot up, both down, right foot up. */
+export const WALK_FRAMES = 4;
+export const WALK_FRAME_TIME = 0.11;
+
+/** Was the hero lifted (a low hop) on this walk frame? */
+export function walkHop(frame: number): number {
+  return frame % 2 === 1 ? 1 : 0;
+}
+
+/**
+ * Build the walk frames `hero_<id>_walk_<n>` from the front picture: find the gap between the legs at the
+ * bottom of the picture, then lift one leg at a time by 2 pixels (the foot leaves the ground, the leg bends).
+ */
+export function makeWalkFrames(textures: Phaser.Textures.TextureManager, hero: string) {
+  const key = `hero_${hero}_south`;
+  if (!textures.exists(key)) return;
+  const img = textures.get(key).getSourceImage() as HTMLImageElement;
+  const w = img.width;
+  const h = img.height;
+  const src = document.createElement("canvas");
+  src.width = w;
+  src.height = h;
+  const sctx = src.getContext("2d")!;
+  sctx.drawImage(img, 0, 0);
+  const alpha = sctx.getImageData(0, 0, w, h).data;
+  const solid = (x: number, y: number) => alpha[(y * w + x) * 4 + 3] > 0;
+  // The legs: rows at the bottom where the figure has an empty gap between its left and right edges.
+  const gapIn = (y: number): [number, number] | undefined => {
+    let l = 0;
+    while (l < w && !solid(l, y)) l++;
+    let r = w - 1;
+    while (r > l && !solid(r, y)) r--;
+    let best: [number, number] | undefined;
+    for (let x = l + 1; x < r; x++) {
+      if (solid(x, y)) continue;
+      let e = x;
+      while (e < r && !solid(e, y)) e++;
+      if (!best || e - x > best[1] - best[0]) best = [x, e];
+      x = e;
+    }
+    return best;
+  };
+  const bottomGap = gapIn(h - 1);
+  if (!bottomGap) return;
+  const split = Math.round((bottomGap[0] + bottomGap[1]) / 2);
+  let top = h - 1;
+  while (top > h * 0.6 && gapIn(top - 1)) top--;
+  const legTop = Math.max(0, top - 1); // a row of hip above the gap moves with the leg
+  const lift = 2;
+  for (let f = 0; f < WALK_FRAMES; f++) {
+    const c = document.createElement("canvas");
+    c.width = w;
+    c.height = h;
+    const ctx = c.getContext("2d")!;
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(src, 0, 0);
+    if (f % 2 === 1) {
+      // Frame 1 lifts the leg on the picture's left, frame 3 the one on its right.
+      const [x0, x1] = f === 1 ? [0, split] : [split, w];
+      ctx.clearRect(x0, legTop, x1 - x0, h - legTop);
+      ctx.drawImage(src, x0, legTop - lift, x1 - x0, lift, x0, legTop - lift, x1 - x0, lift); // keep the hip
+      ctx.drawImage(src, x0, legTop, x1 - x0, h - legTop, x0, legTop - lift, x1 - x0, h - legTop);
+    }
+    const name = `hero_${hero}_walk_${f}`;
+    if (textures.exists(name)) textures.remove(name);
+    textures.addCanvas(name, c);
+  }
+}

@@ -65,7 +65,7 @@ import { TutorialView } from "../tutorial";
 import { isTouchDevice } from "../touch";
 import { DUNGEON, OPEN_WORLD } from "../../../shared/world";
 import { BLOCK } from "../../../shared/maps";
-import { attackArtLayout, attackFrame, facingOf, frontOnly, hasHeroArt, heroArtLayout, SWING_TIME } from "../heroArt";
+import { attackArtLayout, attackFrame, facingOf, frontOnly, hasHeroArt, heroArtLayout, SWING_TIME, WALK_FRAMES, WALK_FRAME_TIME, WALK_HEROES, walkHop } from "../heroArt";
 
 interface PlayerView {
   body: Phaser.GameObjects.Image;
@@ -92,6 +92,8 @@ interface PlayerView {
   look?: string; // the body's look without its facing, so turning around does not count as a transformation
   walkX?: number; // where the body was last frame, to tell walking from standing
   walkY?: number;
+  walkT?: number; // time spent walking (picks the walk frame)
+  walkStill?: number; // time standing still since the last step
   swing?: number; // seconds left of a hand-made basic-attack swing animation
 }
 
@@ -875,7 +877,17 @@ export class GameScene extends Phaser.Scene {
       if (view.swing) view.swing = Math.max(0, view.swing - dt);
       const swing = art && view.swing && !p.dead ? attackFrame(shown, aim, 1 - view.swing / SWING_TIME) : undefined;
       const layout = swing ? attackArtLayout(shown) : art ? heroArtLayout(shown) : undefined;
-      const texture = swing ? swing.texture : art ? `${look}_${facingOf(aim, shown)}` : look;
+      // Walking heroes with stepping feet: the walk frames while moving (a swing still wins).
+      const moved = Math.hypot(body.x - (view.walkX ?? body.x), body.y - (view.walkY ?? body.y));
+      view.walkX = body.x;
+      view.walkY = body.y;
+      if (moved > 0.15 && !p.dead) {
+        view.walkT = (view.walkT ?? 0) + dt;
+        view.walkStill = 0;
+      } else if ((view.walkStill = (view.walkStill ?? 0) + dt) > 0.1) view.walkT = 0; // a missed frame is not a stop
+      const walking = art && !swing && WALK_HEROES.has(shown) && (view.walkT ?? 0) > 0;
+      const walkFrame = walking ? Math.floor((view.walkT ?? 0) / WALK_FRAME_TIME) % WALK_FRAMES : 0;
+      const texture = swing ? swing.texture : walking ? `hero_${shown}_walk_${walkFrame}` : art ? `${look}_${facingOf(aim, shown)}` : look;
       if (art) body.setFlipX(swing ? swing.flip : frontOnly(shown) && Math.cos(aim) < 0);
       if (disguised) view.weapon?.setVisible(false);
       const artScale = layout ? layout.scale : 1;
@@ -884,11 +896,12 @@ export class GameScene extends Phaser.Scene {
         body.setTexture(texture);
         body.setOrigin(0.5, layout ? layout.originY : 0.85);
       }
-      if (art) {
+      if (walking) {
+        // A low hop on each step: up one picture pixel while a foot is in the air.
+        body.y -= walkHop(walkFrame) * k * artScale;
+        body.setRotation(0);
+      } else if (art) {
         // Walking: a little step bounce and sway while the hero moves.
-        const moved = Math.hypot(body.x - (view.walkX ?? body.x), body.y - (view.walkY ?? body.y));
-        view.walkX = body.x;
-        view.walkY = body.y;
         const step = this.time.now / 85;
         if (moved > 0.15 && !p.dead) {
           body.y -= Math.abs(Math.sin(step)) * 1.2 * k;

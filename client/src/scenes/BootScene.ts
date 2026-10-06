@@ -1,5 +1,5 @@
 import Phaser from "phaser";
-import { loadHeroArt } from "../heroArt";
+import { WALK_HEROES, loadHeroArt, makeWalkFrames } from "../heroArt";
 import { CENTER_X, CENTER_Y, MAP_COLS, MAP_ROWS, RING, ROCKS, TILE, WORLD_H, WORLD_W } from "../../../shared/game";
 import {
   BRUTE,
@@ -154,6 +154,7 @@ export class BootScene extends Phaser.Scene {
   }
 
   create() {
+    for (const hero of WALK_HEROES) makeWalkFrames(this.textures, hero);
     for (const [id, sprite] of Object.entries(HERO_SPRITES)) this.addCanvas(`hero_${id}`, renderPixelSprite(sprite));
     this.addCanvas("sword", renderPixelSprite(SWORD));
     this.addCanvas("rifle", renderPixelSprite(RIFLE));
