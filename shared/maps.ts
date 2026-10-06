@@ -400,3 +400,20 @@ export function seesInto(m: ClassicMap, ax: number, ay: number, bx: number, by: 
   const patch = bushPatch(m, bx, by);
   return patch < 0 || patch === bushPatch(m, ax, ay);
 }
+
+const patchTilesCache = new WeakMap<ClassicMap, { x: number; y: number }[][]>();
+
+/** Every patch of tall grass on the map, as the centres of its blocks. */
+export function bushPatches(m: ClassicMap): { x: number; y: number }[][] {
+  let patches = patchTilesCache.get(m);
+  if (patches) return patches;
+  bushPatch(m, 0, 0); // fills the patch ids
+  const ids = regionCache.get(m)!;
+  patches = [];
+  ids.forEach((id, i) => {
+    if (id < 0) return;
+    (patches![id] ??= []).push(tileCenter(i % MAP_COLS_C, Math.floor(i / MAP_COLS_C)));
+  });
+  patchTilesCache.set(m, patches);
+  return patches;
+}

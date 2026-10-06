@@ -83,7 +83,7 @@ import {
   CLASSIC_RESPAWN,
   CLASSIC_TEAM_SIZE,
 } from "./game";
-import { BLOCK, CLASSIC_MAPS, MAP_X, MAP_Y, Team, classicMap, distanceField, seesInto, mapLineClear, stepAlong } from "./maps";
+import { BLOCK, CLASSIC_MAPS, ClassicMap, MAP_X, MAP_Y, Team, bushPatches, classicMap, distanceField, seesInto, mapLineClear, stepAlong } from "./maps";
 
 export const TICK_MS = 1000 / 30;
 const HURT_IFRAMES = 0.5;
@@ -374,7 +374,9 @@ interface PlayerBrain {
   volleyAim?: number;
   eyebeamTick: number;
   /** Bot Duel: this player is driven by the simulation itself. */
-  bot?: { strafe: number; strafeTimer: number; think: number; aimErr: number; level: number; hp: number; path?: Int16Array; pathTo?: number; pathTimer?: number };
+  bot?: { strafe: number; strafeTimer: number; think: number; aimErr: number; level: number; hp: number; path?: Int16Array; pathTo?: number; pathTimer?: number;
+    /** Classic: where it last saw a rival, where it is searching now, and when it last checked each patch of grass. */
+    lastSeen?: { x: number; y: number }; search?: { x: number; y: number; patch?: number }; searchTimer?: number; checked?: Map<number, number> };
   /** The portal we just came out of: it cannot send us back until we step off it. */
   portalLock?: string;
   cloneLife: number; // seconds a clone has left
@@ -4145,11 +4147,19 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       if (map && !seesInto(map, p.x, p.y, v.x, v.y)) return; // Classic: no seeing into tall grass (unless in the same patch)
       if (d < dist) [dist, foe] = [d, v];
     });
+    if (map && foe) [bot.lastSeen, bot.search] = [{ x: foe.x, y: foe.y }, undefined];
     if (map && !foe && !p.dead && this.pvpLive()) {
-      // Classic: nobody in sight, so head for the other side's spawn and look for them.
-      const goal = classicMap(this.state.map).spawns[p.team === 1 ? 2 : 1][1];
+      // Classic: nobody in sight. Go where a rival was last seen, then search the tall grass patch by patch.
+      bot.searchTimer = (bot.searchTimer ?? 0) - dt;
+      const arrived = bot.search && Math.hypot(bot.search.x - p.x, bot.search.y - p.y) < BLOCK * 0.6;
+      if (!bot.search || arrived || bot.searchTimer <= 0) {
+        if (bot.search?.patch !== undefined) (bot.checked ??= new Map()).set(bot.search.patch, this.clock);
+        bot.search = this.nextSearch(map, p, bot);
+        bot.searchTimer = 8;
+      }
+      const goal = bot.search;
       bot.pathTimer = (bot.pathTimer ?? 0) - dt;
-      const to = -1 - p.team;
+      const to = -10000 - Math.floor((goal.x - MAP_X) / BLOCK) - Math.floor((goal.y - MAP_Y) / BLOCK) * 100;
       if (!bot.path || bot.pathTo !== to || bot.pathTimer <= 0) [bot.path, bot.pathTo, bot.pathTimer] = [distanceField(map, goal.x, goal.y), to, 2];
       const step = stepAlong(bot.path, p.x, p.y);
       input.left = step.x < -0.3;
@@ -4207,6 +4217,33 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       else if (hero.skill2 && p.skill2Cooldown <= 0 && this.botWants(hero.skill2, p, dist)) input.skill2 = true;
     }
     brain.input = input;
+  }
+
+  /**
+   * Classic: where a bot that can't see anyone looks next. First the spot a rival was last seen, then
+   * the nearest patch of tall grass it hasn't checked lately (one of the closest few, so bots spread out),
+   * and with nothing left to check, the other side's spawn.
+   */
+  private nextSearch(map: ClassicMap, p: P, bot: NonNullable<PlayerBrain["bot"]>): { x: number; y: number; patch?: number } {
+    if (bot.lastSeen) {
+      const seen = bot.lastSeen;
+      bot.lastSeen = undefined;
+      if (Math.hypot(seen.x - p.x, seen.y - p.y) > BLOCK) return seen;
+    }
+    const options: { x: number; y: number; patch: number; d: number }[] = [];
+    bushPatches(map).forEach((tiles, patch) => {
+      if (this.clock - (bot.checked?.get(patch) ?? -Infinity) < 20) return;
+      let best = tiles[0];
+      for (const t of tiles) if (Math.hypot(t.x - p.x, t.y - p.y) < Math.hypot(best.x - p.x, best.y - p.y)) best = t;
+      // Step a little into the patch, not just onto its edge.
+      const deep = tiles.reduce((a, t) => (Math.hypot(t.x - best.x, t.y - best.y) <= BLOCK * 1.5 && Math.hypot(t.x - p.x, t.y - p.y) > Math.hypot(a.x - p.x, a.y - p.y) ? t : a), best);
+      options.push({ x: deep.x, y: deep.y, patch, d: Math.hypot(best.x - p.x, best.y - p.y) });
+    });
+    options.sort((a, b) => a.d - b.d);
+    const pick = options[Math.floor(Math.random() * Math.min(3, options.length))];
+    if (pick) return pick;
+    bot.checked?.clear();
+    return classicMap(this.state.map).spawns[p.team === 1 ? 2 : 1][1];
   }
 
   /** Would the bot use this skill now, `dist` away from its opponent? */
