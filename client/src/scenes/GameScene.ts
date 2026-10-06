@@ -65,7 +65,7 @@ import { TutorialView } from "../tutorial";
 import { isTouchDevice } from "../touch";
 import { DUNGEON, OPEN_WORLD } from "../../../shared/world";
 import { BLOCK } from "../../../shared/maps";
-import { attackArtLayout, attackFrame, facingOf, frontOnly, hasHeroArt, heroArtLayout, SWING_TIME, WALK_FRAMES, WALK_FRAME_TIME, WALK_HEROES, walkContact, walkOriginY } from "../heroArt";
+import { attackArtLayout, attackFrame, facingOf, frontOnly, hasHeroArt, heroArtLayout, SWING_TIME, WALK_FRAMES, WALK_FRAME_TIME, walksWithFeet, walkContact, walkOriginY } from "../heroArt";
 
 interface PlayerView {
   body: Phaser.GameObjects.Image;
@@ -889,7 +889,7 @@ export class GameScene extends Phaser.Scene {
         view.walkT = (view.walkT ?? 0) + dt;
         view.walkStill = 0;
       } else if ((view.walkStill = (view.walkStill ?? 0) + dt) > 0.1) view.walkT = 0; // a missed frame is not a stop
-      const walking = art && !swing && WALK_HEROES.has(shown) && (view.walkT ?? 0) > 0;
+      const walking = art && !swing && walksWithFeet(shown) && (view.walkT ?? 0) > 0;
       const walkFrame = walking ? Math.floor((view.walkT ?? 0) / WALK_FRAME_TIME) % WALK_FRAMES : 0;
       if (!walking) view.walkFrame = undefined;
       const texture = swing ? swing.texture : walking ? `hero_${shown}_walk_${walkFrame}` : art ? `${look}_${facingOf(aim, shown)}` : look;

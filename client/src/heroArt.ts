@@ -135,8 +135,13 @@ export function paintPortrait(canvas: HTMLCanvasElement, hero: string) {
   img.src = front;
 }
 
-/** Heroes that walk with stepping feet (trial: one hero first, the rest once the user likes it). */
-export const WALK_HEROES = new Set(["rider"]);
+/** Heroes that walk with stepping feet: every hero drawn from a front picture. */
+/** No legs to step with (chess pieces, a bird): they only hop. */
+const HOP_ONLY = new Set(["pawn", "queen", "angrybird"]);
+
+export function walksWithFeet(hero: string): boolean {
+  return frontOnly(hero);
+}
 
 /**
  * The walk cycle, the classic 4 poses of a pixel-art walk seen from the front:
@@ -220,10 +225,25 @@ export function makeWalkFrames(textures: Phaser.Textures.TextureManager, hero: s
     split = Math.round((l + r + 1) / 2);
     legTop = bottom - Math.max(3, Math.round(h * 0.14));
   }
+  // Only the columns the feet stand on step; anything held low at the sides (a weapon, a cape, a tail)
+  // stays with the body instead of being cut in two.
+  let footL = split;
+  let footR = split;
+  for (let y = Math.max(0, bottom - 2); y <= bottom; y++) {
+    for (let x = 0; x < w; x++) {
+      if (!solid(x, y)) continue;
+      footL = Math.min(footL, x);
+      footR = Math.max(footR, x + 1);
+    }
+  }
+  footL = Math.max(0, footL - 1);
+  footR = Math.min(w, footR + 1);
   const headEnd = Math.round(h * 0.47); // chibi heroes: the head is about half the picture
   const H = h + PAD_TOP + PAD_BOTTOM;
   walkOrigin.set(hero, (PAD_TOP + heroArtLayout(hero).originY * h) / H);
-  WALK_POSES.forEach((pose, f) => {
+  const still = { left: 0, right: 0, body: 0, head: 0 };
+  WALK_POSES.forEach((step, f) => {
+    const pose = HOP_ONLY.has(hero) ? still : step;
     const c = document.createElement("canvas");
     c.width = w;
     c.height = H;
@@ -237,8 +257,10 @@ export function makeWalkFrames(textures: Phaser.Textures.TextureManager, hero: s
       // A leg that comes forward gets longer: repeat its top row into the space it left.
       for (let i = 0; i < dy; i++) part(x0, x1, legTop, legTop + 1, i);
     };
-    leg(0, split, pose.left);
-    leg(split, w, pose.right);
+    part(0, footL, legTop, h, pose.body);
+    part(footR, w, legTop, h, pose.body);
+    leg(footL, split, pose.left);
+    leg(split, footR, pose.right);
     // The body covers the tops of the legs (a lifted knee tucks under it); one row more on top so a head
     // that lags above it never leaves a hole at the neck.
     part(0, w, headEnd - 1, legTop, pose.body);
