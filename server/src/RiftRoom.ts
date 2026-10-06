@@ -1,3 +1,4 @@
+import { accountForToken, accountStats } from "./accounts";
 import { Client, Room } from "colyseus";
 import { CLASSIC_TEAM_SIZE, MAX_PLAYERS, PlayerInput, stageOf } from "../../shared/game";
 import { RiftSim, TICK_MS, newRoomCode } from "../../shared/sim";
@@ -83,9 +84,11 @@ export class RiftRoom extends Room<RiftState> {
     for (const c of [asker, client]) c.send("goto", { stage: "pvp", code });
   }
 
-  onJoin(client: Client, options: { name?: string; hero?: string; stats?: string }) {
-    const player = this.sim.addPlayer(client.sessionId, String(options?.name || "Player"), String(options?.hero || ""));
-    player.stats = String(options?.stats ?? "").slice(0, 800);
+  async onJoin(client: Client, options: { name?: string; hero?: string; stats?: string; token?: string }) {
+    // Signed in: play under the account's name with the record saved on the server.
+    const account = await accountForToken(options?.token);
+    const player = this.sim.addPlayer(client.sessionId, account?.username ?? String(options?.name || "Player"), String(options?.hero || ""));
+    player.stats = account ? accountStats(account) : String(options?.stats ?? "").slice(0, 800);
     console.log(`${player.name} (${player.hero}) entered ${this.state.stage} (${this.sim.realPlayerCount()})`);
   }
 

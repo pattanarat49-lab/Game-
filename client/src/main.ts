@@ -8,6 +8,8 @@ import { GODZILLA, KINGKONG, SWORD_GOD, HERO_SPRITES, WARDEN, renderPixelSprite 
 import { heroPortrait } from "./heroArt";
 import { showHeroInfo } from "./heroInfo";
 import { COVER_PNG } from "./cover.data";
+import { accountData, currentAccount, onAccountChange, restoreSession, saveAccountData, signIn, signOut, signUp } from "./account";
+import { deviceStats } from "./stats";
 
 (document.getElementById("cover") as HTMLImageElement | null)?.setAttribute("src", COVER_PNG);
 
@@ -216,8 +218,9 @@ document.getElementById("open-world")?.addEventListener("click", () => startGame
 
 /** Start (or move to) a game: a stage, solo or online, and a room number ("" = any open room). */
 async function startGame(stage: StageId, solo: boolean, code: string) {
-  const name = nameInput.value.trim().slice(0, 16) || "Player";
-  localStorageSet("riftborn-name", name);
+  const account = solo ? undefined : currentAccount();
+  const name = account?.username ?? (nameInput.value.trim().slice(0, 16) || "Player");
+  if (!account) localStorageSet("riftborn-name", name);
   errorText.textContent = "";
   menu.classList.add("hidden");
   const touch = isTouchDevice();
@@ -251,6 +254,7 @@ async function startGame(stage: StageId, solo: boolean, code: string) {
   });
   (window as unknown as { riftGame?: Phaser.Game }).riftGame = game; // handy for debugging and tests
   game.registry.set("playerName", name);
+  game.registry.set("token", account?.token ?? "");
   game.registry.set("solo", solo);
   game.registry.set("hero", selectedHero);
   game.registry.set("stage", stage);
@@ -293,9 +297,106 @@ function localStorageGet(key: string): string | null {
 }
 
 function localStorageSet(key: string, value: string) {
+  // Signed in: the last picks are saved with the account too.
+  if (key === "riftborn-hero") saveAccountData({ prefs: { hero: value } });
+  if (key === "riftborn-stage") saveAccountData({ prefs: { stage: value } });
+  if (key === "riftborn-bot") saveAccountData({ prefs: { bot: value } });
   try {
     localStorage.setItem(key, value);
   } catch {
     // storage unavailable; ignore
   }
+}
+
+// ---- Accounts: sign up / sign in with a username and a password (online builds only). ----
+const accountBar = document.getElementById("account-bar")!;
+const accountModal = document.getElementById("account-modal")!;
+const accountForm = document.getElementById("account-form") as HTMLFormElement;
+const accUser = document.getElementById("acc-user") as HTMLInputElement;
+const accPass = document.getElementById("acc-pass") as HTMLInputElement;
+const accError = document.getElementById("acc-error")!;
+
+function drawAccountBar() {
+  const a = currentAccount();
+  accountBar.innerHTML = "";
+  if (a) {
+    accountBar.append("Signed in as ");
+    const b = document.createElement("b");
+    b.textContent = a.username;
+    accountBar.append(b);
+    const out = document.createElement("button");
+    out.type = "button";
+    out.id = "acc-logout";
+    out.textContent = "LOG OUT";
+    out.addEventListener("click", () => void signOut());
+    accountBar.append(out);
+  } else {
+    accountBar.append("Playing as a guest");
+    const open = document.createElement("button");
+    open.type = "button";
+    open.id = "acc-open";
+    open.className = "main";
+    open.textContent = "SIGN IN / SIGN UP";
+    open.addEventListener("click", () => {
+      accError.textContent = "";
+      accountModal.classList.remove("hidden");
+      accUser.focus();
+    });
+    accountBar.append(open);
+  }
+  // Signed in, the account's name is the player's name.
+  nameInput.style.display = a ? "none" : "";
+}
+
+/** The account's saved picks become the menu's picks. */
+function applyPrefs() {
+  const p = accountData().prefs ?? {};
+  if (p.hero && HERO_IDS.includes(p.hero as HeroId)) {
+    selectedHero = p.hero as HeroId;
+    document.querySelectorAll("#heroes .hero").forEach((c) => c.setAttribute("aria-pressed", String(c.id === `hero-${selectedHero}`)));
+  }
+  if (p.stage && STAGE_IDS.includes(p.stage as StageId)) {
+    selectedStage = p.stage as StageId;
+    document.querySelectorAll("#stages .stage").forEach((c) => c.setAttribute("aria-pressed", String(c.id === `stage-${selectedStage}`)));
+    const bot = document.getElementById("bot-pick");
+    if (bot) bot.style.display = selectedStage === "duel" ? "block" : "none";
+  }
+  if (p.bot && HERO_IDS.includes(p.bot as HeroId)) {
+    selectedBot = p.bot as HeroId;
+    const sel = document.getElementById("bot-hero") as HTMLSelectElement | null;
+    if (sel) sel.value = selectedBot;
+  }
+}
+
+if (soloOnly) {
+  accountBar.remove(); // the solo build has no server to keep accounts on
+} else {
+  drawAccountBar();
+  onAccountChange(() => {
+    drawAccountBar();
+    applyPrefs();
+  });
+  void restoreSession();
+  document.getElementById("acc-close")!.addEventListener("click", () => accountModal.classList.add("hidden"));
+  accountModal.addEventListener("click", (e) => e.target === accountModal && accountModal.classList.add("hidden"));
+  accountForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const signup = ((event as SubmitEvent).submitter as HTMLButtonElement | null)?.id === "acc-signup";
+    const user = accUser.value.trim();
+    const pass = accPass.value;
+    if (!user || !pass) {
+      accError.textContent = "Type a username and a password";
+      return;
+    }
+    accError.textContent = signup ? "Creating account..." : "Signing in...";
+    try {
+      // A new account starts with this device's record and picks.
+      if (signup) await signUp(user, pass, { stats: deviceStats(), prefs: { hero: selectedHero, stage: selectedStage, bot: selectedBot } });
+      else await signIn(user, pass);
+      accPass.value = "";
+      accountModal.classList.add("hidden");
+    } catch (e) {
+      accError.textContent = (e as Error).message === "Failed to fetch" ? "Can't reach the server" : (e as Error).message;
+    }
+  });
 }

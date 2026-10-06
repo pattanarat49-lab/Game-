@@ -367,7 +367,7 @@ export class GameScene extends Phaser.Scene {
     }
     try {
       const client = new Client(serverUrl());
-      this.room = await client.joinOrCreate(ROOM_NAME, { name: this.registry.get("playerName"), hero: this.registry.get("hero"), stage, code: this.registry.get("roomCode") ?? "", stats: statsJson() });
+      this.room = await client.joinOrCreate(ROOM_NAME, { name: this.registry.get("playerName"), hero: this.registry.get("hero"), stage, code: this.registry.get("roomCode") ?? "", stats: statsJson(), token: this.registry.get("token") ?? "" });
       this.registry.set("room", this.room);
     } catch (err) {
       console.error(err);

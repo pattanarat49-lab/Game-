@@ -366,6 +366,21 @@
         letter-spacing: 1px;
       }
       #open-world:hover { background: #38c47a; }
+      #account-bar { font-size: 10px; margin: 2px 0 6px; color: #c9b8c0; }
+      #account-bar b { color: #7dff8a; font-weight: normal; }
+      #account-bar button { font: inherit; font-size: 10px; padding: 6px 10px; margin-left: 6px; background: #3a2e46; color: #fff; border: 2px solid #6b5842; border-radius: 3px; cursor: pointer; }
+      #account-bar button.main { background: #ffd23f; color: #1a1220; border-color: #b8901a; }
+      #account-modal { position: fixed; inset: 0; z-index: 40; display: flex; align-items: center; justify-content: center; background: rgba(0, 0, 0, 0.6); }
+      #account-modal.hidden { display: none; }
+      #account-form { background: #1e1626; border: 3px solid #6b5842; border-radius: 6px; padding: 16px; width: min(88vw, 320px); display: flex; flex-direction: column; gap: 8px; text-align: center; }
+      #account-form h2 { margin: 0 0 4px; font-size: 14px; color: #ffd23f; font-weight: normal; }
+      #account-form input { width: 100%; box-sizing: border-box; font: inherit; font-size: 12px; padding: 9px; background: #120b0f; color: #fff; border: 2px solid #6b5842; border-radius: 3px; }
+      #acc-error { color: #ff6a5a; font-size: 10px; min-height: 1em; margin: 0; line-height: 1.5; }
+      .acc-btns { display: flex; gap: 6px; }
+      .acc-btns button, #acc-close { flex: 1; font: inherit; font-size: 10px; padding: 9px 6px; border-radius: 3px; cursor: pointer; color: #fff; }
+      #acc-signin { background: #2fae6a; border: 2px solid #1d7a48; }
+      #acc-signup { background: #3a6ad8; border: 2px solid #2a4a9a; }
+      #acc-close { background: #3a2e46; border: 2px solid #4a3e56; }
       #cover {
         display: block;
         margin: 0 auto -4px;
@@ -384,6 +399,7 @@
     <div id="menu">
       <img id="cover" alt="" width="110" height="110" />
       <h1>UNTITLED VERSUS</h1>
+      <div id="account-bar"></div>
       <button type="button" id="open-world">OPEN WORLD</button>
       <p id="intro">The multiverse is collapsing. Pick a stage and a hero.</p>
       <p class="step">CHOOSE A STAGE</p>
@@ -397,6 +413,19 @@
         <button type="submit" id="join-solo">PLAY SOLO</button>
       </form>
       <p id="error"></p>
+    </div>
+    <div id="account-modal" class="hidden">
+      <form id="account-form" autocomplete="on">
+        <h2>ACCOUNT</h2>
+        <input id="acc-user" maxlength="16" placeholder="Username" autocomplete="username" autocapitalize="off" spellcheck="false" />
+        <input id="acc-pass" type="password" maxlength="64" placeholder="Password" autocomplete="current-password" />
+        <p id="acc-error"></p>
+        <div class="acc-btns">
+          <button type="submit" id="acc-signin">SIGN IN</button>
+          <button type="submit" id="acc-signup">CREATE ACCOUNT</button>
+        </div>
+        <button type="button" id="acc-close">CLOSE</button>
+      </form>
     </div>
     <button type="button" id="back-btn" class="hidden" aria-label="Back to menu">&#9664; BACK</button>
     <div id="rotate">

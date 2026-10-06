@@ -14,3 +14,7 @@ services:
     envVars:
       - key: NODE_VERSION
         value: "22"
+      # Accounts: a Postgres connection string (e.g. a free Neon database). Without it accounts are
+      # kept in a file that Render wipes whenever the service restarts.
+      - key: DATABASE_URL
+        sync: false
