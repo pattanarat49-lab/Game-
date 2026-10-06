@@ -154,6 +154,8 @@ function publicView(a: Account, token: string) {
   } catch {
     // keep {}
   }
+  // Accounts that play every hero see them all as owned.
+  if (ALL_HEROES_ACCOUNTS.includes(a.key) && data && typeof data === "object") (data as Unlocks).owned = [...HERO_IDS];
   return { username: a.username, token, data };
 }
 
@@ -207,6 +209,8 @@ interface Unlocks {
 }
 type Data = Record<string, unknown> & Unlocks;
 const STARTER_OFFER = 10;
+/** Accounts (lower-case usernames) that play every hero, new ones included (user request 2026-10-06). */
+const ALL_HEROES_ACCOUNTS = ["jedie"];
 const STARTER_PICKS = 3;
 const WIN_GAP_MS = 40_000; // a game takes longer than this, so one spin per real win
 
@@ -225,6 +229,7 @@ function serverPart(d: Data): Unlocks {
 
 /** The heroes an account may play (undefined = it still has to pick its starters). */
 export function ownedHeroes(a: Account): string[] {
+  if (ALL_HEROES_ACCOUNTS.includes(a.key)) return [...HERO_IDS];
   return (readData(a).owned ?? []).filter((h) => (HERO_IDS as string[]).includes(h));
 }
 
