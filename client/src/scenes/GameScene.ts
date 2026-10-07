@@ -57,7 +57,7 @@ import { LocalRoom } from "../localRoom";
 import { drawFxAura, drawFxZone, fxBuffStep, fxGuide, fxShotTexture } from "../fx";
 import { Lobby } from "../lobby";
 import { drawClassicGround } from "../classicMap";
-import { MAP_H, MAP_Y, classicMap, inBush, seesInto } from "../../../shared/maps";
+import { MAP_H, MAP_Y, classicMap, inBush, mapBlocksShot, seesInto } from "../../../shared/maps";
 import { RiftSim, TITAN_ATTACK_COOLDOWN } from "../../../shared/sim";
 import { WorldView } from "../worldView";
 import { recordResult, statsJson } from "../stats";
@@ -2063,6 +2063,7 @@ export class GameScene extends Phaser.Scene {
     const y = this.predicted.y - 5 * HERO_SCALE;
     const aiming = this.aimingSkill();
     const skill = aiming === 2 ? hero.skill2 : aiming === 1 ? hero.skill : undefined;
+    this.guideMap = state.stage === "classic" ? classicMap(state.map ?? 0) : undefined;
     this.drawFormWheel(skill?.kind === "omnitrix" ? me.hero : undefined, x, y);
     if (hero.skill2?.kind === "kunai" && me.mode > 0 && this.drawKunaiPick(g, state, x, y + 5)) return;
     if (skill) {
@@ -2076,10 +2077,8 @@ export class GameScene extends Phaser.Scene {
       g.fillStyle(0x9fd8ff, 0.12).fillCircle(tx, ty, hero.aoe);
       g.lineStyle(1, 0x9fd8ff, 0.4).strokeCircle(tx, ty, hero.aoe);
     } else if (hero.attack === "rifle" || hero.attack === "magic" || (hero.gun && me.mode === 1)) {
-      for (let d = 14; d < 150; d += 10) {
-        g.fillStyle(0xffffff, 0.35 * (1 - d / 150));
-        g.fillRect(x + Math.cos(this.aim) * d - 1, y + Math.sin(this.aim) * d - 1, 2, 2);
-      }
+      // Basic shots: a thin line to where the shot runs out (or hits a wall), with a small arrow tip.
+      this.guideRay(g, x, y, this.aim, hero.range, 0xffffff, 0.6, false);
     } else {
       g.fillStyle(0xffffff, 0.1);
       g.slice(x, y, hero.range, this.aim - hero.arc / 2, this.aim + hero.arc / 2);
@@ -2212,30 +2211,122 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
+  /** Classic 3v3 map while aiming: shots and lanes stop at its walls. */
+  private guideMap?: ReturnType<typeof classicMap>;
+
+  /** How far a straight line from x,y along `angle` gets before a wall (the full `len` off the Classic maps). */
+  private guideReach(x: number, y: number, angle: number, len: number): { len: number; wall: boolean } {
+    const m = this.guideMap;
+    if (!m) return { len, wall: false };
+    for (let d = 6; d < len; d += 4) {
+      if (mapBlocksShot(m, x + Math.cos(angle) * d, y + Math.sin(angle) * d)) return { len: Math.max(0, d - 4), wall: true };
+    }
+    return { len, wall: false };
+  }
+
+  /** An arrow tip at the end of a guide line. */
+  private guideArrow(g: Phaser.GameObjects.Graphics, ex: number, ey: number, angle: number, size: number, color: number, alpha: number) {
+    size *= this.guidePx();
+    const c = Math.cos(angle);
+    const s = Math.sin(angle);
+    const back = { x: ex - c * size, y: ey - s * size };
+    const o = this.guidePx() * 1.5; // dark rim
+    g.fillStyle(0x1a0f14, 0.5 * alpha).fillTriangle(ex + c * o, ey + s * o, back.x - s * (size * 0.6 + o) - c * o, back.y + c * (size * 0.6 + o) - s * o, back.x + s * (size * 0.6 + o) - c * o, back.y - c * (size * 0.6 + o) - s * o);
+    g.fillStyle(color, alpha).fillTriangle(ex, ey, back.x - s * size * 0.6, back.y + c * size * 0.6, back.x + s * size * 0.6, back.y - c * size * 0.6);
+  }
+
+  /** A cross where a shot would hit a wall. */
+  private guideWallMark(g: Phaser.GameObjects.Graphics, ex: number, ey: number) {
+    const k = 5 * this.guidePx();
+    g.lineStyle(3 * this.guidePx(), 0xff4a3a, 1).lineBetween(ex - k, ey - k, ex + k, ey + k).lineBetween(ex - k, ey + k, ex + k, ey - k);
+  }
+
+  /** One screen pixel in world units, so the guides look the same thickness at every zoom. */
+  private guidePx(): number {
+    return 1 / (this.cameras.main.zoom || 1);
+  }
+
+  /** One shot's path: a line (dashes marching outward when `march`) ending in an arrow, cut short by walls. */
+  private guideRay(g: Phaser.GameObjects.Graphics, x: number, y: number, angle: number, len: number, color: number, alpha: number, march = true) {
+    const reach = this.guideReach(x, y, angle, len);
+    const c = Math.cos(angle);
+    const s = Math.sin(angle);
+    const px = this.guidePx();
+    const start = 10;
+    const end = reach.len;
+    if (end <= start) return;
+    const tip = (march ? 12 : 8) * px;
+    // A dark line under the bright one keeps it readable on light floors.
+    g.lineStyle((march ? 6 : 4) * px, 0x1a0f14, 0.45 * alpha).lineBetween(x + c * start, y + s * start, x + c * (end - tip * 0.5), y + s * (end - tip * 0.5));
+    if (march) {
+      const dash = 14 * px;
+      const shift = ((this.time.now / 1000) * 60 * px) % dash;
+      for (let d = start + shift - dash; d < end - tip; d += dash) {
+        const a = Math.max(start, d);
+        const b = Math.min(end - tip, d + dash * 0.6);
+        if (b > a) g.lineStyle(3 * px, color, alpha).lineBetween(x + c * a, y + s * a, x + c * b, y + s * b);
+      }
+    } else g.lineStyle(2 * px, color, alpha * 0.8).lineBetween(x + c * start, y + s * start, x + c * (end - tip), y + s * (end - tip));
+    this.guideArrow(g, x + c * end, y + s * end, angle, march ? 12 : 8, color, alpha);
+    if (reach.wall) this.guideWallMark(g, x + c * end, y + s * end);
+  }
+
   private drawSkillGuide(g: Phaser.GameObjects.Graphics, skill: SkillDef, heroRange: number, x: number, y: number) {
     const cos = Math.cos(this.aim);
     const sin = Math.sin(this.aim);
+    const GOLD = 0xffd23f;
+    // A straight skill: the lane it sweeps, bright edges, dashes marching the way it goes and an arrow at the end.
     const lane = (len: number, width: number) => {
-      const w = width / 2;
+      const reach = this.guideReach(x, y, this.aim, len);
+      const l = reach.len;
+      const w = Math.max(width, 3) / 2;
       const pts = [
         { x: x - sin * w, y: y + cos * w },
-        { x: x + cos * len - sin * w, y: y + sin * len + cos * w },
-        { x: x + cos * len + sin * w, y: y + sin * len - cos * w },
+        { x: x + cos * l - sin * w, y: y + sin * l + cos * w },
+        { x: x + cos * l + sin * w, y: y + sin * l - cos * w },
         { x: x + sin * w, y: y - cos * w },
       ];
-      g.fillStyle(0xffd23f, 0.16).fillPoints(pts, true);
-      g.lineStyle(1, 0xffd23f, 0.7).strokePoints(pts, true);
+      const px = this.guidePx();
+      g.fillStyle(GOLD, 0.24).fillPoints(pts, true);
+      if (width >= 8) {
+        g.lineStyle(4 * px, 0x1a0f14, 0.35).strokePoints(pts, true);
+        g.lineStyle(2 * px, GOLD, 1).strokePoints(pts, true);
+      }
+      this.guideRay(g, x, y, this.aim, l, 0xffe14a, 1);
+      if (reach.wall) this.guideWallMark(g, x + cos * l, y + sin * l);
     };
+    // A spot it lands on: a ring with a cross-hair in the middle and a line out to it.
     const area = (cx: number, cy: number, r: number) => {
-      g.fillStyle(0xffd23f, 0.12).fillCircle(cx, cy, r);
-      g.lineStyle(1, 0xffd23f, 0.7).strokeCircle(cx, cy, r);
+      const pulse = 0.5 + 0.5 * Math.sin(this.time.now / 120);
+      const px = this.guidePx();
+      g.fillStyle(GOLD, 0.16 + 0.08 * pulse).fillCircle(cx, cy, r);
+      g.lineStyle(5 * px, 0x1a0f14, 0.35).strokeCircle(cx, cy, r);
+      g.lineStyle(3 * px, GOLD, 1).strokeCircle(cx, cy, r);
+      const k = Math.min(8 * px, r * 0.5);
+      g.lineStyle(2 * px, 0xfff3b0, 1).lineBetween(cx - k, cy, cx + k, cy).lineBetween(cx, cy - k, cx, cy + k);
+    };
+    // Several shots at once: one line per shot.
+    const rays = (n: number, spread: number, range: number) => {
+      for (let i = 0; i < n; i++) this.guideRay(g, x, y, this.aim + (i / (n - 1) - 0.5) * spread, range, 0xffe14a, 1);
     };
     switch (skill.kind) {
       case "combo":
-        fxGuide(skill, this.aim, x, y, lane, area, (range, arc) => {
-          g.fillStyle(0xffd23f, 0.12).slice(x, y, range, this.aim - arc / 2, this.aim + arc / 2, false).fillPath();
-          g.lineStyle(1, 0xffd23f, 0.7).beginPath().arc(x, y, range, this.aim - arc / 2, this.aim + arc / 2).strokePath();
-        });
+        fxGuide(
+          skill,
+          this.aim,
+          x,
+          y,
+          lane,
+          area,
+          (range, arc) => {
+            g.fillStyle(GOLD, 0.16).slice(x, y, range, this.aim - arc / 2, this.aim + arc / 2, false).fillPath();
+            g.lineStyle(2, GOLD, 0.9).beginPath().arc(x, y, range, this.aim - arc / 2, this.aim + arc / 2).strokePath();
+            g.lineStyle(1.5, GOLD, 0.6).lineBetween(x, y, x + Math.cos(this.aim - arc / 2) * range, y + Math.sin(this.aim - arc / 2) * range);
+            g.lineBetween(x, y, x + Math.cos(this.aim + arc / 2) * range, y + Math.sin(this.aim + arc / 2) * range);
+            this.guideRay(g, x, y, this.aim, range, 0xffe14a, 1);
+          },
+          rays,
+        );
         break;
       case "wave":
       case "line":
@@ -2294,11 +2385,7 @@ export class GameScene extends Phaser.Scene {
       }
       case "shuriken": {
         const n = skill.count ?? 5;
-        g.lineStyle(2, 0xffd23f, 0.6);
-        for (let i = 0; i < n; i++) {
-          const a = this.aim + (i - (n - 1) / 2) * (skill.width ?? 0.2);
-          g.lineBetween(x, y, x + Math.cos(a) * skill.radius, y + Math.sin(a) * skill.radius);
-        }
+        for (let i = 0; i < n; i++) this.guideRay(g, x, y, this.aim + (i - (n - 1) / 2) * (skill.width ?? 0.2), skill.radius, 0xffe14a, 1);
         break;
       }
       case "shield":
@@ -2351,13 +2438,7 @@ export class GameScene extends Phaser.Scene {
         break;
       }
       case "sparks": {
-        const n = skill.count ?? 7;
-        const spread = skill.width ?? 0.9;
-        g.lineStyle(2, 0xffd23f, 0.6);
-        for (let i = 0; i < n; i++) {
-          const a = this.aim + (i / (n - 1) - 0.5) * spread;
-          g.lineBetween(x, y, x + Math.cos(a) * skill.radius, y + Math.sin(a) * skill.radius);
-        }
+        rays(skill.count ?? 7, skill.width ?? 0.9, skill.radius);
         break;
       }
       case "wall": {
@@ -2383,11 +2464,7 @@ export class GameScene extends Phaser.Scene {
         break;
       case "fan": {
         const n = skill.count ?? 5;
-        g.lineStyle(2, 0xffd23f, 0.6);
-        for (let i = 0; i < n; i++) {
-          const a = this.aim + (i - (n - 1) / 2) * (skill.width ?? 0.24);
-          g.lineBetween(x, y, x + Math.cos(a) * skill.radius, y + Math.sin(a) * skill.radius);
-        }
+        for (let i = 0; i < n; i++) this.guideRay(g, x, y, this.aim + (i - (n - 1) / 2) * (skill.width ?? 0.24), skill.radius, 0xffe14a, 1);
         break;
       }
       case "fireball":

@@ -537,6 +537,7 @@ export function fxGuide(
   lane: (len: number, width: number) => void,
   area: (cx: number, cy: number, r: number) => void,
   cone: (range: number, arc: number) => void,
+  rays?: (n: number, spread: number, range: number) => void,
 ) {
   for (const st of skill.steps ?? []) {
     switch (st.do) {
@@ -553,8 +554,9 @@ export function fxGuide(
         return cone(st.range, st.arc);
       case "shots":
         if (st.spread >= Math.PI * 2 - 0.01) return area(x, y, st.range);
+        if (rays && st.n > 1 && st.spread > 0.01) return rays(st.n, st.spread, st.range); // one line per shot
         if (st.spread > 0.3) return cone(st.range, st.spread);
-        return lane(st.range, 8);
+        return lane(st.range, Math.max(8, (st.size ?? 3) * 2));
       case "drop":
       case "field":
         if (st.at === "self") return area(x, y, st.radius);
