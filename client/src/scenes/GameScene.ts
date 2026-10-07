@@ -1,5 +1,6 @@
 import Phaser from "phaser";
-import { Client, Room } from "colyseus.js";
+import { Client } from "colyseus.js";
+import { RoomLink } from "../roomLink";
 import {
   CENTER_X,
   CENTER_Y,
@@ -273,7 +274,8 @@ export function serverUrl(): string {
 const PORTAL_FRAMES = 9;
 
 export class GameScene extends Phaser.Scene {
-  room?: Room<any> | LocalRoom;
+  room?: RoomLink | LocalRoom;
+  private reconnectText?: Phaser.GameObjects.Text;
   private players = new Map<string, PlayerView>();
   private enemies = new Map<string, EnemyView>();
   private bullets = new Map<string, Phaser.GameObjects.Image>();
@@ -407,7 +409,7 @@ export class GameScene extends Phaser.Scene {
     }
     try {
       const client = new Client(serverUrl());
-      this.room = await client.joinOrCreate(ROOM_NAME, { name: this.registry.get("playerName"), hero: this.registry.get("hero"), stage, code: this.registry.get("roomCode") ?? "", stats: statsJson(), token: this.registry.get("token") ?? "" });
+      this.room = new RoomLink(client, await client.joinOrCreate(ROOM_NAME, { name: this.registry.get("playerName"), hero: this.registry.get("hero"), stage, code: this.registry.get("roomCode") ?? "", stats: statsJson(), token: this.registry.get("token") ?? "" }));
       this.registry.set("room", this.room);
     } catch (err) {
       console.error(err);
@@ -507,6 +509,15 @@ export class GameScene extends Phaser.Scene {
     const dt = Math.min(deltaMs, 100) / 1000;
     const state = room.state;
     if (room instanceof LocalRoom) room.step(dt);
+    if (room instanceof RoomLink) {
+      // The connection dropped: say so while it comes back by itself.
+      this.reconnectText ??= this.add
+        .text(this.scale.width / 2, 60, "RECONNECTING...", { fontFamily: "monospace", fontSize: "18px", color: "#ffe14a", backgroundColor: "#000000aa", padding: { x: 10, y: 6 } })
+        .setOrigin(0.5)
+        .setScrollFactor(0)
+        .setDepth(5000);
+      this.reconnectText.setVisible(room.reconnecting);
+    }
     this.walkShadows?.clear();
     if (this.classicGround) {
       // The map picked on the select screen.

@@ -47,7 +47,12 @@ export class RiftRoom extends Room<RiftState> {
     // ~30 updates a second so other players and enemies move smoothly.
     this.setPatchRate(TICK_MS);
     this.setSimulationInterval((deltaMs) => {
-      this.sim.update(Math.min(deltaMs, 100) / 1000);
+      try {
+        this.sim.update(Math.min(deltaMs, 100) / 1000);
+      } catch (err) {
+        // One bad tick must not take the whole server (and every player on it) down.
+        console.error(`sim error in ${this.state.stage}:`, err);
+      }
       this.state.time = this.clock.elapsedTime;
       // The portal or the dungeon's way out: tell those players' devices where to go.
       for (const w of this.sim.warps.splice(0)) for (const id of w.ids) this.clientOf(id)?.send("goto", { stage: w.stage, code: w.code });
@@ -104,7 +109,17 @@ export class RiftRoom extends Room<RiftState> {
   /** The heroes each signed-in player has unlocked. */
   private owned = new Map<string, string[]>();
 
-  onLeave(client: Client) {
+  async onLeave(client: Client, consented: boolean) {
+    if (!consented) {
+      // The connection dropped (not the BACK button): keep the seat a little while so the device can come back.
+      this.sim.setInput(client.sessionId, { aim: this.state.players.get(client.sessionId)?.aim ?? 0 });
+      try {
+        await this.allowReconnection(client, 20);
+        return; // back in the same seat
+      } catch {
+        // gone for good
+      }
+    }
     this.owned.delete(client.sessionId);
     this.sim.removePlayer(client.sessionId);
     this.lastChat.delete(client.sessionId);

@@ -8,6 +8,10 @@ import { ROOM_NAME, SERVER_PORT } from "../../shared/game";
 import { RiftRoom } from "./RiftRoom";
 import { accountRoutes } from "./accounts";
 
+// Log stray errors instead of letting them kill the process (that would drop every player at once).
+process.on("uncaughtException", (err) => console.error("uncaught:", err));
+process.on("unhandledRejection", (err) => console.error("unhandled rejection:", err));
+
 const port = Number(process.env.PORT ?? SERVER_PORT);
 const app = express();
 
