@@ -45,9 +45,9 @@ export function playSanctuaryIntro() {
   root.innerHTML = `
     <img alt="" src="${SANCTUARY_PNG}">
     <div class="cs-shade"></div>
-    <div class="cs-quote">“แม้กาลเวลาจะผ่านไป<br>หินก็ยังคงจดจำคำสาบาน...”</div>
-    <div class="cs-title"><b>ห้องบอส : อัศวินหินโบราณ</b><span>— ANCIENT KNIGHT'S SANCTUARY —</span></div>
-    <button class="cs-skip-btn" type="button">ข้าม ▶</button>`;
+    <div class="cs-quote">“Though ages pass,<br>the stone still remembers its oath...”</div>
+    <div class="cs-title"><b>THE ANCIENT KNIGHT</b><span>— ANCIENT KNIGHT'S SANCTUARY —</span></div>
+    <button class="cs-skip-btn" type="button">SKIP ▶</button>`;
   document.body.appendChild(root);
   const done = () => root.remove();
   const timer = setTimeout(done, 7600);
