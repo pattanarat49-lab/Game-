@@ -1,6 +1,6 @@
-import { accountForToken, accountStats, ownedHeroes } from "./accounts";
+import { accountForToken, accountProfile, accountStats, ownedHeroes } from "./accounts";
 import { Client, Room } from "colyseus";
-import { CLASSIC_TEAM_SIZE, MAX_PLAYERS, PlayerInput, stageOf } from "../../shared/game";
+import { CLASSIC_TEAM_SIZE, MAX_PLAYERS, PlayerInput, masteryLevel, stageOf } from "../../shared/game";
 import { RiftSim, TICK_MS, newRoomCode } from "../../shared/sim";
 import { WORLD_MAX_PLAYERS } from "../../shared/world";
 import { Bullet, Enemy, Player, RiftState, Zone } from "./schema";
@@ -94,7 +94,7 @@ export class RiftRoom extends Room<RiftState> {
     for (const c of [asker, client]) c.send("goto", { stage: "pvp", code });
   }
 
-  async onJoin(client: Client, options: { name?: string; hero?: string; stats?: string; token?: string }) {
+  async onJoin(client: Client, options: { name?: string; hero?: string; stats?: string; token?: string; title?: string; mastery?: number }) {
     // Signed in: play under the account's name with the record saved on the server.
     const account = await accountForToken(options?.token);
     const owned = account ? ownedHeroes(account) : [];
@@ -103,6 +103,11 @@ export class RiftRoom extends Room<RiftState> {
     if (owned.length && !owned.includes(hero)) hero = owned[0];
     const player = this.sim.addPlayer(client.sessionId, account?.username ?? String(options?.name || "Player"), hero);
     player.stats = account ? accountStats(account) : String(options?.stats ?? "").slice(0, 800);
+    // The title worn and the mastery with this hero (shown in the Open World); an account's come from its saved profile.
+    const prof = account ? accountProfile(account) : undefined;
+    const title = String((prof ? prof.title : options?.title) ?? "").replace(/[^\w '&.!-]/g, "").slice(0, 32);
+    player.title = prof && !prof.titles.includes(title) ? "" : title;
+    player.mastery = prof ? masteryLevel(prof.mastery[player.hero] ?? 0) : Math.max(0, Math.min(10, Math.floor(Number(options?.mastery) || 0)));
     console.log(`${player.name} (${player.hero}) entered ${this.state.stage} (${this.sim.realPlayerCount()})`);
   }
 

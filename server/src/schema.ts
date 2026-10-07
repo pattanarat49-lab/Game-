@@ -62,6 +62,19 @@ export class Player extends Schema {
   @type("boolean") late = false;
   /** Open World: this player's record (games, wins, recent results) as JSON, shown when someone looks them up. */
   @type("string") stats = "";
+  /** Classic 3v3: seconds left of the spawn shield. */
+  @type("float32") shield = 0;
+  /** Classic 3v3 FINAL STAND: the last hero of a side, on the last life. */
+  @type("boolean") stand = false;
+  /** This match so far, for the scores at the end. */
+  @type("uint16") kos = 0;
+  @type("uint16") assists = 0;
+  @type("uint16") falls = 0;
+  @type("float32") dealt = 0;
+  @type("float32") taken = 0;
+  /** The title the player wears and their mastery level with this hero (Open World). */
+  @type("string") title = "";
+  @type("uint8") mastery = 0;
 }
 
 export class Enemy extends Schema {

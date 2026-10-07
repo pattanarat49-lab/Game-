@@ -23,6 +23,8 @@ export class HudScene extends Phaser.Scene {
   private scores!: Phaser.GameObjects.Text;
   private skills!: Phaser.GameObjects.Text;
   private special!: Phaser.GameObjects.Text;
+  private wasStand = false;
+  private standUntil = 0;
   touch?: TouchControls;
 
   constructor() {
@@ -139,7 +141,7 @@ export class HudScene extends Phaser.Scene {
       this.waveText.setText(`RED ${left[1]}/${redMax} LIVES  vs  BLUE ${left[2]}/${blueMax} LIVES`);
       if (state.phase === "victory") banner = state.winner === "NO" ? `DRAW!\nBack to select in ${Math.ceil(state.phaseTimer)}` : `${state.winner} TEAM WINS!\nBack to select in ${Math.ceil(state.phaseTimer)}`;
       else if (state.phase === "intermission") banner = `${me?.team === 1 ? "YOU ARE RED" : "YOU ARE BLUE"}\nFIGHT! in ${Math.ceil(state.phaseTimer)}`;
-      else if (me?.dead && !(me.lives > 0)) banner = "OUT OF LIVES\nCheer your team on!";
+      else if (me?.dead && !(me.lives > 0)) banner = "OUT OF LIVES\nWatching your team";
       else if (me?.dead) banner = `YOU FELL  ${me.lives} ${me.lives === 1 ? "LIFE" : "LIVES"} LEFT\nBack in ${Math.ceil(me.respawnIn)}`;
     } else if (ringStage(state.stage)) {
       const pve = state.stage === "pve";
@@ -216,6 +218,10 @@ export class HudScene extends Phaser.Scene {
       else if (z.kind === "rewind") [special, color] = ["TIME MACHINE", "#9fd8ff"];
       else if (z.kind === "asgard" && !special) [special, color] = [z.maxLife - z.life < 1.5 ? "ILLUSION: GOLDEN CITY" : "", "#ffd86a"];
     });
+    // FINAL STAND: called out for a few seconds when it starts.
+    if (me?.stand && !this.wasStand) this.standUntil = this.time.now + 3000;
+    this.wasStand = !!me?.stand;
+    if (!special && me?.stand && this.time.now < this.standUntil) [special, color] = ["FINAL STAND!\n+50% DAMAGE  +50% HP", "#ffc040"];
     if (state.reality > 0) {
       [special, color] = [`REALITY CHANGE  ${state.reality.toFixed(1)}s\nenemies are ordinary humans`, "#ff6a9a"];
     }

@@ -2152,6 +2152,12 @@ export const CLASSIC_TEAM_SIZE = 3;
 /** Classic 3v3: lives per hero; out of lives means out of the match. The last team standing wins. */
 export const CLASSIC_LIVES = 3;
 export const CLASSIC_RESPAWN = 3;
+/** Classic 3v3: seconds of untouchable armour after coming back, so nobody can camp a spawn (user request 2026-10-07). */
+export const SPAWN_SHIELD = 2;
+/** Classic 3v3 FINAL STAND: the last hero of a team, on the last life, hits this much harder and gets this much more HP. */
+export const FINAL_STAND_BOOST = 1.5;
+/** A helper who hit the fallen hero within this many seconds gets an assist. */
+export const ASSIST_WINDOW = 6;
 
 /** Stages that open on the player select screen. */
 export function selectStage(stage: string): boolean {
@@ -2272,3 +2278,44 @@ export const HERO_HIT_SCALE = 0.4;
 /** Everything a hero deals, to monsters and heroes alike: the PvP softening times HERO_HIT_SCALE (user request 2026-10-06). */
 export const HERO_DAMAGE_SCALE = PVP_DAMAGE_SCALE * HERO_HIT_SCALE;
 export const PVP_COUNTDOWN = 3;
+
+/** One hero's match at the end (2026-10-07): what the score from 1.0 to 10.0 is worked out from. */
+export interface MatchLine {
+  won: boolean;
+  kos: number;
+  assists: number;
+  falls: number;
+  dealt: number;
+  taken: number;
+}
+
+/**
+ * Everyone's score for the match, 1.0 to 10.0 (one decimal), measured against the others in the same match:
+ * damage dealt counts most, then KOs and assists, soaking damage helps a little and every fall costs a bit.
+ * Winning adds a head start, so the best winner lands near 10 and the best loser near 8-9.
+ */
+export function matchRatings(lines: MatchLine[]): number[] {
+  const top = (f: (l: MatchLine) => number) => Math.max(1, ...lines.map(f));
+  const dealt = top((l) => l.dealt);
+  const kos = top((l) => l.kos);
+  const assists = top((l) => l.assists);
+  const taken = top((l) => l.taken);
+  return lines.map((l) => {
+    const r = (l.won ? 4 : 2.5) + 3 * (l.dealt / dealt) + 1.5 * (l.kos / kos) + 1 * (l.assists / assists) + 0.8 * (l.taken / taken) - 0.4 * Math.min(5, l.falls);
+    return Math.round(Math.min(10, Math.max(1, r)) * 10) / 10;
+  });
+}
+
+/** Hero mastery: points needed for each level (level 1 at the first game, level 10 is the top). */
+export const MASTERY_STEPS = [1, 60, 160, 320, 560, 900, 1400, 2100, 3000, 4200];
+
+export function masteryLevel(points: number): number {
+  let lv = 0;
+  for (const step of MASTERY_STEPS) if (points >= step) lv++;
+  return lv;
+}
+
+/** Mastery points for one match: playing counts, playing well counts more, and winning adds a bonus. */
+export function masteryPoints(rating: number, won: boolean): number {
+  return Math.round(10 + rating * 3 + (won ? 15 : 0));
+}

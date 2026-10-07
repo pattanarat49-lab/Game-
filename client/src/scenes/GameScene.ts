@@ -2,6 +2,7 @@ import Phaser from "phaser";
 import { Client } from "colyseus.js";
 import { RoomLink } from "../roomLink";
 import {
+  matchRatings,
   CENTER_X,
   CENTER_Y,
   ENEMIES,
@@ -65,6 +66,8 @@ import { MAP_H, MAP_Y, classicMap, inBush, mapBlocksShot, seesInto } from "../..
 import { RiftSim, TITAN_ATTACK_COOLDOWN } from "../../../shared/sim";
 import { WorldView } from "../worldView";
 import { recordResult, statsJson } from "../stats";
+import { ScoreRow, closeScoreboard, showScoreboard } from "../scoreboard";
+import { heroMastery, recordMatch, wornTitle } from "../profile";
 import { TutorialView } from "../tutorial";
 import { isTouchDevice } from "../touch";
 import { DUNGEON, OPEN_WORLD } from "../../../shared/world";
@@ -78,6 +81,8 @@ interface PlayerView {
   wasDashing?: boolean;
   weapon?: Phaser.GameObjects.Image;
   label: Phaser.GameObjects.Text;
+  /** Open World: the title the player wears, over the name tag. */
+  tag?: Phaser.GameObjects.Text;
   bar: Phaser.GameObjects.Graphics;
   lastHp: number;
   hurtFlash: number;
@@ -411,7 +416,7 @@ export class GameScene extends Phaser.Scene {
     }
     try {
       const client = new Client(serverUrl());
-      this.room = new RoomLink(client, await client.joinOrCreate(ROOM_NAME, { name: this.registry.get("playerName"), hero: this.registry.get("hero"), stage, code: this.registry.get("roomCode") ?? "", stats: statsJson(), token: this.registry.get("token") ?? "" }));
+      this.room = new RoomLink(client, await client.joinOrCreate(ROOM_NAME, { name: this.registry.get("playerName"), hero: this.registry.get("hero"), stage, code: this.registry.get("roomCode") ?? "", stats: statsJson(), token: this.registry.get("token") ?? "", title: wornTitle(), mastery: heroMastery(this.registry.get("hero")).level }));
       this.registry.set("room", this.room);
     } catch (err) {
       console.error(err);
@@ -432,6 +437,7 @@ export class GameScene extends Phaser.Scene {
     if (selectStage(stage)) this.openLobby(stage);
     if (open) this.openWorld(stage, true);
     this.scene.launch("Hud");
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => closeScoreboard());
   }
 
   /** The Open World or the dungeon: map, portals, chat, profiles; a portal or a duel moves us to another room. */
@@ -459,12 +465,54 @@ export class GameScene extends Phaser.Scene {
       else if (stage === "pve") won = state.winner === "TEAM";
       else won = state.winner === me.name;
       if (mode) recordResult({ mode, won, hero, at: Date.now() });
+      if (mode) this.endOfMatch(state, me);
     }
+    if (phase === "intermission" && this.lastPhase !== "intermission") closeScoreboard(); // the next match is starting
     if (state.stage === "dungeon" && !this.dungeonCleared && String(state.notice ?? "").startsWith("BOSS DEFEATED")) {
       this.dungeonCleared = true;
       recordResult({ mode: "Dungeon", won: true, hero, at: Date.now() });
     }
     this.lastPhase = phase;
+  }
+
+  /** Who won this match, for any player (by team, by being the bot's team, or by name). */
+  private wonMatch(state: any, p: any, id: string): boolean {
+    if (state.winner === "NO") return false;
+    if (state.stage === "classic") return state.winner === (p.team === 1 ? "RED" : "BLUE");
+    if (state.stage === "pve") return (state.winner === "TEAM") === (id !== "bot");
+    return state.winner === p.name;
+  }
+
+  /** The match is over: everyone's scores and the MVPs on screen, and mastery and titles for us. */
+  private endOfMatch(state: any, me: any) {
+    const myId = this.room!.sessionId;
+    const ids: string[] = [];
+    const ps: any[] = [];
+    state.players.forEach((p: any, id: string) => {
+      if (p.owner || p.late) return;
+      ids.push(id);
+      ps.push(p);
+    });
+    const won = ps.map((p, i) => this.wonMatch(state, p, ids[i]));
+    const ratings = matchRatings(ps.map((p, i) => ({ won: won[i], kos: p.kos ?? 0, assists: p.assists ?? 0, falls: p.falls ?? 0, dealt: p.dealt ?? 0, taken: p.taken ?? 0 })));
+    const side = (p: any, id: string, i: number): [number, string] => {
+      if (state.stage === "classic") return [p.team, p.team === 1 ? "RED TEAM" : "BLUE TEAM"];
+      if (state.stage === "pve") return id === "bot" ? [2, "BOT"] : [1, "YOUR TEAM"];
+      return [i + 1, p.name];
+    };
+    const rows: ScoreRow[] = ps.map((p, i) => {
+      const [s, sideName] = side(p, ids[i], i);
+      return { id: ids[i], name: p.name, hero: p.hero, won: won[i], side: s, sideName, kos: p.kos ?? 0, assists: p.assists ?? 0, falls: p.falls ?? 0, dealt: p.dealt ?? 0, taken: p.taken ?? 0, rating: ratings[i], mvp: false };
+    });
+    // One MVP among the winners and one among the rest.
+    for (const w of [true, false]) {
+      const best = rows.filter((r) => r.won === w).sort((a, b) => b.rating - a.rating)[0];
+      if (best) best.mvp = true;
+    }
+    const mine = rows.find((r) => r.id === myId);
+    if (!mine) return;
+    showScoreboard(rows, myId, state.winner === "NO" ? "DRAW" : mine.won ? "VICTORY" : "DEFEAT");
+    recordMatch({ hero: me.hero, won: mine.won, rating: mine.rating, mvp: mine.mvp, kos: mine.kos, assists: mine.assists, falls: mine.falls, dealt: mine.dealt, taken: mine.taken, stand: !!me.stand });
   }
 
   /** PvP and PvE Squad player select screen (everyone picks, then READY). */
@@ -785,7 +833,62 @@ export class GameScene extends Phaser.Scene {
         this.predicted.y += (me.y - this.predicted.y) * k;
       }
     }
-    this.cameraTarget.setPosition(this.predicted.x, this.predicted.y);
+    // Out of lives: the camera follows a teammate who is still fighting (SPECTATE).
+    const watched = this.spectate(state, me);
+    const wv = watched ? this.players.get(watched) : undefined;
+    if (wv) this.cameraTarget.setPosition(wv.body.x, wv.body.y);
+    else this.cameraTarget.setPosition(this.predicted.x, this.predicted.y);
+  }
+
+  private specIndex = 0;
+  private specBar?: HTMLDivElement;
+
+  /** Classic 3v3 with no lives left: whom we watch (a living teammate), with a bar to switch between them. */
+  private spectate(state: any, me: any): string | undefined {
+    const out = state.stage === "classic" && me && me.dead && !(me.lives > 0) && !me.late && state.phase === "fight";
+    const mates: string[] = [];
+    if (out) {
+      state.players.forEach((p: any, id: string) => {
+        if (!p.owner && !p.dead && p.team === me.team) mates.push(id);
+      });
+    }
+    if (!mates.length) {
+      this.specBar?.remove();
+      this.specBar = undefined;
+      return undefined;
+    }
+    this.specIndex = ((this.specIndex % mates.length) + mates.length) % mates.length;
+    const id = mates[this.specIndex];
+    if (!this.specBar) {
+      const bar = document.createElement("div");
+      bar.style.cssText =
+        "position:fixed;left:50%;bottom:18px;transform:translateX(-50%);z-index:30;display:flex;align-items:center;gap:10px;padding:8px 10px;" +
+        "background:rgba(10,12,28,0.85);border:3px solid #4a5a8a;border-radius:8px;font:10px 'Press Start 2P',monospace;color:#fff;";
+      const btn = (label: string, step: number) => {
+        const b = document.createElement("button");
+        b.type = "button";
+        b.textContent = label;
+        b.style.cssText = "font:inherit;font-size:12px;padding:8px 12px;color:#fff;background:#2a3458;border:2px solid #5a6aa0;border-radius:5px;cursor:pointer;";
+        b.addEventListener("pointerdown", (e) => {
+          e.stopPropagation();
+          this.specIndex += step;
+        });
+        return b;
+      };
+      const name = document.createElement("span");
+      name.className = "spec-name";
+      bar.append(btn("\u25C0", -1), name, btn("\u25B6", 1));
+      document.body.append(bar);
+      this.specBar = bar;
+      this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+        this.specBar?.remove();
+        this.specBar = undefined;
+      });
+    }
+    const label = `SPECTATING ${state.players.get(id)?.name ?? ""}`;
+    const span = this.specBar.querySelector<HTMLElement>(".spec-name")!;
+    if (span.textContent !== label) span.textContent = label;
+    return id;
   }
 
   // ------------------------------------------------------- interpolation
@@ -875,7 +978,8 @@ export class GameScene extends Phaser.Scene {
       // Jungle Boy's GROWN UP: the user's grown-up form picture while it lasts.
       const grown = !disguised && p.hero === "gon" && p.active2 > 0 && !p.dead;
       const shown: string = disguised?.hero ?? (grown ? "gongrown" : p.hero);
-      const name: string = disguised && !isMe ? disguised.name : p.name;
+      const world = state.stage === "world";
+      const name: string = disguised && !isMe ? disguised.name : world && p.mastery ? `${p.name} Lv${p.mastery}` : p.name;
       if (view.label.text !== name) view.label.setText(name);
       if (isMe) body.setPosition(this.predicted.x, this.predicted.y);
       else {
@@ -1086,6 +1190,13 @@ export class GameScene extends Phaser.Scene {
       }
       if (heroOf(p.hero).ram && !heroOf(p.hero).ramBody) this.drawTrail(view, p.dead); // the dragon slithers without afterimages
       view.label.setDepth(1000);
+      if (world && p.title && !p.owner) {
+        // Open World: the title the player wears, in gold over the name.
+        view.tag ??= this.add.text(0, 0, "", { fontFamily: "monospace", fontSize: "16px", color: "#ffd23f", stroke: "#000000", strokeThickness: 3 }).setScale(0.4).setOrigin(0.5, 1).setResolution(2).setDepth(1000);
+        const t = `\u300C${p.title}\u300D`;
+        if (view.tag.text !== t) view.tag.setText(t);
+        view.tag.setPosition(view.label.x, view.label.y - 7).setVisible(view.label.visible);
+      } else view.tag?.setVisible(false);
 
       if (p.hp < view.lastHp - 0.5) {
         view.hurtFlash = 0.15;
@@ -1132,6 +1243,21 @@ export class GameScene extends Phaser.Scene {
           view.bar.lineStyle(1, 0xfff07a, 0.6).strokeEllipse(body.x, body.y + 1, 18 * k, 7 * k);
         }
         const pulse = 0.5 + 0.5 * Math.sin(this.time.now / 120);
+        if ((p.shield ?? 0) > 0) {
+          // Spawn shield: a pale blue bubble that blinks as it runs out.
+          const fade = p.shield < 0.6 ? (Math.sin(this.time.now / 50) > 0 ? 1 : 0.3) : 1;
+          view.bar.fillStyle(0x8ad8ff, 0.16 * fade).fillCircle(body.x, body.y - 9 * k, 18 * k);
+          view.bar.lineStyle(2, 0xd8f4ff, 0.8 * fade).strokeCircle(body.x, body.y - 9 * k, 18 * k);
+        }
+        if (p.stand) {
+          // FINAL STAND: a gold aura rising off the last hero standing.
+          view.bar.lineStyle(2, 0xffc040, 0.5 + 0.5 * pulse).strokeEllipse(body.x, body.y + 1, 26 * k, 9 * k);
+          for (let i = 0; i < 4; i++) {
+            const a = this.time.now / 300 + i * 1.57;
+            const fy = ((this.time.now / 600 + i * 0.25) % 1) * 22 * k;
+            view.bar.fillStyle(0xffd060, 0.8).fillRect(body.x + Math.cos(a) * 10 * k - 1, body.y - fy, 2, 3);
+          }
+        }
         if (doveForm) this.drawDoves(view.bar, body.x, body.y - 12 * k);
         else if (p.barrier > 0) {
           // IMMORTAL: a dark-violet barrier around the Demon Lord; anyone else is under a golden HOLY SHIELD.
@@ -1273,6 +1399,7 @@ export class GameScene extends Phaser.Scene {
     view.glitch?.forEach((g) => g.destroy());
     view.trail?.forEach((g) => g.destroy());
     view.label.destroy();
+    view.tag?.destroy();
     view.bar.destroy();
   }
 

@@ -179,6 +179,16 @@ export function accountStats(a: Account): string {
   }
 }
 
+/** The saved hero mastery and titles (client/src/profile.ts writes them). */
+export function accountProfile(a: Account): { title: string; titles: string[]; mastery: Record<string, number> } {
+  const p = (readData(a).profile ?? {}) as { title?: unknown; titles?: unknown; mastery?: unknown };
+  return {
+    title: typeof p.title === "string" ? p.title : "",
+    titles: Array.isArray(p.titles) ? p.titles.map(String) : [],
+    mastery: p.mastery && typeof p.mastery === "object" ? (p.mastery as Record<string, number>) : {},
+  };
+}
+
 // A few wrong passwords in a row from one address, then a short wait.
 const tries = new Map<string, { n: number; until: number }>();
 function slowDown(req: Request): boolean {

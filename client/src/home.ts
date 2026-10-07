@@ -7,6 +7,7 @@ import { HEROES, HERO_CLASSES, HERO_IDS, HeroId, StageId, heroClass } from "../.
 import { heroPortrait, paintPortrait } from "./heroArt";
 import { showHeroInfo } from "./heroInfo";
 import { AttackMode, attackMode, setAttackMode } from "./settings";
+import { heroMastery, loadProfile, masteryColor, wearTitle } from "./profile";
 
 export interface HomeActions {
   online: boolean; // false in the solo build: no online modes, no account
@@ -58,6 +59,18 @@ const CSS = `
 #hm-hero canvas { height: 100%; image-rendering: pixelated; filter: drop-shadow(0 4px 0 rgba(0,0,0,0.25)); }
 @keyframes hm-bob { 50% { transform: translateY(-6px); } }
 #hm-heroname { position: absolute; left: 712px; top: 572px; width: 400px; text-align: center; font-size: 20px; color: #fff; text-shadow: 0 2px 0 #000, 0 0 6px #000; pointer-events: none; }
+#hm-title { position: absolute; left: 662px; top: 272px; width: 500px; text-align: center; font-size: 26px; color: #ffe27a; pointer-events: none;
+  text-shadow: 0 2px 0 #6a3a0a, 0 0 8px rgba(255, 190, 60, 0.9); letter-spacing: 1px; }
+#hm-mastery { position: absolute; left: 812px; top: 310px; width: 204px; display: flex; flex-direction: column; align-items: center; gap: 4px; pointer-events: none; }
+#hm-mastery span { font-size: 19px; color: var(--mc); text-shadow: 0 2px 0 #000; }
+#hm-mastery i { display: block; width: 160px; height: 10px; background: #000a; border: 2px solid #000; border-radius: 3px; overflow: hidden; }
+#hm-mastery i b { display: block; height: 100%; background: var(--mc); }
+#hm-titles { position: absolute; left: 60px; top: 136px; font: inherit; font-size: 15px; padding: 9px 14px; color: #fff; background: #7a3ab8; border: 4px solid #3e1a6a; border-radius: 8px; cursor: pointer;
+  box-shadow: 0 5px 0 #3e1a6a; }
+.hm-tlist { width: min(100%, 640px); display: flex; flex-direction: column; gap: 8px; }
+.hm-tlist button { font: inherit; font-size: 12px; padding: 14px; text-align: left; color: #fff; background: #1c2442; border: 3px solid #3a4878; border-radius: 6px; cursor: pointer; }
+.hm-tlist button.on { border-color: #ffd23f; color: #ffe27a; box-shadow: 0 0 10px rgba(255, 210, 60, 0.5); }
+.hm-tlist p { margin: 0; font-size: 9px; line-height: 1.8; color: #c8cce0; text-align: center; }
 #home-error { position: absolute; left: 0; right: 0; bottom: 30px; text-align: center; color: #ff6a5a; font-size: 18px; text-shadow: 0 2px 0 #000; pointer-events: none; }
 
 .hm-screen { position: fixed; inset: 0; z-index: 15; display: flex; flex-direction: column; align-items: center; overflow-y: auto; padding: 14px; box-sizing: border-box; gap: 12px;
@@ -132,13 +145,16 @@ export class Home {
       <img class="bg" src="/home-bg.jpg" alt="" />
       <div id="hm-ped"></div>
       <div id="hm-hero"></div>
+      <div id="hm-title"></div>
       <div id="hm-heroname"></div>
+      <div id="hm-mastery"><span></span><i><b></b></i></div>
       <div id="hm-corner">
         <img id="hm-frame" src="/home-frame.png" alt="" />
         <div id="hm-pic"></div>
         <div id="hm-name"></div>
         <button type="button" class="hm-hit" id="hm-profile" aria-label="Profile"></button>
         <button type="button" id="hm-spin"></button>
+        <button type="button" id="hm-titles">TITLE</button>
         <div id="hm-drop"></div>
       </div>
       <button type="button" class="hm-hit" id="hm-world" aria-label="Open World" style="left:455px;top:637px;width:238px;height:125px"></button>
@@ -169,6 +185,10 @@ export class Home {
     stage.querySelector("#hm-start")!.addEventListener("click", () => this.showModes());
     stage.querySelector("#hm-char")!.addEventListener("click", () => this.showCharacters());
     this.spinBtn.addEventListener("click", () => act.openSlot());
+    stage.querySelector("#hm-titles")!.addEventListener("click", (e) => {
+      e.stopPropagation();
+      this.showTitles();
+    });
     stage.querySelector("#hm-profile")!.addEventListener("click", (e) => {
       e.stopPropagation();
       this.drop.classList.toggle("show");
@@ -218,8 +238,18 @@ export class Home {
       this.heroEl.append(big);
       this.heroName.textContent = HEROES[fav]?.name ?? "";
     }
+    // The title worn, over the hero; the hero's mastery under its name.
+    this.stage.querySelector("#hm-title")!.textContent = loadProfile().title ? `\u300C${loadProfile().title}\u300D` : "";
+    const m = heroMastery(fav);
+    const mEl = this.stage.querySelector<HTMLElement>("#hm-mastery")!;
+    mEl.style.setProperty("--mc", masteryColor(m.level));
+    mEl.querySelector("span")!.textContent = m.level ? `MASTERY Lv.${m.level}` : "MASTERY Lv.0";
+    const share = m.level >= 10 ? 1 : (m.points - m.prev) / Math.max(1, m.next - m.prev);
+    mEl.querySelector<HTMLElement>("i b")!.style.width = `${Math.round(Math.max(0, Math.min(1, share)) * 100)}%`;
     const spins = this.act.spins();
     this.spinBtn.style.display = this.act.online && spins > 0 ? "" : "none";
+    // The TITLE button sits where SPIN is, just under it when SPIN shows.
+    this.stage.querySelector<HTMLElement>("#hm-titles")!.style.top = this.act.online && spins > 0 ? "196px" : "136px";
     this.spinBtn.textContent = `SPIN x${spins}`;
     // The profile menu.
     this.drop.innerHTML = "";
@@ -280,6 +310,37 @@ export class Home {
     box.querySelectorAll<HTMLElement>(".lbl").forEach((l) => (l.style.cursor = "pointer"));
     show(attackMode());
     el.append(box);
+  }
+
+  /** TITLE: the titles earned so far; tap one to wear it (shown over the hero here and in the Open World). */
+  showTitles() {
+    const { el } = this.screen("TITLES");
+    const list = document.createElement("div");
+    list.className = "hm-tlist";
+    const draw = () => {
+      const p = loadProfile();
+      list.innerHTML = "";
+      if (!p.titles.length) {
+        list.innerHTML = "<p>No titles yet.<br>Titles are earned by the way you play and the heroes you play most. Keep playing!</p>";
+        return;
+      }
+      const add = (label: string, title: string) => {
+        const b = document.createElement("button");
+        b.type = "button";
+        b.textContent = label;
+        b.classList.toggle("on", p.title === title);
+        b.addEventListener("click", () => {
+          wearTitle(title);
+          draw();
+          this.refresh();
+        });
+        list.append(b);
+      };
+      add("(no title)", "");
+      for (const t of p.titles) add(t, t);
+    };
+    draw();
+    el.append(list);
   }
 
   /** START GAME: pick a mode (then heroes are picked on the select screen in the game). */

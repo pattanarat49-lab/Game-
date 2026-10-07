@@ -9,6 +9,7 @@ export interface AccountData {
   tutorial?: boolean; // the tutorial was played (or skipped)
   owned?: string[]; // heroes unlocked (the server's to change)
   spins?: number; // slot spins waiting (the server's to change)
+  profile?: unknown; // hero mastery and titles (profile.ts)
 }
 
 export interface Session {

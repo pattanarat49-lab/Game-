@@ -85,6 +85,9 @@ import {
   HERO_HIT_SCALE,
   HERO_DAMAGE_SCALE,
   CLASSIC_RESPAWN,
+  SPAWN_SHIELD,
+  FINAL_STAND_BOOST,
+  ASSIST_WINDOW,
   CLASSIC_TEAM_SIZE,
   aimPickScore,
 } from "./game";
@@ -275,6 +278,19 @@ export interface SimPlayer {
   link: string;
   /** The hero this one looks like to rivals (the Trickster's disguise). */
   disguise: string;
+  /** Classic 3v3: seconds left of the spawn shield (no damage taken). */
+  shield: number;
+  /** Classic 3v3 FINAL STAND: the last hero of a team, on the last life (+50% damage and HP). */
+  stand: boolean;
+  /** This match so far (for the scores at the end): KOs, assists, falls, damage dealt and taken. */
+  kos: number;
+  assists: number;
+  falls: number;
+  dealt: number;
+  taken: number;
+  /** The title the player wears, and their mastery level with this hero (shown in the Open World). */
+  title: string;
+  mastery: number;
 }
 
 export interface SimEnemy {
@@ -375,6 +391,8 @@ export interface SimFactory<P, E, B, Z = SimZone> {
 // Data that players do not need to see.
 interface PlayerBrain {
   input: PlayerInput;
+  /** Who hit this hero lately (root player id -> sim clock), for assists. */
+  hitBy?: Map<string, number>;
   /** ALIEN TRANSFORM: HP when the transform started; turning back restores it. */
   formHp?: number;
   attackTimer: number;
@@ -1034,7 +1052,11 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
   private beginMatch() {
     const s = this.state;
     s.players.forEach((p, id) => {
+      this.endStand(p);
       p.score = 0;
+      p.kos = p.assists = p.falls = p.dealt = p.taken = p.shield = 0;
+      const b = this.brains.get(id);
+      if (b) b.hitBy = undefined;
       p.dead = false;
       p.hp = p.maxHp;
       p.ready = false;
@@ -1079,6 +1101,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
     const hero = heroOf(p.hero);
     if (p.domain > 0 && hero.skill.kind === "domainx") rage *= hero.skill.damage; // twice as deadly in his own domain
     if (p.hero === "mob" && p.maxHp > 0) rage *= 1 + 4 * Math.max(0, 1 - p.hp / p.maxHp); // Psychic Kid: up to 500% when nearly down
+    if (p.stand) rage *= FINAL_STAND_BOOST;
     return rage * (bot ? BOT_LEVELS[bot.level].damage : 1) * (p.power || 1) * (DAMAGE_BALANCE[(heroOf(p.hero).formOf ?? p.hero) as HeroId] ?? 1); // an alien form hits like its hero
   }
 
@@ -2213,6 +2236,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       // The Open World is peaceful: walking and dashing only.
       const input = this.state.stage === "world" ? { ...steered, shoot: false, skill: false, skill2: false } : steered;
       brain.hurtTimer = Math.max(0, brain.hurtTimer - dt);
+      p.shield = Math.max(0, p.shield - dt);
       brain.attackTimer = Math.max(0, brain.attackTimer - dt);
       brain.kbExtra = Math.max(0, brain.kbExtra - KNOCKBACK_DISTANCE * 2 * dt);
       if (Math.abs(brain.kbx) + Math.abs(brain.kby) > 1) {
@@ -2278,6 +2302,10 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
           this.placeAtSpawn(p);
           brain.target = undefined;
           brain.hurtTimer = 1.5;
+          if (this.classic) {
+            p.shield = SPAWN_SHIELD;
+            this.updateStands();
+          }
         }
         return;
       }
@@ -4796,6 +4824,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
     const p = this.state.players.get(id);
     const brain = this.brains.get(id);
     if (!p || !brain || p.dead || p.dashing) return;
+    if (p.shield > 0) return; // fresh off the spawn: untouchable for a moment
     if (!pierce && (heroOf(p.hero).invincible || p.barrier > 0)) return;
     if (p.vanish > 0) return; // eaten (safe inside) or inside a foe
     if (attacker && attacker !== ENEMY && (p.domain > 0) !== (this.state.players.get(this.rootOf(attacker))?.domain ?? 0) > 0) return; // a domain shuts the world out
@@ -4827,6 +4856,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       brain.hurtTimer = HURT_IFRAMES;
     }
     this.leech(attacker, Math.min(p.hp, amount));
+    this.noteHit(id, p, brain, attacker, Math.min(p.hp, amount));
     p.hp = Math.max(0, p.hp - amount);
     if (p.hp <= 0 && p.revive > 0 && !p.owner) {
       // REVIVE: back on his feet at once.
@@ -4846,6 +4876,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       p.respawnIn = this.classic ? CLASSIC_RESPAWN : RESPAWN_TIME;
       const root = this.rootOf(attacker);
       const killer = root && root !== id ? this.state.players.get(root) : undefined;
+      this.noteFall(id, p, brain, root);
       if (this.classic) {
         if (this.pvpLive()) this.classicKnockout(p, killer);
       } else if (this.state.stage === "pve") {
@@ -4861,6 +4892,53 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       // PvP and Bot Duel: every knockout starts a fresh round (handled at the start of the next tick).
       if (this.ring && this.state.stage !== "pve" && !this.classic && this.state.phase === "fight") this.roundOver = true;
     }
+  }
+
+  /** Match scores: damage dealt and taken, and who helped bring this hero down. */
+  private noteHit(id: string, p: P, brain: PlayerBrain, attacker: string | undefined, dealt: number) {
+    if (dealt <= 0 || p.owner) return;
+    p.taken += dealt;
+    const root = attacker && attacker !== ENEMY ? this.rootOf(attacker) : "";
+    const a = root && root !== id ? this.state.players.get(root) : undefined;
+    if (!a) return;
+    a.dealt += dealt;
+    (brain.hitBy ??= new Map()).set(root, this.clock);
+  }
+
+  private noteFall(id: string, p: P, brain: PlayerBrain, killerId: string) {
+    p.falls++;
+    const killer = killerId && killerId !== id ? this.state.players.get(killerId) : undefined;
+    if (killer) killer.kos++;
+    brain.hitBy?.forEach((t, rid) => {
+      const helper = this.state.players.get(rid);
+      if (helper && rid !== killerId && rid !== id && this.clock - t <= ASSIST_WINDOW) helper.assists++;
+    });
+    brain.hitBy = undefined;
+  }
+
+  /** Classic 3v3 FINAL STAND: the last hero standing on a side, on their last life, gets +50% HP and damage. */
+  private updateStands() {
+    if (!this.classic || !this.pvpLive()) return;
+    for (const team of [1, 2]) {
+      const left: P[] = [];
+      this.state.players.forEach((q) => {
+        if (!q.owner && q.team === team && (!q.dead || q.lives > 0)) left.push(q);
+      });
+      const last = left.length === 1 ? left[0] : undefined;
+      if (!last || last.dead || last.stand || last.lives > 1) continue;
+      last.stand = true;
+      last.maxHp = Math.round(last.maxHp * FINAL_STAND_BOOST);
+      last.hp = Math.round(last.hp * FINAL_STAND_BOOST);
+      this.addZone("fx:shock:ffb020", last.x, last.y, 50, 1, { owner: this.idOf(last), every: Infinity, damage: 0 });
+    }
+  }
+
+  /** FINAL STAND is over (a new match): back to the hero's own HP. */
+  private endStand(p: P) {
+    if (!p.stand) return;
+    p.stand = false;
+    p.maxHp = Math.round(p.maxHp / FINAL_STAND_BOOST);
+    p.hp = Math.min(p.hp, p.maxHp);
   }
 
   /** Classic 3v3: a hero fell; the other team scores (whoever landed the blow), first to the target wins. */
@@ -4879,7 +4957,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       s.phase = "victory";
       s.phaseTimer = 8;
       s.winner = standing[1] ? "RED" : standing[2] ? "BLUE" : "NO";
-    }
+    } else this.updateStands();
   }
 
   /** PvE Squad: someone fell. The round goes to the team when the bot is down, to the bot when every player is. */
