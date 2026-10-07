@@ -1000,15 +1000,39 @@ const ROSTER = {
     ]],
     { laneParry: true }),
   // 2026-10-07 (user's sheet, ref Goo Kim, renamed): no skills yet, just a very strong, very fast, wide, long sword swing.
-  penblade: hero("fighter", "Pen Blade", "Street swordsman", 110, blade(48, 0.3, 64, 3.0), "Very fast, very strong, wide sword swings that reach far.",
+  penblade: hero("fighter", "Pen Blade", "Street swordsman", 110, blade(30, 0.3, 64, 3.0), "Very fast, very strong, wide sword swings that reach far.",
     NO_SKILL,
     null,
     { noSkills: true }),
+  // 2026-10-07 (user's picture): the Shinsengumi captain. Okita Souji is a historical figure.
+  souji: hero("assassin", "Okita Souji", "Shinsengumi first captain", 100, blade(28, 0.4, 34), "Quick katana cuts.",
+    ["SANDANZUKI", 7, "three thrusts down the lane so fast they land almost as one; the third pierces armor and stuns 0.5s.", [
+      { do: "lane", len: 120, width: 22, look: "slash", color: "7fc8ff", dmg: 30 },
+      { do: "lane", wait: 0.06, len: 120, width: 22, look: "slash", color: "a0d8ff", dmg: 30 },
+      { do: "lane", wait: 0.12, len: 120, width: 22, look: "slash", color: "ffffff", dmg: 30, ignoreArmor: true, stun: 0.5 },
+    ]],
+    ["SHUKUCHI", 9, "steps through space to the aimed spot, cutting everything around where he lands, then moves 40% faster and attacks faster for 3s.", [
+      { do: "blink", to: "aim", range: 170, color: "7fc8ff" },
+      { do: "ring", radius: 60, look: "spin", color: "7fc8ff", dmg: 35 },
+      { do: "buff", dur: 3, speed: 1.4, atk: 0.6, color: "7fc8ff" },
+    ]]),
+  // 2026-10-07 (user's picture): the London fog killer. Jack the Ripper is a historical figure.
+  ripper: hero("assassin", "Jack the Ripper", "Whitechapel phantom", 95, shoot(bladeShot("d0d0e0", 3), 18, 0.35, 180, 340), "Throws scalpels fast.",
+    ["WHITECHAPEL FOG", 12, "breathes out a blood-red fog that follows him for 5s: foes inside can't see him and take damage every 0.5s, and his hits deal 50% more.", [
+      { do: "field", at: "self", follow: true, radius: 120, life: 5, tick: 0.5, fog: true, look: "fog", color: "8a1020", dmg: 6 },
+      { do: "buff", dur: 5, dmg: 1.5, color: "c01030" },
+    ]],
+    ["MARIA THE RIPPER", 10, "appears behind the nearest foe and cuts four times in a flash; the cuts slow by 50% for 2s.", [
+      { do: "blink", to: "behind", range: 200, color: "c01030" },
+      { do: "cone", times: 4, gap: 0.08, range: 50, arc: 2.5, color: "c01030", dmg: 20, slow: 2, slowPct: 0.5 },
+    ]]),
 } satisfies Record<string, Entry>;
 
 /** Tuning results (DAMAGE_BALANCE, win %, stars) per hero, filled in from the bot duels. */
 const TUNED: Record<string, [bal: number, win: number, stars: number]> = {
   penblade: [1, 55.6, 5],
+  souji: [1.83, 47.4, 3],
+  ripper: [1.91, 50.0, 4],
   poseidon: [2.28, 49.5, 3],
   ace: [2.87, 52.9, 4],
   ainz: [3.27, 52.9, 4],

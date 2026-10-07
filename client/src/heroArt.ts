@@ -31,6 +31,8 @@ const LAYOUT: Record<string, ArtLayout> = {
   rika: { scale: 0.5, originY: 0.97 },
   poseidon: { scale: 0.45, originY: 0.97 }, // the picture is drawn finer (65px tall)
   penblade: { scale: 0.5, originY: 0.97 }, // 56px tall
+  souji: { scale: 0.55, originY: 0.97 }, // 51px tall
+  ripper: { scale: 0.56, originY: 0.97 }, // 50px tall
   // The Detective's chess pieces (52px and 66px tall pictures): a small pawn, a queen taller than a hero.
   pawn: { scale: 1 / 3, originY: 0.97 },
   queen: { scale: 0.45, originY: 0.97 },
