@@ -10,6 +10,7 @@ export interface AccountData {
   owned?: string[]; // heroes unlocked (the server's to change)
   spins?: number; // slot spins waiting (the server's to change)
   profile?: unknown; // hero mastery and titles (profile.ts)
+  rank?: { r1?: number; r3?: number }; // Ranked points (the server's to change)
 }
 
 export interface Session {

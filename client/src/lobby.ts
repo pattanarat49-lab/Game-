@@ -343,7 +343,7 @@ export class Lobby {
   update(state: any, myId: string) {
     // Classic 3v3 late joiners pick their hero here too, while the match goes on.
     const late = !!state?.players?.get(myId)?.late;
-    const show = (state?.stage === "pvp" || state?.stage === "pve" || state?.stage === "classic") && (state.phase === "select" || late);
+    const show = (state?.stage === "pvp" || state?.stage === "pve" || state?.stage === "classic") && !state.ranked && (state.phase === "select" || late);
     this.root.hidden = !show;
     if (!show) return;
     if (this.pve) return this.updatePve(state, myId);

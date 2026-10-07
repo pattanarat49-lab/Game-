@@ -212,6 +212,7 @@ function bearer(req: Request): string {
 
 // ---- Heroes: new players pick 3 starters out of 10 random ones; every win earns a spin that unlocks one more. ----
 interface Unlocks {
+  rank?: { r1?: number; r3?: number };
   owned?: string[];
   spins?: number;
   offer?: string[];
@@ -234,7 +235,26 @@ function readData(a: Account): Data {
 }
 
 function serverPart(d: Data): Unlocks {
-  return { owned: d.owned ?? [], spins: d.spins ?? 0, offer: d.offer, lastWin: d.lastWin };
+  return { owned: d.owned ?? [], spins: d.spins ?? 0, offer: d.offer, lastWin: d.lastWin, rank: d.rank };
+}
+
+/** Ranked: add (or take) rank points for one mode ("r1" = 1v1, "r3" = 3v3); never below 0. */
+export async function addRankPoints(key: string, mode: "r1" | "r3", delta: number): Promise<{ before: number; after: number } | undefined> {
+  try {
+    const a = await store.get(key);
+    if (!a) return undefined;
+    const d = readData(a);
+    const rank = { r1: 0, r3: 0, ...(d.rank ?? {}) };
+    const before = rank[mode] ?? 0;
+    rank[mode] = Math.max(0, before + delta);
+    d.rank = rank;
+    a.data = JSON.stringify(d);
+    await store.save(a);
+    return { before, after: rank[mode] };
+  } catch (e) {
+    console.error("rank update failed", e);
+    return undefined;
+  }
 }
 
 /** The heroes an account may play (undefined = it still has to pick its starters). */

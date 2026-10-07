@@ -46,6 +46,19 @@ const CSS = `
 
 let open: HTMLDivElement | undefined;
 
+/** Ranked: the rank points won or lost, under the scores (or as a toast if they are closed). */
+export function showRankLine(text: string, color: string) {
+  const box = open?.querySelector(".box");
+  if (!box) {
+    import("./toast").then(({ toast }) => toast(text));
+    return;
+  }
+  const el = document.createElement("div");
+  el.style.cssText = `text-align:center;font-size:12px;color:${color};padding:8px;border:2px solid ${color};border-radius:6px;`;
+  el.textContent = text;
+  box.querySelector("h2")!.after(el);
+}
+
 export function closeScoreboard() {
   open?.remove();
   open = undefined;

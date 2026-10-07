@@ -3,7 +3,7 @@
 // then picks heroes on the PvP-style select screen); CHARACTER opens the hero gallery by class, where
 // one hero can be made the favourite.
 
-import { HEROES, HERO_CLASSES, HERO_IDS, HeroId, StageId, heroClass } from "../../shared/game";
+import { HEROES, HERO_CLASSES, HERO_IDS, HeroId, RANKED_CODE, StageId, heroClass, rankTier } from "../../shared/game";
 import { heroPortrait, paintPortrait } from "./heroArt";
 import { showHeroInfo } from "./heroInfo";
 import { AttackMode, attackMode, setAttackMode } from "./settings";
@@ -22,6 +22,8 @@ export interface HomeActions {
   play(stage: StageId, solo: boolean, code: string): void;
   logout?(): void;
   rename?(): void;
+  /** Ranked points for 1v1 and 3v3 (undefined = not signed in, so no Ranked). */
+  rank?(): { r1: number; r3: number } | undefined;
 }
 
 const W = 1850;
@@ -88,6 +90,9 @@ const CSS = `
 .hm-mode button { flex: 1; font: inherit; font-size: 11px; padding: 11px 8px; border-radius: 6px; cursor: pointer; color: #fff; }
 .hm-mode button.solo { background: #2fae6a; border: 3px solid #1d7a48; }
 .hm-mode button.online { background: #3a6ad8; border: 3px solid #1b3a9a; }
+.hm-mode.ranked { border-color: #c9932e; background: linear-gradient(#241a30, #141a30); }
+.hm-mode.ranked h3 { color: #ff9a3a; }
+.hm-mode button:disabled { opacity: 0.45; cursor: default; }
 .hm-room { display: flex; gap: 8px; align-items: center; font-size: 9px; color: #c8cce0; }
 .hm-room input { font: inherit; font-size: 11px; width: 130px; padding: 8px; background: #0a0f22; color: #fff; border: 2px solid #4a5a8a; border-radius: 4px; }
 .hm-tabs { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; }
@@ -375,6 +380,31 @@ export class Home {
       if (m.solo) add(m.online ? "SOLO" : "PLAY", "solo", () => this.act.play(m.solo!, true, ""));
       if (m.online && online) add(m.solo ? "ONLINE" : "PLAY ONLINE", "online", () => this.act.play(m.online!, false, room.value.trim().slice(0, 8).toUpperCase()));
       grid.append(card);
+    }
+    if (online) {
+      // Ranked: rank points by result, tiers from Bronze to Champion, and a draft (3 bans each, then turns at picking).
+      const ranks = this.act.rank?.();
+      for (const [title, stage, key, text] of [...[
+        ["RANKED 1v1", "pvp", "r1", "1 vs 1 in the ring. Each player bans 3 heroes, then you take turns picking. Win to climb."],
+        ["RANKED 3v3", "classic", "r3", "Red vs Blue on the 3v3 maps. Everyone bans 3, then the teams take turns picking one hero each."],
+      ] as const].reverse()) {
+        const card = document.createElement("div");
+        card.className = "hm-mode ranked";
+        const pts = ranks?.[key] ?? 0;
+        const tier = rankTier(pts);
+        card.innerHTML = `<h3>${title}</h3><div class="tag" style="color:${tier.color}">${ranks ? `${tier.name.toUpperCase()} · ${pts} RP` : "LOG IN TO PLAY"}</div><p>${text}</p><div class="btns"></div>`;
+        const b = document.createElement("button");
+        b.type = "button";
+        b.className = "online";
+        b.textContent = ranks ? "FIND MATCH" : "LOG IN FIRST";
+        b.disabled = !ranks;
+        b.addEventListener("click", () => {
+          close();
+          this.act.play(stage, false, RANKED_CODE);
+        });
+        card.querySelector(".btns")!.append(b);
+        grid.prepend(card);
+      }
     }
     el.append(grid);
     const roomRow = document.createElement("div");

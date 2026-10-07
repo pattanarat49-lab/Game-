@@ -3,6 +3,8 @@ import { Client } from "colyseus.js";
 import { RoomLink } from "../roomLink";
 import {
   matchRatings,
+  RANKED_CODE,
+  rankTier,
   CENTER_X,
   CENTER_Y,
   ENEMIES,
@@ -66,8 +68,10 @@ import { MAP_H, MAP_Y, classicMap, inBush, mapBlocksShot, seesInto } from "../..
 import { RiftSim, TITAN_ATTACK_COOLDOWN } from "../../../shared/sim";
 import { WorldView } from "../worldView";
 import { recordResult, statsJson } from "../stats";
-import { ScoreRow, closeScoreboard, showScoreboard } from "../scoreboard";
+import { ScoreRow, closeScoreboard, showRankLine, showScoreboard } from "../scoreboard";
 import { heroMastery, recordMatch, wornTitle } from "../profile";
+import { DraftScreen } from "../draft";
+import { accountData } from "../account";
 import { TutorialView } from "../tutorial";
 import { isTouchDevice } from "../touch";
 import { DUNGEON, OPEN_WORLD } from "../../../shared/world";
@@ -325,6 +329,8 @@ export class GameScene extends Phaser.Scene {
   private cameraTarget!: Phaser.GameObjects.Zone;
   private aim = 0;
   private lobby?: Lobby;
+  /** Ranked: the ban and pick screen. */
+  private draft?: DraftScreen;
   private effects: Effect[] = [];
   private fx!: Phaser.GameObjects.Graphics;
   private aimGuide!: Phaser.GameObjects.Graphics;
@@ -532,6 +538,26 @@ export class GameScene extends Phaser.Scene {
     this.lobby = lobby;
     this.events.once(Phaser.Scenes.Events.DESTROY, () => lobby.destroy());
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => lobby.destroy());
+    if (this.registry.get("roomCode") === RANKED_CODE) {
+      // Ranked: everyone READY, then 3 bans each and turns at picking.
+      const mode = stage === "classic" ? "r3" : "r1";
+      const draft = new DraftScreen(
+        { ban: (hero) => room.send("ban", hero), pick: (hero) => room.send("pick", hero), setReady: (ready) => room.send("ready", ready) },
+        stage === "classic" ? 3 : 1,
+        () => (accountData().rank as Record<string, number> | undefined)?.[mode] ?? 0,
+      );
+      this.draft = draft;
+      this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => draft.destroy());
+      room.onMessage("rank", (r: { mode: string; before: number; after: number; mvp: boolean }) => {
+        const rank = { ...((accountData().rank as Record<string, number>) ?? {}), [r.mode]: r.after };
+        accountData().rank = rank;
+        const was = rankTier(r.before);
+        const now = rankTier(r.after);
+        const diff = r.after - r.before;
+        const line = `${diff >= 0 ? "+" : ""}${diff} RP · ${now.name.toUpperCase()} ${r.after} RP${now.name !== was.name ? (r.after > r.before ? "  RANK UP!" : "  RANK DOWN") : ""}`;
+        showRankLine(line, now.color);
+      });
+    }
   }
 
   /** Classic 3v3: a row of pixel hearts over the head, one per life left (spent ones grey), red or blue for the team. */
@@ -576,9 +602,10 @@ export class GameScene extends Phaser.Scene {
     }
 
     this.lobby?.update(state, room.sessionId);
+    this.draft?.update(state, room.sessionId);
     this.tickPopups(dt);
     const me = state.players.get(room.sessionId);
-    const selecting = state.phase === "select" || !!me?.late;
+    const selecting = state.phase === "select" || state.phase === "draft" || !!me?.late;
     // (An ALIEN TRANSFORM is still the same hero: the HUD stays, so held sticks and buttons carry on.)
     const baseHero = me ? heroOf(me.hero).formOf ?? me.hero : undefined;
     if (me && baseHero !== this.registry.get("hero") && !selecting) {

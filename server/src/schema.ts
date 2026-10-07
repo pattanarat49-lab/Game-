@@ -112,7 +112,7 @@ export class Zone extends Schema {
   @type("float32") maxLife = 0;
 }
 
-export type Phase = "select" | "intermission" | "fight" | "victory";
+export type Phase = "select" | "draft" | "intermission" | "fight" | "victory";
 
 export class RiftState extends Schema {
   @type("string") stage = "lava";
@@ -137,6 +137,10 @@ export class RiftState extends Schema {
   @type("uint8") map = 0;
   @type("uint8") scoreA = 0;
   @type("uint8") scoreB = 0;
+  /** Ranked: a Ranked room, its draft (JSON) and the seconds left for the current draft step. */
+  @type("boolean") ranked = false;
+  @type("string") draft = "";
+  @type("float32") draftTimer = 0;
   /** Server clock (ms) at this update, so clients can space updates evenly however they arrive. */
   @type("float64") time = 0;
 }

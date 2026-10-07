@@ -49,6 +49,7 @@ const home = new Home(menu, {
   },
   openWorld: () => void startGame("world", soloOnly, ""),
   play: (stage, solo, code) => void startGame(stage, solo, code),
+  rank: () => (currentAccount() ? { r1: accountData().rank?.r1 ?? 0, r3: accountData().rank?.r3 ?? 0 } : undefined),
   logout: soloOnly ? undefined : () => logOut(),
   rename: soloOnly
     ? () => {

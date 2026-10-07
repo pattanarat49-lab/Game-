@@ -2319,3 +2319,48 @@ export function masteryLevel(points: number): number {
 export function masteryPoints(rating: number, won: boolean): number {
   return Math.round(10 + rating * 3 + (won ? 15 : 0));
 }
+
+// ---- Ranked (user request 2026-10-07): 1v1 and 3v3 with a draft (3 bans each, then the sides take turns picking). ----
+
+/** The room number every Ranked room shares (players can't type it, so only Ranked players meet there). */
+export const RANKED_CODE = "*RANKED";
+export const DRAFT_BANS = 3;
+/** Seconds for the ban phase (everyone bans at once), and for each pick. */
+export const DRAFT_BAN_TIME = 25;
+export const DRAFT_PICK_TIME = 20;
+
+export interface RankTier {
+  name: string;
+  min: number; // rank points where it starts
+  color: string;
+}
+
+export const RANK_TIERS: RankTier[] = [
+  { name: "Bronze", min: 0, color: "#d8925a" },
+  { name: "Silver", min: 200, color: "#cfd8e8" },
+  { name: "Gold", min: 400, color: "#ffd23f" },
+  { name: "Diamond", min: 600, color: "#7ae0ff" },
+  { name: "Legend", min: 800, color: "#c97aff" },
+  { name: "Champion", min: 1000, color: "#ff5a6a" },
+];
+
+export function rankTier(points: number): RankTier & { next?: number } {
+  let i = 0;
+  while (i + 1 < RANK_TIERS.length && points >= RANK_TIERS[i + 1].min) i++;
+  return { ...RANK_TIERS[i], next: RANK_TIERS[i + 1]?.min };
+}
+
+/** Rank points for a Ranked match: a win gives 25 (30 as MVP), a loss takes 20 (10 as the losing side's MVP). */
+export function rankDelta(won: boolean, mvp: boolean): number {
+  return won ? (mvp ? 30 : 25) : mvp ? -10 : -20;
+}
+
+/** The order the heroes are picked in a draft: the sides take turns, one hero each. */
+export function draftOrder(sideA: string[], sideB: string[]): string[] {
+  const out: string[] = [];
+  for (let i = 0; i < Math.max(sideA.length, sideB.length); i++) {
+    if (sideA[i]) out.push(sideA[i]);
+    if (sideB[i]) out.push(sideB[i]);
+  }
+  return out;
+}

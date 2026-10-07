@@ -1,6 +1,6 @@
-import { accountForToken, accountProfile, accountStats, ownedHeroes } from "./accounts";
+import { accountForToken, accountProfile, accountStats, addRankPoints, ownedHeroes } from "./accounts";
 import { Client, Room } from "colyseus";
-import { CLASSIC_TEAM_SIZE, MAX_PLAYERS, PlayerInput, masteryLevel, stageOf } from "../../shared/game";
+import { CLASSIC_TEAM_SIZE, MAX_PLAYERS, PlayerInput, RANKED_CODE, masteryLevel, matchRatings, rankDelta, stageOf } from "../../shared/game";
 import { RiftSim, TICK_MS, newRoomCode } from "../../shared/sim";
 import { WORLD_MAX_PLAYERS } from "../../shared/world";
 import { Bullet, Enemy, Player, RiftState, Zone } from "./schema";
@@ -13,8 +13,11 @@ export class RiftRoom extends Room<RiftState> {
   /** Open World: open duel requests, asker -> asked. */
   private duels = new Map<string, string>();
 
-  onCreate(options: { stage?: string }) {
+  onCreate(options: { stage?: string; code?: string }) {
     this.setState(new RiftState());
+    // Ranked rooms all share one room number nobody can type.
+    const stage = String(options?.stage ?? "");
+    this.state.ranked = String(options?.code ?? "") === RANKED_CODE && (stage === "pvp" || stage === "classic");
     this.sim = new RiftSim(this.state, {
       player: () => new Player(),
       enemy: () => new Enemy(),
@@ -31,6 +34,8 @@ export class RiftRoom extends Room<RiftState> {
       this.sim.pickHero(client.sessionId, String(hero));
     });
     this.onMessage("ready", (client, ready: boolean) => this.sim.setReady(client.sessionId, !!ready));
+    // Ranked draft: ban a hero (picks come in as "pick").
+    this.onMessage("ban", (client, hero: string) => this.sim.draftBan(client.sessionId, String(hero)));
     // PvE Squad player select: anyone picks the bot's hero and difficulty.
     this.onMessage("bothero", (_client, hero: string) => this.sim.setBot(String(hero)));
     this.onMessage("botlevel", (_client, level: number) => this.sim.setBot(undefined, Number(level)));
@@ -54,9 +59,46 @@ export class RiftRoom extends Room<RiftState> {
         console.error(`sim error in ${this.state.stage}:`, err);
       }
       this.state.time = this.clock.elapsedTime;
+      // Ranked: rank points for everyone signed in once a match is decided.
+      if (this.state.phase === "victory" && this.lastPhase !== "victory" && this.state.ranked) void this.awardRanks();
+      this.lastPhase = this.state.phase;
       // The portal or the dungeon's way out: tell those players' devices where to go.
       for (const w of this.sim.warps.splice(0)) for (const id of w.ids) this.clientOf(id)?.send("goto", { stage: w.stage, code: w.code });
     }, TICK_MS);
+  }
+
+  private lastPhase = "";
+  /** Signed-in players' account keys (Ranked points go to the account). */
+  private accounts = new Map<string, string>();
+
+  /** Ranked: every signed-in player gains or loses rank points by result (MVPs lose less, win more). */
+  private async awardRanks() {
+    const s = this.state;
+    const ids: string[] = [];
+    const ps: Player[] = [];
+    s.players.forEach((p, id) => {
+      if (p.owner || p.late) return;
+      ids.push(id);
+      ps.push(p);
+    });
+    const classic = s.stage === "classic";
+    const won = ps.map((p) => (s.winner === "NO" ? false : classic ? s.winner === (p.team === 1 ? "RED" : "BLUE") : s.winner === p.name));
+    const ratings = matchRatings(ps.map((p, i) => ({ won: won[i], kos: p.kos, assists: p.assists, falls: p.falls, dealt: p.dealt, taken: p.taken })));
+    const best = (w: boolean) => {
+      let at = -1;
+      ratings.forEach((r, i) => {
+        if (won[i] === w && (at < 0 || r > ratings[at])) at = i;
+      });
+      return at;
+    };
+    const mvps = [best(true), best(false)];
+    const mode = classic ? "r3" : "r1";
+    for (let i = 0; i < ids.length; i++) {
+      const key = this.accounts.get(ids[i]);
+      if (!key || s.winner === "NO") continue;
+      const change = await addRankPoints(key, mode, rankDelta(won[i], mvps.includes(i)));
+      if (change) this.clientOf(ids[i])?.send("rank", { mode, ...change, mvp: mvps.includes(i) });
+    }
   }
 
   private clientOf(id: string): Client | undefined {
@@ -99,9 +141,13 @@ export class RiftRoom extends Room<RiftState> {
     const account = await accountForToken(options?.token);
     const owned = account ? ownedHeroes(account) : [];
     if (owned.length) this.owned.set(client.sessionId, owned);
+    if (account) this.accounts.set(client.sessionId, account.key);
+    // Ranked is for signed-in players only.
+    if (this.state.ranked && !account) throw new Error("Log in to play Ranked");
     let hero = String(options?.hero || "");
     if (owned.length && !owned.includes(hero)) hero = owned[0];
     const player = this.sim.addPlayer(client.sessionId, account?.username ?? String(options?.name || "Player"), hero);
+    if (owned.length) this.sim.setOwned(client.sessionId, owned);
     player.stats = account ? accountStats(account) : String(options?.stats ?? "").slice(0, 800);
     // The title worn and the mastery with this hero (shown in the Open World); an account's come from its saved profile.
     const prof = account ? accountProfile(account) : undefined;
@@ -126,6 +172,7 @@ export class RiftRoom extends Room<RiftState> {
       }
     }
     this.owned.delete(client.sessionId);
+    this.accounts.delete(client.sessionId);
     this.sim.removePlayer(client.sessionId);
     this.lastChat.delete(client.sessionId);
     this.duels.delete(client.sessionId);

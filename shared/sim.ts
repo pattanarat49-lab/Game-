@@ -85,6 +85,10 @@ import {
   HERO_HIT_SCALE,
   HERO_DAMAGE_SCALE,
   CLASSIC_RESPAWN,
+  DRAFT_BANS,
+  DRAFT_BAN_TIME,
+  DRAFT_PICK_TIME,
+  draftOrder,
   SPAWN_SHIELD,
   FINAL_STAND_BOOST,
   ASSIST_WINDOW,
@@ -379,6 +383,20 @@ export interface SimState<P extends SimPlayer, E extends SimEnemy, B extends Sim
   /** PvE Squad: the hero the bot plays, and its difficulty (index into BOT_LEVELS). */
   botHero: string;
   botLevel: number;
+  /** Ranked: this room is a Ranked one (drafted heroes, rank points). */
+  ranked?: boolean;
+  /** Ranked draft as JSON (see Draft), and seconds left for the current step. */
+  draft?: string;
+  draftTimer?: number;
+}
+
+/** Ranked draft: everyone bans 3 heroes at once, then the sides take turns picking one hero each. */
+export interface Draft {
+  stage: "ban" | "pick";
+  order: string[]; // pick order (player ids)
+  turn: number; // whose pick it is (index into order)
+  bans: Record<string, string[]>;
+  picks: Record<string, string>;
 }
 
 export interface SimFactory<P, E, B, Z = SimZone> {
@@ -919,9 +937,10 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
     const s = this.state;
     const leaver = s.players.get(id);
     // PvP: if a fighter leaves mid-match, the match is void and everyone goes back to player select.
-    const voids = !!leaver && !leaver.owner && s.stage === "pvp" && (s.phase === "intermission" || s.phase === "fight");
+    const voids = !!leaver && !leaver.owner && ((s.stage === "pvp" && (s.phase === "intermission" || s.phase === "fight")) || (s.phase === "draft" && !this.brains.get(id)?.bot));
     s.players.delete(id);
     this.brains.delete(id);
+    this.owned.delete(id);
     // A player's clones vanish with them.
     this.state.players.forEach((p, cid) => {
       if (p.owner === id) this.removePlayer(cid);
@@ -932,8 +951,129 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
     }
   }
 
+  // ---------------------------------------------------------------- ranked draft
+
+  /** Heroes each signed-in player may pick (set by the server; empty = every hero). */
+  private owned = new Map<string, string[]>();
+  private draftState?: Draft;
+
+  setOwned(id: string, heroes: string[]) {
+    this.owned.set(id, heroes);
+  }
+
+  private publishDraft() {
+    this.state.draft = this.draftState ? JSON.stringify(this.draftState) : "";
+  }
+
+  /** Every Ranked player is ready: bots fill Classic's empty seats, then the bans begin. */
+  private startDraft() {
+    const s = this.state;
+    const sideA: string[] = [];
+    const sideB: string[] = [];
+    if (this.classic) {
+      const n = this.teamCounts();
+      let k = 0;
+      for (const team of [1, 2]) {
+        for (let i = n[team]; i < CLASSIC_TEAM_SIZE; i++) {
+          const bot = this.addBot(HERO_IDS[Math.floor(Math.random() * HERO_IDS.length)], `bot${++k}`, s.botLevel);
+          bot.team = team;
+        }
+      }
+      s.players.forEach((p, id) => {
+        if (!p.owner) (p.team === 1 ? sideA : sideB).push(id);
+      });
+    } else {
+      s.players.forEach((p, id) => {
+        if (!p.owner) (sideA.length ? sideB : sideA).push(id);
+      });
+    }
+    this.draftState = { stage: "ban", order: draftOrder(sideA, sideB), turn: 0, bans: {}, picks: {} };
+    s.phase = "draft";
+    s.draftTimer = DRAFT_BAN_TIME;
+    s.notice = "";
+    this.publishDraft();
+  }
+
+  private draftTaken(hero: string): boolean {
+    const d = this.draftState!;
+    return Object.values(d.bans).some((b) => b.includes(hero)) || Object.values(d.picks).includes(hero);
+  }
+
+  /** Ban phase: up to three heroes nobody may pick. */
+  draftBan(id: string, hero: string) {
+    const d = this.draftState;
+    if (this.state.phase !== "draft" || !d || d.stage !== "ban" || !d.order.includes(id) || this.brains.get(id)?.bot) return;
+    if (!(HERO_IDS as string[]).includes(hero) || this.draftTaken(hero)) return;
+    const mine = (d.bans[id] ??= []);
+    if (mine.length >= DRAFT_BANS) return;
+    mine.push(hero);
+    // Everyone has banned: on to the picks at once.
+    if (d.order.every((pid) => this.brains.get(pid)?.bot || (d.bans[pid]?.length ?? 0) >= DRAFT_BANS)) this.startPicks();
+    this.publishDraft();
+  }
+
+  private startPicks() {
+    this.draftState!.stage = "pick";
+    this.draftState!.turn = 0;
+    this.state.draftTimer = DRAFT_PICK_TIME;
+  }
+
+  /** Pick phase: the player whose turn it is locks in a hero (not banned, not taken, one they own). */
+  private draftPick(id: string, hero: string) {
+    const d = this.draftState;
+    if (!d || d.stage !== "pick" || d.order[d.turn] !== id || !(HERO_IDS as string[]).includes(hero) || this.draftTaken(hero)) return;
+    const owned = this.owned.get(id);
+    if (owned?.length && !owned.includes(hero)) return;
+    d.picks[id] = hero;
+    this.setHero(id, hero);
+    d.turn++;
+    this.state.draftTimer = DRAFT_PICK_TIME;
+    if (d.turn >= d.order.length) {
+      this.draftState = undefined;
+      this.publishDraft();
+      this.beginMatch();
+      return;
+    }
+    this.publishDraft();
+  }
+
+  /** A hero for a player outside player select (the draft): stats as for that hero (bots keep their HP share). */
+  private setHero(id: string, hero: string) {
+    const p = this.state.players.get(id);
+    const def = HEROES[hero as keyof typeof HEROES];
+    if (!p || !def) return;
+    const bot = this.brains.get(id)?.bot;
+    p.hero = hero;
+    p.maxHp = p.hp = Math.round(def.maxHp * (bot?.hp ?? 1));
+    p.mode = 0;
+    if (bot) p.name = `BOT ${def.name}`;
+  }
+
+  /** Draft clock: bans end when time runs out; a pick not made in time (or a bot's) is made at random. */
+  private updateDraft(dt: number) {
+    const s = this.state;
+    const d = this.draftState;
+    if (!d) return this.startSelect();
+    s.draftTimer = Math.max(0, (s.draftTimer ?? 0) - dt);
+    if (d.stage === "ban") {
+      if (s.draftTimer <= 0) {
+        this.startPicks();
+        this.publishDraft();
+      }
+      return;
+    }
+    const id = d.order[d.turn];
+    const bot = !!this.brains.get(id)?.bot;
+    if (s.draftTimer > 0 && !(bot && s.draftTimer < DRAFT_PICK_TIME - 1.5)) return;
+    const owned = this.owned.get(id);
+    const open = HERO_IDS.filter((h) => !this.draftTaken(h) && (!owned?.length || owned.includes(h)));
+    const pool = open.length ? open : HERO_IDS.filter((h) => !this.draftTaken(h));
+    this.draftPick(id, pool[Math.floor(Math.random() * pool.length)]);
+  }
+
   /** PvP player select: change hero (only before locking in). */
   pickHero(id: string, hero: string) {
+    if (this.state.phase === "draft") return this.draftPick(id, hero);
     const p = this.state.players.get(id);
     const def = HEROES[hero as keyof typeof HEROES];
     if (!p || p.owner || p.ready || (this.state.phase !== "select" && !p.late) || !def || !(HERO_IDS as string[]).includes(hero)) return;
@@ -955,6 +1095,8 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
   private startSelect() {
     const s = this.state;
     s.phase = "select";
+    this.draftState = undefined;
+    this.publishDraft();
     s.phaseTimer = 0;
     s.winner = "";
     s.timeStop = 0;
@@ -2148,7 +2290,14 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
         fighters++;
         if (p.ready) ready++;
       });
-      if (fighters >= (s.stage === "pve" || this.classic ? 1 : 2) && ready === fighters) this.beginMatch();
+      if (s.ranked) {
+        // Ranked: everyone ready (two players for 1v1, someone on each side for 3v3), then the draft.
+        const sides = this.teamCounts();
+        const enough = this.classic ? fighters >= 2 && sides[1] > 0 && sides[2] > 0 : fighters === 2;
+        if (enough && ready === fighters) this.startDraft();
+      } else if (fighters >= (s.stage === "pve" || this.classic ? 1 : 2) && ready === fighters) this.beginMatch();
+    } else if (s.phase === "draft") {
+      this.updateDraft(dt);
     } else if (s.phase === "intermission") {
       s.phaseTimer -= dt;
       if (s.phaseTimer <= 0) s.phase = "fight";
