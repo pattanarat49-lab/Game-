@@ -34,6 +34,8 @@ const CSS = `
 .hm-hit { position: absolute; border-radius: 14px; cursor: pointer; background: transparent; border: 0; padding: 0; transition: box-shadow .15s, transform .1s; }
 .hm-hit:hover { box-shadow: 0 0 0 4px rgba(255, 230, 120, 0.7), 0 0 30px rgba(255, 220, 100, 0.6); }
 .hm-hit:active { transform: scale(0.97); }
+#hm-corner { position: absolute; left: 0; top: 0; width: 0; height: 0; z-index: 3; }
+#hm-frame { position: absolute; left: 30px; top: 6px; width: 432px; height: 122px; pointer-events: none; }
 #hm-pic { position: absolute; left: 60px; top: 26px; width: 90px; height: 86px; display: flex; align-items: flex-end; justify-content: center; overflow: hidden;
   background: radial-gradient(circle at 50% 40%, #f0a040, #b8401e 70%); }
 #hm-pic canvas { height: 118%; image-rendering: pixelated; margin-bottom: -4px; }
@@ -116,14 +118,17 @@ export class Home {
       <div id="hm-ped"></div>
       <div id="hm-hero"></div>
       <div id="hm-heroname"></div>
-      <div id="hm-pic"></div>
-      <div id="hm-name"></div>
-      <button type="button" class="hm-hit" id="hm-profile" aria-label="Profile"></button>
+      <div id="hm-corner">
+        <img id="hm-frame" src="/home-frame.png" alt="" />
+        <div id="hm-pic"></div>
+        <div id="hm-name"></div>
+        <button type="button" class="hm-hit" id="hm-profile" aria-label="Profile"></button>
+        <button type="button" id="hm-spin"></button>
+        <div id="hm-drop"></div>
+      </div>
       <button type="button" class="hm-hit" id="hm-world" aria-label="Open World" style="left:455px;top:637px;width:238px;height:125px"></button>
       <button type="button" class="hm-hit" id="hm-start" aria-label="Start game" style="left:712px;top:632px;width:425px;height:125px"></button>
       <button type="button" class="hm-hit" id="hm-char" aria-label="Characters" style="left:1158px;top:637px;width:240px;height:125px"></button>
-      <button type="button" id="hm-spin"></button>
-      <div id="hm-drop"></div>
       <div id="home-error"></div>`;
     root.append(stage);
     this.stage = stage;
@@ -145,21 +150,32 @@ export class Home {
     });
     root.addEventListener("click", () => this.drop.classList.remove("show"));
 
+    const corner = stage.querySelector<HTMLElement>("#hm-corner")!;
     const fit = () => {
       const w = innerWidth;
       const h = innerHeight;
-      // Fill the screen, but keep the profile box and the three buttons in view.
-      const s = Math.min(Math.max(w / W, h / H), w / 1390, h / 770);
+      // Cover the whole screen with the picture (no empty bands), centred, as long as the three buttons still fit;
+      // only a very narrow (portrait) screen shrinks it to keep them in view.
+      const BTN = { l: 435, r: 1418, t: 622, b: 772 };
+      const s = Math.min(Math.max(w / W, h / H), w / (BTN.r - BTN.l + 40));
       const vw = w / s;
       const vh = h / s;
+      const clamp = (v: number, lo: number, hi: number) => Math.min(Math.max(v, lo), hi);
+      // Centred, then nudged so the buttons stay on screen (and never past the picture's edges).
       let left = (W - vw) / 2;
-      if (vw < W) left = Math.min(Math.max(Math.min(left, 36), 1408 - vw, 0), W - vw);
+      if (vw < W) left = clamp(clamp(left, BTN.r + 20 - vw, BTN.l - 20), 0, W - vw);
       let up = (H - vh) / 2;
-      if (vh < H) up = Math.min(Math.max(Math.min(up, 12), 772 - vh, 0), H - vh);
+      if (vh < H) up = clamp(clamp(up, BTN.b + 10 - vh, BTN.t - 10), 0, H - vh);
       stage.style.transform = `scale(${s}) translate(${-left}px, ${-up}px)`;
+      // The profile box (with its frame) sticks to the top-left corner of the screen.
+      corner.style.transform = `translate(${Math.max(0, left - 24)}px, ${Math.max(0, up - 2)}px)`;
     };
     fit();
     addEventListener("resize", fit);
+    // Phones change size late (address bar, rotation, going fullscreen): fit again once things settle.
+    addEventListener("orientationchange", () => setTimeout(fit, 300));
+    visualViewport?.addEventListener("resize", fit);
+    document.addEventListener("fullscreenchange", () => setTimeout(fit, 150));
     this.refresh();
   }
 
