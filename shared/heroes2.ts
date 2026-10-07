@@ -87,6 +87,7 @@ function hero(cls: HeroClass, name: string, role: string, maxHp: number, basic: 
 }
 
 /** Queen's Bond's CURSED QUEEN: calls out the big curse (HP = this share of his max HP) for `duration`. */
+const DOGS_SKILL: SkillDef = { kind: "summon", name: "DIVINE DOGS", cooldown: 12, damage: 0.4, radius: 0, count: 1, duration: 10, pet: "whitewolf" as SkillDef["pet"], pet2: "blackwolf" as SkillDef["pet"], desc: "calls a white and a black shadow wolf for 10s: they run 1.5x as fast as a hero, chase down his foes and bite them." };
 const RIKA_SKILL: SkillDef = { kind: "summon", name: "CURSED QUEEN", cooldown: 16, damage: 2, radius: 0, count: 1, duration: 10, pet: "rika" as SkillDef["pet"], desc: "calls out his giant curse queen for 10s (as much HP as twice his own): she follows him and smashes his foes with huge claws that knock them back, and fires PURE LOVE with him." };
 
 /** ODM GEAR (same as the Giant Shifter's): a wire into the wall ahead, and he zips along it. */
@@ -542,9 +543,7 @@ const ROSTER = {
       { do: "shots", wait: 0.5, n: 1, spread: 0, speed: 200, range: 250, pierce: 9, shape: "orb", size: 10, color: "302040", dmg: 90 },
     ]]),
   megumi: hero("summoner", "Shadow Summoner", "Ten shadows", 95, blade(24, 0.45), "Short blade cuts.",
-    ["DIVINE DOGS", 7, "two shadow dogs chase down foes.", [
-      { do: "shots", n: 2, spread: 0.4, speed: 280, range: 220, shape: "spike", size: 6, color: "303040", dmg: 35, home: true },
-    ]],
+    DOGS_SKILL,
     ["SHADOW GARDEN", 13, "floods the ground with shadow for 4s: foes slow down, he runs 30% faster.", [
       { do: "field", at: "self", radius: 100, life: 4, tick: 0.5, look: "dark", color: "202030", dmg: 8, slow: 1 },
       { do: "buff", dur: 4, speed: 1.3, color: "404060" },
@@ -1117,6 +1116,46 @@ for (const [id, e] of Object.entries(ROSTER)) {
 
 /** Helpers the new heroes call out (not pickable). */
 const SUMMONS = {
+  // DIVINE DOGS: Shadow Summoner's two wolves, fast biters.
+  whitewolf: {
+    name: "White Shadow Wolf",
+    role: "Summon",
+    blurb: "",
+    stars: 1,
+    summon: true,
+    maxHp: 1,
+    speed: 150,
+    walk: 1.5,
+    attack: "punch",
+    attackCooldown: 0.7,
+    damage: 12,
+    range: 26,
+    arc: 1.8,
+    aoe: 0,
+    shotSpeed: 0,
+    pierce: 0,
+    skill: { kind: "passive", name: "", cooldown: 1, damage: 0, radius: 0 },
+  },
+  // DIVINE DOGS: Shadow Summoner's two wolves, fast biters.
+  blackwolf: {
+    name: "Black Shadow Wolf",
+    role: "Summon",
+    blurb: "",
+    stars: 1,
+    summon: true,
+    maxHp: 1,
+    speed: 150,
+    walk: 1.5,
+    attack: "punch",
+    attackCooldown: 0.7,
+    damage: 12,
+    range: 26,
+    arc: 1.8,
+    aoe: 0,
+    shotSpeed: 0,
+    pierce: 0,
+    skill: { kind: "passive", name: "", cooldown: 1, damage: 0, radius: 0 },
+  },
   // CURSED QUEEN: Queen's Bond's giant curse; HP is a share of his max HP (the skill's damage).
   rika: {
     name: "Cursed Queen",

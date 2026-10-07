@@ -241,6 +241,7 @@ export interface SkillDef {
   width?: number; // for "line"
   duration?: number; // for lasting skills (time stop, storms, illusions, clones)
   count?: number; // how many missiles or summons
+  pet2?: HeroId; // for "summon": a second, different helper that comes out with the first
   pet?: HeroId; // for "summon": which helper comes out (damage = its share of the summoner's max HP)
   max?: number; // for "summon": most of these helpers out at once (the oldest leaves); default `count`
   chargeTime?: number; // for charged skills: seconds to a full charge (default CHARGE_FULL)
@@ -364,6 +365,7 @@ export interface HeroDef {
   ramKnock?: number;
   /** A long body that rams with all of it: a box `len` long and `half` * 2 tall, lying left-right (the dragon). */
   ramBody?: { len: number; half: number };
+  walk?: number; // walk speed multiplier on top of HERO_WALK (DIVINE DOGS run x1.5)
   /** Has no basic attack (DRAGON FORM). */
   noAttack?: boolean;
 }
@@ -2104,7 +2106,7 @@ export function heroSpeed(p: { hero: string; big: number; active2?: number; buff
   if (hero.skill2?.kind === "yoyo" && p.mode === 1) bike *= 1.3; // YOYO MODE: lighter on his feet
   if (hero.skill.kind === "deathnote" && (p.buff ?? 0) > 0) bike *= 0.2; // NAME WRITTEN: writing, barely moving
   const slowed = (p.slow ?? 0) > 0 ? 1 - ((p.slowPct ?? 0) > 0 ? p.slowPct! : 1 - BURN_SLOW) : 1;
-  return base * (p.big > 0 ? BIG_SLOW : 1) * slowed * bike;
+  return base * (hero.walk ?? 1) * (p.big > 0 ? BIG_SLOW : 1) * slowed * bike;
 }
 
 /** The boxing ring the PvP Arena and Bot Duel are fought in: a small square with no cover. */

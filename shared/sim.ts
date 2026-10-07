@@ -4066,6 +4066,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
         break;
       case "summon":
         this.spawnSummon(id, p, skill.pet!, skill.damage, skill.count ?? 1, skill.duration ?? Infinity, skill.max ?? skill.count ?? 1);
+        if (skill.pet2) this.spawnSummon(id, p, skill.pet2, skill.damage, skill.count ?? 1, skill.duration ?? Infinity, skill.max ?? skill.count ?? 1);
         break;
       case "card": {
         // Draw a card: its number is the share of the target's HP it takes (x10%).
