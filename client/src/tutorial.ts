@@ -1,4 +1,5 @@
 // Tutorial for new players (2026-10-06): walk, attack, both skills, dash, then a short fight.
+// Computer and mobile players get separate lessons (2026-10-07).
 // A panel at the top says what to do next; SKIP TUTORIAL leaves at any time.
 
 import Phaser from "phaser";
@@ -38,6 +39,7 @@ export class TutorialView {
   private hits = 0;
   private fightStarted = 0;
   private finished = false;
+  private device = "COMPUTER";
 
   private arrows: Phaser.GameObjects.Graphics;
 
@@ -57,44 +59,40 @@ export class TutorialView {
     const hero = heroOf(me?.hero ?? "superman");
     const q = hero.skill.kind === "passive" ? undefined : hero.skill.name;
     const e = hero.skill2?.name;
+    // Two separate lessons: computer (keyboard + mouse) and mobile/tablet (touch sticks and buttons).
+    this.device = touch ? "MOBILE" : "COMPUTER";
+    const advance = attackMode() === "advance";
+    const lessons: Step[] = touch
+      ? [
+          { title: "MOVE", text: "Put your thumb on the <b>left side</b> of the screen and drag to walk around.", done: () => this.walked >= 90 },
+          {
+            title: "ATTACK",
+            text: advance
+              ? "Hold the <b>sword stick</b> (bottom right) to attack, and drag it toward a straw dummy to aim. Hit it 3 times."
+              : "Walk near a straw dummy and hold the <b>sword button</b> (bottom right): your hero hits the closest one by itself. Hit it 3 times.",
+            done: () => this.hits >= 3,
+          },
+          ...(q ? [{ title: "SKILL 1", text: `Hold the <b>${q}</b> button, drag to aim, then let go to use it. (Let go on <b>CANCEL</b> to call it off.)`, done: (m: any) => m.skillCooldown > 0 }] : []),
+          ...(e ? [{ title: "SKILL 2", text: `Now do the same with the <b>${e}</b> button: hold, drag to aim, let go.`, done: (m: any) => m.skill2Cooldown > 0 }] : []),
+          {
+            title: "DASH",
+            text: "Push the <b>left stick</b> the way you want to go, then <b>let go of it</b> while it is still pushed: your hero dashes that way. Dashing gets you out of danger fast.",
+            done: (m: any) => m.dashCooldown > 0,
+          },
+        ]
+      : [
+          { title: "MOVE", text: "Walk with <b>W A S D</b> (or the arrow keys).", done: () => this.walked >= 90 },
+          { title: "ATTACK", text: "Aim with the <b>mouse</b> and <b>click</b> (or hold) to attack a straw dummy. Hit it 3 times.", done: () => this.hits >= 3 },
+          ...(q ? [{ title: "SKILL 1", text: `Press <b>Q</b> (or the right mouse button) to use <b>${q}</b>. Hold it to aim with the mouse, let go to use it.`, done: (m: any) => m.skillCooldown > 0 }] : []),
+          ...(e ? [{ title: "SKILL 2", text: `Press <b>E</b> to use <b>${e}</b>.`, done: (m: any) => m.skill2Cooldown > 0 }] : []),
+          {
+            title: "DASH",
+            text: "Hold a direction with <b>W A S D</b> and press <b>SPACE</b>: your hero dashes that way. Dashing gets you out of danger fast.",
+            done: (m: any) => m.dashCooldown > 0,
+          },
+        ];
     this.steps = [
-      {
-        title: "MOVE",
-        text: touch ? "Drag the <b>left stick</b> to walk around." : "Walk with <b>W A S D</b> (or the arrow keys).",
-        done: () => this.walked >= 90,
-      },
-      {
-        title: "ATTACK",
-        text: touch
-          ? attackMode() === "advance"
-            ? "Hold the <b>sword stick</b> (bottom right) to attack, and drag it toward a straw dummy to aim. Hit it 3 times."
-            : "Hold the <b>sword button</b> (bottom right): your hero attacks the closest straw dummy. Hit it 3 times."
-          : "Aim with the <b>mouse</b> and <b>click</b> (or hold) to attack a straw dummy. Hit it 3 times.",
-        done: () => this.hits >= 3,
-      },
-      ...(q
-        ? [
-            {
-              title: "SKILL 1",
-              text: touch ? `Tap the <b>${q}</b> button to use your first skill.` : `Press <b>Q</b> (or the right mouse button) to use <b>${q}</b>.`,
-              done: (m: any) => m.skillCooldown > 0,
-            },
-          ]
-        : []),
-      ...(e
-        ? [
-            {
-              title: "SKILL 2",
-              text: touch ? `Tap the <b>${e}</b> button to use your second skill.` : `Press <b>E</b> to use <b>${e}</b>.`,
-              done: (m: any) => m.skill2Cooldown > 0,
-            },
-          ]
-        : []),
-      {
-        title: "DASH",
-        text: touch ? "Tap <b>DASH</b> to dash. Dashing gets you out of danger fast." : "Press <b>SPACE</b> to dash. Dashing gets you out of danger fast.",
-        done: (m: any) => m.dashCooldown > 0,
-      },
+      ...lessons,
       {
         title: "FIGHT",
         text: "Monsters are coming! Use everything you learned and defeat all <b>3</b> of them.",
@@ -129,7 +127,7 @@ export class TutorialView {
     }
     const s = this.steps[this.i];
     this.root.className = "";
-    this.root.innerHTML = `<div class="tut-k">STEP ${this.i + 1} / ${this.steps.length}</div><div class="tut-t">${s.title}</div><div class="tut-x">${s.text}</div><div class="tut-row"><button class="tut-skip">SKIP TUTORIAL</button></div>`;
+    this.root.innerHTML = `<div class="tut-k">${this.device} TUTORIAL · STEP ${this.i + 1} / ${this.steps.length}</div><div class="tut-t">${s.title}</div><div class="tut-x">${s.text}</div><div class="tut-row"><button class="tut-skip">SKIP TUTORIAL</button></div>`;
     this.root.querySelector(".tut-skip")!.addEventListener("click", () => this.finish(true));
   }
 

@@ -288,14 +288,14 @@ export class Home {
     const online = this.act.online;
     const modes: { title: string; tag: string; text: string; solo?: StageId; online?: StageId }[] = [
       { title: "PvP ARENA", tag: "1 VS 1 · ONLINE", text: "Fight another player in the boxing ring. First to 3 knockouts wins.", online: "pvp" },
-      { title: "PvE SQUAD", tag: "UP TO 4 PLAYERS VS BOT", text: "Team up with friends against one strong bot. Pick its hero and difficulty.", solo: "pve", online: "pve" },
+      { title: "TRAINING", tag: "UP TO 4 PLAYERS VS BOT", text: "Team up with friends against one strong bot. Pick its hero and difficulty.", solo: "pve", online: "pve" },
       { title: "CLASSIC 3v3", tag: "RED VS BLUE", text: "3 heroes a side on maps with walls, tall grass and water. Bots fill empty slots. 3 lives each.", solo: "classic", online: "classic" },
     ];
     const grid = document.createElement("div");
     grid.className = "hm-modes";
     for (const m of modes) {
       if (!online && !m.solo) continue;
-      if (!online && m.title === "PvE SQUAD") continue; // the same as Bot Duel without other players
+      if (!online && m.title === "TRAINING") continue; // the same as Bot Duel without other players
       const card = document.createElement("div");
       card.className = "hm-mode";
       card.innerHTML = `<h3>${m.title}</h3><div class="tag">${m.tag}</div><p>${m.text}</p><div class="btns"></div>`;

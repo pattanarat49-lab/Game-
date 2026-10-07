@@ -453,7 +453,7 @@ export class GameScene extends Phaser.Scene {
     const hero = me ? heroOf(me.hero).name : "";
     if (phase === "victory" && this.lastPhase !== "victory" && me) {
       const stage = state.stage as string;
-      const mode = stage === "pvp" ? "PvP" : stage === "duel" ? "Bot Duel" : stage === "pve" ? "PvE Squad" : stage === "classic" ? "3v3" : "";
+      const mode = stage === "pvp" ? "PvP" : stage === "duel" ? "Bot Duel" : stage === "pve" ? "Training" : stage === "classic" ? "3v3" : "";
       let won: boolean | null = null;
       if (stage === "classic") won = state.winner === "NO" ? null : state.winner === (me.team === 1 ? "RED" : "BLUE");
       else if (stage === "pve") won = state.winner === "TEAM";

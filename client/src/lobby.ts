@@ -173,7 +173,7 @@ export class Lobby {
     this.root = document.createElement("div");
     this.root.id = "lobby";
     this.root.hidden = true;
-    const sub = this.pve ? "PVE SQUAD - 1 TO 4 PLAYERS VS BOT" : this.classic ? "CLASSIC 3V3 - RED VS BLUE" : "PVP ARENA - 1 VS 1";
+    const sub = this.pve ? "TRAINING - 1 TO 4 PLAYERS VS BOT" : this.classic ? "CLASSIC 3V3 - RED VS BLUE" : "PVP ARENA - 1 VS 1";
     if (this.classic) this.root.classList.add("classic");
     this.root.innerHTML = `<div class="title">PLAYER SELECT<small>${sub}</small></div><div class="row"></div><div class="bottom"></div>`;
     const row = this.root.querySelector(".row")!;

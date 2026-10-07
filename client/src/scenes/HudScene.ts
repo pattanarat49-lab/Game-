@@ -144,7 +144,7 @@ export class HudScene extends Phaser.Scene {
     } else if (ringStage(state.stage)) {
       const pve = state.stage === "pve";
       const level = pve ? `  ${BOT_LEVELS[state.botLevel ?? 2]?.name ?? ""}` : "";
-      this.waveText.setText(`${pve ? "PVE SQUAD" : state.stage === "duel" ? "BOT DUEL" : "PVP ARENA"}  FIRST TO ${PVP_KILLS_TO_WIN} ${pve ? "ROUNDS" : "KILLS"}${level}`);
+      this.waveText.setText(`${pve ? "TRAINING" : state.stage === "duel" ? "BOT DUEL" : "PVP ARENA"}  FIRST TO ${PVP_KILLS_TO_WIN} ${pve ? "ROUNDS" : "KILLS"}${level}`);
       if (state.phase === "victory") banner = `${state.winner === "TEAM" ? "YOUR TEAM" : state.winner} WINS!\nNext round in ${Math.ceil(state.phaseTimer)}`;
       else if (pve && state.phase === "intermission") {
         // PvE Squad: the team's rounds against the bot's.
