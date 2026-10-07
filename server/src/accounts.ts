@@ -210,7 +210,7 @@ interface Unlocks {
 type Data = Record<string, unknown> & Unlocks;
 const STARTER_OFFER = 10;
 /** Accounts (lower-case usernames) that play every hero, new ones included (user request 2026-10-06). */
-const ALL_HEROES_ACCOUNTS = ["jedie", "naju"];
+const ALL_HEROES_ACCOUNTS = ["jedie", "naju", "ptc_tong"];
 const STARTER_PICKS = 3;
 const WIN_GAP_MS = 40_000; // a game takes longer than this, so one spin per real win
 
