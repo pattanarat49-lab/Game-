@@ -1177,6 +1177,20 @@ export const RIFLE: PixelSprite = {
   palette: { k: OUTLINE, n: "#7a4a26", G: "#8f9aa6" },
 };
 
+/** Frost Sniper's long rifle: wooden stock, scope on top, long dark barrel. Held at (8, 4). */
+export const SNIPER_RIFLE: PixelSprite = {
+  grid: [
+    "...........kkkkkkkk.........",
+    "..........kwssssssLk........",
+    "kkkk.......kkmkkmkk.........",
+    "knnnkkkkkkkkkkkkkkkkkkkkkkkk",
+    "knlnnnnnnnddmmmmmmmmmmmmmmGk",
+    "kknnnnkkkmkkkkkkkkkkkkkkkkkk",
+    "..kkkk.kkk..................",
+  ],
+  palette: { k: OUTLINE, n: "#8a5a32", l: "#b57d48", d: "#5a3820", m: "#3a3f48", G: "#9aa6b4", s: "#4a505c", w: "#cfd8e4", L: "#7fd8ff" },
+};
+
 export const KNIFE: PixelSprite = {
   grid: [
     "kkk.kkkkkk..",

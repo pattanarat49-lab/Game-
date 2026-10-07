@@ -112,7 +112,16 @@ interface Effect {
   follow?: PlayerView;
 }
 
-const WEAPON_TEXTURE: Record<string, string | undefined> = { isekai: "sword", simo: "rifle", okita: "sword", sakamoto: "knife", hanuman: "trident", rick: "raygun", kid: "pistol", doraemon: "aircannon", agamemnon: "bronzesword", gladiator: "gladius", steve: "diamondsword", zenitsu: "sword" };
+/**
+ * Weapons that stay in the hands of a hero drawn from hand-made art (which otherwise hides the weapon sprite):
+ * the grip point in the picture (ox, oy), how many art pixels above the feet the hands are, and the size
+ * (2/3 = one weapon pixel per art pixel).
+ */
+const HELD_WITH_ART: Record<string, { ox: number; oy: number; hands: number; scale: number } | undefined> = {
+  simo: { ox: 8 / 28, oy: 4.5 / 7, hands: 9, scale: 2 / 3 },
+};
+
+const WEAPON_TEXTURE: Record<string, string | undefined> = { isekai: "sword", simo: "sniperrifle", okita: "sword", sakamoto: "knife", hanuman: "trident", rick: "raygun", kid: "pistol", doraemon: "aircannon", agamemnon: "bronzesword", gladiator: "gladius", steve: "diamondsword", zenitsu: "sword" };
 const BULLET_TEXTURE: Record<string, string> = {
   snipe: "snipe",
   wave: "wave",
@@ -860,12 +869,21 @@ export class GameScene extends Phaser.Scene {
 
       if (view.weapon) {
         if (heroOf(p.hero).gun) view.weapon.setTexture(p.mode === 1 ? "machinegun" : WEAPON_TEXTURE[p.hero]!);
-        view.weapon.setPosition(body.x, body.y - 5 * k + bob).setScale(k);
+        const held = HELD_WITH_ART[p.hero];
+        const left = Math.cos(aim) < 0;
+        if (held) {
+          // Held in both hands and turned to the aim; behind the body when aiming up.
+          view.weapon.setOrigin(held.ox, left ? 1 - held.oy : held.oy);
+          view.weapon.setPosition(body.x, body.y - held.hands * (2 / 3) * k + bob).setScale(held.scale * k);
+          view.weapon.setDepth(body.y + (Math.sin(aim) < -0.35 ? -0.5 : 0.5));
+        } else {
+          view.weapon.setPosition(body.x, body.y - 5 * k + bob).setScale(k);
+          view.weapon.setDepth(body.y + 0.5);
+        }
         view.weapon.setRotation(aim);
-        view.weapon.setFlipY(Math.cos(aim) < 0);
-        view.weapon.setDepth(body.y + 0.5);
-        // The diamond sword only while crafted; hand-made art already holds its own weapon.
-        view.weapon.setVisible(!p.dead && (!heroOf(p.hero).sword || p.buff > 0) && !hasHeroArt(p.hero));
+        view.weapon.setFlipY(left);
+        // The diamond sword only while crafted; hand-made art already holds its own weapon unless listed above.
+        view.weapon.setVisible(!p.dead && (!heroOf(p.hero).sword || p.buff > 0) && (!hasHeroArt(p.hero) || !!held));
       }
       this.playAttackEffects(view, p, body.x, body.y - 5 * k, aim);
       const helper = !!heroOf(p.hero).summon; // pets and gunner bots look like themselves, not ghostly clones
