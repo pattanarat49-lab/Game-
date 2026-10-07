@@ -2523,9 +2523,9 @@ export class GameScene extends Phaser.Scene {
         area(x + cos * 120, y + sin * 120, skill.radius);
         break;
       default:
-        // Skills that hit all around you: show their reach (map-wide ones just get an arrow).
+        // Skills that hit all around you: show their reach. Nothing is fired (summons, buffs, transforms),
+        // so no line out in front.
         if (skill.radius > 0 && skill.radius < 500) area(x, y + 5, skill.radius);
-        lane(40, 4);
     }
   }
 
