@@ -2,14 +2,14 @@
 // Sanctuary slowly lights up, the room's name and its saying appear, then it fades into the fight.
 // Tap anywhere (or SKIP) to go straight in.
 
-import { SANCTUARY_JPG } from "./sanctuary.data";
+import { SANCTUARY_PNG } from "./sanctuary.data";
 
 const CSS = `
 #cutscene { position: fixed; inset: 0; z-index: 60; background: #000; overflow: hidden; cursor: pointer;
   animation: cs-out 0.9s ease-in 6.6s forwards; }
 #cutscene.cs-skip { animation: cs-out 0.45s ease-in forwards; }
 #cutscene img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: 50% 40%;
-  opacity: 0; filter: brightness(0.2); transform: scale(1.14);
+  image-rendering: pixelated; opacity: 0; filter: brightness(0.2); transform: scale(1.14);
   animation: cs-light 3s ease-out 0.6s forwards, cs-zoom 7.5s ease-out 0.6s forwards; }
 #cutscene .cs-shade { position: absolute; inset: 0; pointer-events: none;
   background: radial-gradient(ellipse at 50% 42%, transparent 35%, rgba(0,0,0,0.75) 100%),
@@ -43,7 +43,7 @@ export function playSanctuaryIntro() {
   const root = document.createElement("div");
   root.id = "cutscene";
   root.innerHTML = `
-    <img alt="" src="${SANCTUARY_JPG}">
+    <img alt="" src="${SANCTUARY_PNG}">
     <div class="cs-shade"></div>
     <div class="cs-quote">“แม้กาลเวลาจะผ่านไป<br>หินก็ยังคงจดจำคำสาบาน...”</div>
     <div class="cs-title"><b>ห้องบอส : อัศวินหินโบราณ</b><span>— ANCIENT KNIGHT'S SANCTUARY —</span></div>
