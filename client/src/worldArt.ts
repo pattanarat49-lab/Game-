@@ -5,6 +5,8 @@
 import { BLOCK } from "../../shared/maps";
 import {
   D_DOOR,
+  D_STAIRS,
+  D_WALK,
   D_WALL,
   DUNGEON,
   L_BRIDGE,
@@ -228,7 +230,11 @@ export function worldChunk(cx: number, cy: number): HTMLCanvasElement {
   return canvas;
 }
 
-/** Paints one chunk of the dungeon: purple flagstones, dark walls with lit tops, golden gates. */
+/**
+ * Paints one chunk of the dungeon, the Ancient Knight's Sanctuary from the user's map: dark slate
+ * flagstones, a worn stone walk round the edge with moss in the cracks, mossy walls, a carved circle
+ * of runes in the middle and the steps down to the way in.
+ */
 export function dungeonChunk(cx: number, cy: number): HTMLCanvasElement {
   const canvas = document.createElement("canvas");
   canvas.width = CHUNK;
@@ -238,6 +244,18 @@ export function dungeonChunk(cx: number, cy: number): HTMLCanvasElement {
   const n = CHUNK / BLOCK;
   const at = (c: number, r: number) => (c < 0 || r < 0 || c >= m.cols || r >= m.rows ? D_WALL : m.look[r * m.cols + c]);
   const b = BLOCK;
+  const moss = (col: number, row: number, x: number, y: number, amount: number) => {
+    // Little clumps of moss, two greens.
+    for (let i = 0; i < 6; i++) {
+      if (hash(col, row, 20 + i) > amount) continue;
+      const mx = x + Math.floor(hash(col, row, 30 + i) * (b - 4));
+      const my = y + Math.floor(hash(col, row, 40 + i) * (b - 3));
+      ctx.fillStyle = "#4a5e22";
+      ctx.fillRect(mx, my, 4, 2);
+      ctx.fillStyle = "#6e8a30";
+      ctx.fillRect(mx + 1, my, 2, 1);
+    }
+  };
   for (let r = 0; r < n; r++)
     for (let c = 0; c < n; c++) {
       const col = cx * n + c;
@@ -248,52 +266,117 @@ export function dungeonChunk(cx: number, cy: number): HTMLCanvasElement {
       if (l === D_WALL) {
         const floorBelow = at(col, row + 1) !== D_WALL;
         const nearFloor = [[-1, 0], [1, 0], [0, -1], [0, 1], [-1, -1], [1, -1], [-1, 1], [1, 1]].some(([dc, dr]) => at(col + dc, row + dr) !== D_WALL);
-        ctx.fillStyle = nearFloor ? "#2a2232" : "#09070c";
+        ctx.fillStyle = nearFloor ? "#25262a" : "#0b0c0e";
         ctx.fillRect(x, y, b, b);
         if (floorBelow) {
-          // The wall's face, in stone bricks, seen from above and in front.
-          ctx.fillStyle = "#3e3448";
+          // The wall's face in big old stone blocks, moss creeping down from the top.
+          ctx.fillStyle = "#4a4b46";
           ctx.fillRect(x, y + 6, b, b - 6);
-          ctx.fillStyle = "#2c2434";
-          for (let yy = 8; yy < b; yy += 5) {
+          ctx.fillStyle = "#33342f";
+          for (let yy = 9; yy < b; yy += 6) {
             ctx.fillRect(x, y + yy, b, 1);
-            const off = ((yy / 5) % 2) * 5;
-            for (let xx = off; xx < b; xx += 10) ctx.fillRect(x + xx, y + yy, 1, 5);
+            const off = ((yy / 6) % 2) * 6;
+            for (let xx = off; xx < b; xx += 12) ctx.fillRect(x + xx, y + yy, 1, 6);
           }
-          ctx.fillStyle = "#5a4e66";
+          ctx.fillStyle = "#62645a";
           ctx.fillRect(x, y + 5, b, 2);
+          ctx.fillStyle = "#4e6624";
+          for (let xx = 0; xx < b; xx += 3) {
+            const drip = Math.floor(hash(col * 7 + xx, row, 5) * 7);
+            if (drip > 2) ctx.fillRect(x + xx, y + 6, 2, drip);
+          }
         } else if (nearFloor) {
-          ctx.fillStyle = "#4a3e56";
+          ctx.fillStyle = "#3e3f3a";
           ctx.fillRect(x + 1, y + 1, b - 2, b - 2);
-          ctx.fillStyle = "#3a3044";
+          ctx.fillStyle = "#2e2f2b";
           ctx.fillRect(x + 3, y + 3, b - 6, b - 6);
+          moss(col, row, x, y, 0.45);
         }
         continue;
       }
-      // Flagstones, a little uneven.
       const f = 0.9 + hash(col, row) * 0.2;
-      ctx.fillStyle = shade("#3c2c44", f);
+      if (l === D_STAIRS) {
+        // Steps going down to the way in.
+        for (let yy = 0; yy < b; yy += 7) {
+          ctx.fillStyle = shade("#5c5d55", f);
+          ctx.fillRect(x, y + yy, b, 4);
+          ctx.fillStyle = shade("#3a3b36", f);
+          ctx.fillRect(x, y + yy + 4, b, 3);
+        }
+        continue;
+      }
+      if (l === D_WALK) {
+        // The raised walk: big worn slabs, mossy.
+        ctx.fillStyle = shade("#55574e", f);
+        ctx.fillRect(x, y, b, b);
+        ctx.fillStyle = shade("#61635a", f);
+        ctx.fillRect(x + 1, y + 1, b - 2, 9);
+        ctx.fillStyle = shade("#4a4c44", f);
+        ctx.fillRect(x + 1, y + 11, b - 2, 9);
+        ctx.fillStyle = "#3a3b35";
+        ctx.fillRect(x, y + 10, b, 1);
+        ctx.fillRect(x + (row % 2 ? 7 : 14), y, 1, b);
+        moss(col, row, x, y, 0.3);
+        continue;
+      }
+      // The hall floor: dark slate flagstones, a little uneven, the odd crack.
+      ctx.fillStyle = shade("#2b2c31", f);
       ctx.fillRect(x, y, b, b);
-      ctx.fillStyle = shade("#46344e", f);
+      ctx.fillStyle = shade("#34353b", f);
       ctx.fillRect(x + 1, y + 1, 9, 9);
       ctx.fillRect(x + 11, y + 11, 9, 9);
-      ctx.fillStyle = shade("#34263c", f);
+      ctx.fillStyle = shade("#303136", f);
       ctx.fillRect(x + 11, y + 1, 9, 9);
       ctx.fillRect(x + 1, y + 11, 9, 9);
-      if (hash(col, row, 3) < 0.08) {
-        ctx.fillStyle = "#241a2a";
+      if (hash(col, row, 3) < 0.12) {
+        ctx.fillStyle = "#1c1d21";
         ctx.fillRect(x + 4, y + 6, 6, 1);
         ctx.fillRect(x + 9, y + 7, 1, 4);
       }
+      if (hash(col, row, 4) < 0.1) moss(col, row, x, y, 0.25);
       if (l === D_DOOR) {
-        // An open golden gate: posts on either side and bars drawn up.
         ctx.fillStyle = "#c8902a";
         for (let i = 2; i < b; i += 5) ctx.fillRect(x + i, y, 2, 4);
         ctx.fillStyle = "#ffd25a";
         ctx.fillRect(x, y, b, 2);
       }
     }
+  paintRune(ctx, cx * CHUNK, cy * CHUNK);
   return canvas;
+}
+
+/** The circle of runes carved in the middle of the sanctuary floor, pixel by pixel. */
+function paintRune(ctx: CanvasRenderingContext2D, ox: number, oy: number) {
+  const { x: rx, y: ry, r: R } = DUNGEON.rune;
+  if (rx + R < ox || rx - R > ox + CHUNK || ry + R < oy || ry - R > oy + CHUNK) return;
+  const x0 = Math.floor(rx - R - 2);
+  const y0 = Math.floor(ry - R - 2);
+  const size = Math.ceil(R * 2 + 5);
+  // First find the grooves: rings, eight spokes, and runes dotted round the outer band.
+  const groove = new Uint8Array(size * size);
+  for (let j = 0; j < size; j++)
+    for (let i = 0; i < size; i++) {
+      const dx = x0 + i + 0.5 - rx;
+      const dy = y0 + j + 0.5 - ry;
+      const d = Math.hypot(dx, dy);
+      const a = Math.atan2(dy, dx);
+      const ring = Math.abs(d - R) < 1.5 || Math.abs(d - R * 0.82) < 1 || Math.abs(d - R * 0.34) < 1 || d < 5;
+      const spoke = d > R * 0.34 && d < R * 0.82 && Math.abs(Math.sin(a * 4)) * d < 4.4; // about 1px either side of each spoke
+      const rune = d > R * 0.84 && d < R * 0.98 && Math.sin(a * 24) > 0.86 && Math.abs(d - R * 0.91) < 2.5;
+      if (ring || spoke || rune) groove[j * size + i] = 1;
+    }
+  // Then paint them dark, with a lit edge just below each one so they read as carved into the stone.
+  for (let j = 0; j < size; j++)
+    for (let i = 0; i < size; i++) {
+      const x = x0 + i - ox;
+      const y = y0 + j - oy;
+      if (x < 0 || y < 0 || x >= CHUNK || y >= CHUNK) continue;
+      const here = groove[j * size + i];
+      const above = j > 0 && groove[(j - 1) * size + i];
+      if (!here && !above) continue;
+      ctx.fillStyle = here ? "#1a1b1e" : "#5a5d52";
+      ctx.fillRect(x, y, 1, 1);
+    }
 }
 
 // ------------------------------------------------------------------ props

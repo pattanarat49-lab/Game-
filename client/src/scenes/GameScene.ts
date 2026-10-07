@@ -2630,7 +2630,8 @@ export class GameScene extends Phaser.Scene {
       const s = view.sprite;
       const asHuman = state.reality > 0;
       const etex = asHuman ? "human" : e.kind;
-      if (s.texture.key !== etex) {
+      const knightPose = e.kind === "knight" && !asHuman && s.texture.key.startsWith("knight_"); // animKnight picks his frame
+      if (s.texture.key !== etex && !knightPose) {
         s.setTexture(etex).setScale(asHuman ? 1.2 : ENEMY_SCALE[e.kind as EnemyKind]);
         this.sparks.explode(8, s.x, s.y - 4);
       }

@@ -126,7 +126,7 @@ export class HudScene extends Phaser.Scene {
         this.bars.fillStyle(0xff7a3a, 1).fillRect(x, 40, w * Math.max(0, e.hp / e.maxHp), 6);
       });
       banner = me?.dead ? `YOU FELL\nBack at the entrance in ${Math.ceil(me.respawnIn)}` : "";
-      this.special.setText(String(state.notice ?? "").startsWith("BOSS DEFEATED") ? "BOSS DEFEATED!\nThe portal home is open (top left room)" : "").setColor("#9ad8ff");
+      this.special.setText(String(state.notice ?? "").startsWith("BOSS DEFEATED") ? "BOSS DEFEATED!\nThe portal home is open by the stairs" : "").setColor("#9ad8ff");
     } else if (state.stage === "classic") {
       // Classic 3v3: the two teams' KOs.
       // Classic 3v3: lives left on each side; the last team standing wins.

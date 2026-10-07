@@ -671,7 +671,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
     }
   }
 
-  /** Dungeon: monsters stand guard in every room and corridor; the boss waits in the last room. */
+  /** Dungeon: the Ancient Knight waits in his sanctuary with a stone minion on either side. */
   private fillDungeon() {
     for (const room of DUNGEON.rooms) {
       room.monsters.forEach((kind, i) => {
@@ -685,7 +685,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
     }
     for (const g of DUNGEON.guards) this.spawnEnemyAt(g.kind as EnemyKind, g.x, g.y);
     this.spawnEnemyAt("knight", DUNGEON.boss.x, DUNGEON.boss.y);
-    this.state.notice = "Find and defeat the Pyre Warden";
+    this.state.notice = "Defeat the Ancient Knight";
   }
 
   private spawnEnemyAt(kind: EnemyKind, x: number, y: number) {
@@ -714,7 +714,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
     if (boss) return;
     if (!this.dungeonCleared) {
       this.dungeonCleared = true;
-      s.notice = "BOSS DEFEATED! The portal home is open (top left room)";
+      s.notice = "BOSS DEFEATED! The portal home is open by the stairs";
       this.addZone("exitportal", DUNGEON.exit.x, DUNGEON.exit.y, PORTAL_RADIUS, Infinity, { owner: "", every: Infinity, damage: 0 });
     }
     s.players.forEach((p, id) => {

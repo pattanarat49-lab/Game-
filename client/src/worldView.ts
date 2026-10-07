@@ -6,6 +6,7 @@ import { BLOCK } from "../../shared/maps";
 import { DUNGEON, L_DEEP, L_WATER, OPEN_WORLD, PORTAL_RADIUS } from "../../shared/world";
 import { CHUNK, dungeonChunk, propCanvas, worldChunk } from "./worldArt";
 import { WorldUi } from "./worldUi";
+import { playSanctuaryIntro } from "./cutscene";
 
 interface Bubble {
   text: Phaser.GameObjects.Text;
@@ -29,6 +30,7 @@ export class WorldView {
     online: boolean,
   ) {
     const map = stage === "world" ? OPEN_WORLD : DUNGEON;
+    if (stage === "dungeon") playSanctuaryIntro();
     const w = map.cols * BLOCK;
     const h = map.rows * BLOCK;
     // The ground, in squares.

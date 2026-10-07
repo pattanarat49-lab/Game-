@@ -250,11 +250,13 @@ function buildWorld(): OpenMap {
 
 // ---------------------------------------------------------------- dungeon
 
-export const DUNGEON_COLS = 90;
-export const DUNGEON_ROWS = 92;
-export const D_FLOOR = 0;
+export const DUNGEON_COLS = 36;
+export const DUNGEON_ROWS = 38;
+export const D_FLOOR = 0; // the dark flagstones in the middle of the hall
 export const D_WALL = 1;
 export const D_DOOR = 2; // a golden gate (open)
+export const D_WALK = 3; // the worn, mossy stone walk round the edge of the hall
+export const D_STAIRS = 4; // the steps down to the way in
 
 export interface DungeonRoom {
   c0: number;
@@ -269,88 +271,72 @@ export interface DungeonRoom {
 export interface DungeonMap extends ClassicMap {
   look: Uint8Array;
   rooms: DungeonRoom[];
-  /** Monsters standing guard in the corridors. */
+  /** Monsters standing guard. */
   guards: { kind: string; x: number; y: number }[];
   spawn: { x: number; y: number };
   exit: { x: number; y: number };
   boss: { x: number; y: number };
   torches: { x: number; y: number }[];
+  /** The carved circle of runes in the middle of the floor. */
+  rune: { x: number; y: number; r: number };
 }
 
-/** The dungeon from the user's picture: seven rooms joined by corridors, entered top centre, boss bottom left, way out top left. */
+/**
+ * The dungeon is one room now (user request 2026-10-07): the Ancient Knight's Sanctuary from the user's
+ * top-down map. An eight-sided hall with a mossy stone walk round its edge, the knight's alcove at the top,
+ * a circle of runes in the middle, a minion on either side and the steps in at the bottom.
+ */
 function buildDungeon(): DungeonMap {
   const C = DUNGEON_COLS;
   const R = DUNGEON_ROWS;
   const tiles = new Uint8Array(C * R).fill(T_WALL);
   const look = new Uint8Array(C * R).fill(D_WALL);
-  const open = (c0: number, r0: number, c1: number, r1: number, l = D_FLOOR) => {
-    for (let r = r0; r <= r1; r++)
-      for (let c = c0; c <= c1; c++) {
-        if (c < 0 || r < 0 || c >= C || r >= R) continue;
-        tiles[r * C + c] = T_FLOOR;
-        look[r * C + c] = l;
-      }
+  const set = (c: number, r: number, l: number) => {
+    if (c < 0 || r < 0 || c >= C || r >= R) return;
+    tiles[r * C + c] = T_FLOOR;
+    look[r * C + c] = l;
   };
-  const rooms: DungeonRoom[] = [
-    { c0: 10, r0: 6, c1: 20, r1: 15, monsters: [], role: "exit" }, // A: the way out (portal)
-    { c0: 41, r0: 3, c1: 53, r1: 15, monsters: [], role: "start" }, // F: where heroes come in
-    { c0: 8, r0: 40, c1: 21, r1: 55, monsters: ["brute", "cinderling", "cinderling", "caster", "swordsman"], role: "fight" }, // B
-    { c0: 39, r0: 40, c1: 56, r1: 56, monsters: ["swordsman", "swordsman", "caster", "caster", "brute", "cinderling"], role: "fight" }, // E: the big hall
-    { c0: 73, r0: 44, c1: 82, r1: 52, monsters: ["swordmaster", "caster", "cinderling"], role: "fight" }, // G
-    { c0: 43, r0: 74, c1: 52, r1: 83, monsters: ["brute", "brute", "caster"], role: "fight" }, // D
-    { c0: 8, r0: 72, c1: 21, r1: 85, monsters: [], role: "boss" }, // C: the boss
-  ];
-  for (const room of rooms) open(room.c0, room.r0, room.c1, room.r1);
-  const corridor = (c0: number, r0: number, c1: number, r1: number) => open(Math.min(c0, c1), Math.min(r0, r1), Math.max(c0, c1), Math.max(r0, r1));
-  corridor(14, 16, 16, 39); // A - B
-  corridor(46, 16, 48, 39); // F - E
-  corridor(22, 46, 38, 48); // B - E
-  corridor(57, 47, 72, 49); // E - G
-  corridor(46, 57, 48, 73); // E - D
-  corridor(14, 56, 16, 71); // B - C
-  corridor(22, 78, 42, 80); // C - D
-  // Golden gates where corridors meet rooms (just for looks).
-  const gates: [number, number, number, number][] = [
-    [14, 16, 16, 16], [14, 39, 16, 39], [46, 16, 48, 16], [46, 39, 48, 39], [22, 46, 22, 48], [38, 46, 38, 48],
-    [57, 47, 57, 49], [72, 47, 72, 49], [46, 57, 48, 57], [46, 73, 48, 73], [14, 56, 14 + 2, 56], [14, 71, 16, 71], [22, 78, 22, 80], [42, 78, 42, 80],
-  ];
-  for (const [c0, r0, c1, r1] of gates) open(c0, r0, c1, r1, D_DOOR);
-  const ox = 0;
-  const oy = 0;
-  const center = (room: DungeonRoom) => ({ x: ox + ((room.c0 + room.c1 + 1) / 2) * BLOCK, y: oy + ((room.r0 + room.r1 + 1) / 2) * BLOCK });
-  const start = rooms.find((r) => r.role === "start")!;
-  const exitRoom = rooms.find((r) => r.role === "exit")!;
-  const bossRoom = rooms.find((r) => r.role === "boss")!;
-  const guards = [
-    { kind: "cinderling", x: 15.5 * BLOCK, y: 28 * BLOCK },
-    { kind: "caster", x: 47.5 * BLOCK, y: 26 * BLOCK },
-    { kind: "cinderling", x: 30 * BLOCK, y: 47.5 * BLOCK },
-    { kind: "swordsman", x: 65 * BLOCK, y: 48.5 * BLOCK },
-    { kind: "cinderling", x: 47.5 * BLOCK, y: 65 * BLOCK },
-    { kind: "swordsman", x: 15.5 * BLOCK, y: 64 * BLOCK },
-    { kind: "caster", x: 32 * BLOCK, y: 79.5 * BLOCK },
-  ];
-  const torches: { x: number; y: number }[] = [];
-  for (const room of rooms) {
-    for (const [c, r] of [[room.c0, room.r0], [room.c1 + 1, room.r0], [room.c0, room.r1 + 1], [room.c1 + 1, room.r1 + 1]]) torches.push({ x: c * BLOCK, y: r * BLOCK });
-  }
-  const spawn = center(start);
+  const room: DungeonRoom = { c0: 3, r0: 4, c1: 32, r1: 33, monsters: [], role: "boss" };
+  const cut = 5; // the corners are cut off diagonally
+  for (let r = room.r0; r <= room.r1; r++)
+    for (let c = room.c0; c <= room.c1; c++) {
+      const dx0 = c - room.c0;
+      const dx1 = room.c1 - c;
+      const dy0 = r - room.r0;
+      const dy1 = room.r1 - r;
+      const corner = Math.min(dx0 + dy0, dx1 + dy0, dx0 + dy1, dx1 + dy1);
+      if (corner < cut) continue;
+      const edge = Math.min(dx0, dx1, dy0, dy1) < 2 || corner < cut + 2;
+      set(c, r, edge ? D_WALK : D_FLOOR);
+    }
+  for (let r = 1; r < room.r0; r++) for (let c = 15; c <= 20; c++) set(c, r, D_WALK); // the knight's alcove
+  for (let r = room.r1 + 1; r < R; r++) for (let c = 16; c <= 19; c++) set(c, r, D_STAIRS); // the way in
+  const b = BLOCK;
+  const midX = 18 * b;
+  const torches = [
+    [3, 12], [3, 25], [33, 12], [33, 25], [10, 4], [26, 4], [10, 34], [26, 34],
+  ].map(([c, r]) => ({ x: c * b, y: r * b }));
+  const spawn = { x: midX, y: 35.5 * b };
   return {
     name: "DUNGEON",
-    theme: { ...THEME, floor: "#3a2a40", floor2: "#33243a", wall: "#1a141e", wallTop: "#4a3e56" },
+    theme: { ...THEME, floor: "#34343a", floor2: "#2e2e33", wall: "#16171a", wallTop: "#5e6050" },
     tiles,
     look,
-    rooms,
-    guards,
+    rooms: [room],
+    guards: [
+      { kind: "stonecrawler", x: 8.5 * b, y: 16 * b },
+      { kind: "stonecrawler", x: 27.5 * b, y: 16 * b },
+    ],
     spawns: { 1: [spawn], 2: [spawn] },
     cols: C,
     rows: R,
-    ox,
-    oy,
+    ox: 0,
+    oy: 0,
     spawn,
-    exit: center(exitRoom),
-    boss: center(bossRoom),
+    exit: { x: midX, y: 30.5 * b },
+    boss: { x: midX, y: 9.5 * b },
     torches,
+    rune: { x: midX, y: 19.5 * b, r: 86 },
   };
 }
 
