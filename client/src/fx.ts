@@ -126,6 +126,7 @@ export function drawFxZone(floor: G, sky: G, z: any, now: number): boolean {
       }
       case "zoltrak":
       case "pinkbeam":
+      case "tidal":
         // The picture frames are played by the scene (playZoltrak / playPinkBeam); this is only a soft glow under them.
         lane(w * 1.6, c, 0.12 * t);
         break;
@@ -167,6 +168,7 @@ export function drawFxZone(floor: G, sky: G, z: any, now: number): boolean {
     const r = z.radius;
     const grow = 1 - t;
     switch (look) {
+      case "vortex":
       case "psychic":
         // 100%: the user's explosion frames do the show (GameScene); just a faint purple floor here.
         floor.fillStyle(c, 0.12 * t).fillCircle(z.x, z.y, r);

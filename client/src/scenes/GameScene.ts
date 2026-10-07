@@ -2269,9 +2269,9 @@ export class GameScene extends Phaser.Scene {
   }
 
   /** Play a list of effect frames once (glowing: added on top of what is under them). */
-  private playFrameList(keys: string[], delay: number, x: number, y: number, angle: number, originX: number, originY: number, scale: number, flip: boolean) {
+  private playFrameList(keys: string[], delay: number, x: number, y: number, angle: number, originX: number, originY: number, scale: number, flip: boolean, glow = true) {
     const img = this.add.image(x, y, keys[0]).setOrigin(originX, originY).setRotation(angle).setScale(scale).setFlipY(flip).setDepth(955);
-    img.setBlendMode(Phaser.BlendModes.ADD);
+    if (glow) img.setBlendMode(Phaser.BlendModes.ADD);
     let frame = 0;
     this.time.addEvent({
       delay,
@@ -2325,6 +2325,37 @@ export class GameScene extends Phaser.Scene {
    * the far end, then sparkles and a fading ring are left behind.
    */
   /** PURE LOVE: the user's pink beam shoots out to full length, flickers, fades; a starburst where it ends. */
+  /** WAVE CRASH: the user's wave frames grow as the wave runs down the lane, then the crash frames at its end. */
+  private playTidalWave(x: number, y: number, aim: number, len: number, width: number) {
+    const cos = Math.cos(aim);
+    const sin = Math.sin(aim);
+    const left = cos < 0; // keep the wave's crest on top when it rolls to the left
+    const travel = 300;
+    const wave = this.add.image(x, y, "poswave_0").setOrigin(1, 0.5).setRotation(aim).setFlipY(left).setDepth(955);
+    const scaleOf = (key: string) => (width * 1.1) / Math.max(40, this.textures.get(key).getSourceImage().height);
+    const frames = 6;
+    const run = { t: 0 };
+    this.tweens.add({
+      targets: run,
+      t: 1,
+      duration: travel,
+      onUpdate: () => {
+        const f = Math.min(frames - 1, Math.floor(run.t * frames));
+        const key = `poswave_${f}`;
+        if (wave.texture.key !== key) wave.setTexture(key);
+        // The wave's front leads the way; it never pokes out past the end of the lane.
+        const d = Math.max(30, len * run.t);
+        wave.setPosition(x + cos * d, y + sin * d).setScale(Math.min(scaleOf(key), d / wave.width));
+      },
+      onComplete: () => {
+        wave.destroy();
+        const keys = [0, 1, 2, 3, 4, 5, 6].map((i) => `poscrash_${i}`);
+        this.playFrameList(keys, 65, x + cos * len * 0.92, y + sin * len * 0.92 + width * 0.3, 0, 0.5, 0.9, (width * 1.2) / 144, false, false);
+        this.cameras.main.shake(140, 0.005);
+      },
+    });
+  }
+
   private playPinkBeam(x: number, y: number, aim: number, len: number, width: number) {
     const add = Phaser.BlendModes.ADD;
     const beam = this.add.image(x, y, "pinkbeam_beam").setOrigin(0, 0.5).setRotation(aim).setDepth(955).setBlendMode(add);
@@ -3314,6 +3345,18 @@ export class GameScene extends Phaser.Scene {
         }
         const full = Math.max(1, Math.round(((z.radius * 2.1) / img.width) * 2) / 2);
         img.setPosition(z.x, z.y).setScale(full * (0.7 + 0.3 * Math.min(1, age / 0.25))).setAlpha(fade);
+      }
+      if (z.kind.startsWith("fx:vortex:") && !this.zoltraks.has(id)) {
+        // WAVE CRASH, part 1: the user's whirlpool frames grow round Poseidon while he calls the wave.
+        this.zoltraks.add(id);
+        const keys = [0, 1, 2, 3, 4, 5].map((i) => `posvortex_${i}`);
+        this.playFrameList(keys, 70, z.x, z.y - 8, 0, 0.5, 0.5, (z.radius * 2.2) / 149, false, false);
+      }
+      if (z.kind.startsWith("fxl:tidal:") && !this.zoltraks.has(id)) {
+        // WAVE CRASH, part 2: the wave rolls down the lane, then crashes and splashes at its end.
+        this.zoltraks.add(id);
+        const [, , , angS, lenS, widthS] = z.kind.split(":");
+        this.playTidalWave(z.x, z.y - 6, Number(angS), Number(lenS), Number(widthS));
       }
       if (z.kind.startsWith("fx:psychic:") && !this.zoltraks.has(id)) {
         // 100%: the user's psychic explosion frames, the burst built up round him, then the flash and the dust.
