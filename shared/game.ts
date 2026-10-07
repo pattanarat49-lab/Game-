@@ -275,6 +275,8 @@ export interface FxHit {
   silence?: number;
   /** Goes straight through armour, shields and immortality (ZOLTRAAK). */
   ignoreArmor?: boolean;
+  /** WATER JET: hitting anything charges the caster's next basic attack (HeroDef.chargedHit). */
+  empower?: boolean;
 }
 
 /**
@@ -299,7 +301,7 @@ export type FxAt = number | "self" | "target" | { upTo: number; scatter?: number
 export type FxStep = { wait?: number; times?: number; gap?: number; color: string } & (
   | ({ do: "dash"; len: number; width?: number; trail?: { n: number; radius: number; delay: number; dmg: number; look?: "meteor" | "pillar" | "bolt" | "fist" | "blade" | "skull" } } & FxHit)
   | { do: "blink"; to: "behind" | "aim" | "start"; range: number }
-  | ({ do: "lane"; len: number; width: number; look?: "beam" | "slash" | "wave" | "chain" | "bolt" | "zoltrak" | "pinkbeam" | "tidal" } & FxHit)
+  | ({ do: "lane"; len: number; width: number; look?: "beam" | "slash" | "wave" | "chain" | "bolt" | "zoltrak" | "pinkbeam" | "tidal" | "waterjet" } & FxHit)
   | ({ do: "ring"; radius: number; look?: "burst" | "shock" | "petal" | "spin" | "pull" | "psychic" | "vortex" } & FxHit)
   | ({ do: "cone"; range: number; arc: number; reflect?: boolean; look?: "hawkcut1" | "hawkcut2" } & FxHit)
   | ({ do: "shots"; n: number; spread: number; speed: number; range: number; pierce?: number; shape?: "orb" | "blade" | "star" | "spike" | "roach" | "hawkwave"; size?: number; home?: boolean; hitSize?: number; bounce?: number; split?: { n: number; range: number; speed: number; shape: "orb" | "blade" | "star" | "spike" | "roach"; size: number; color: string } & FxHit } & FxHit)
@@ -357,6 +359,8 @@ export interface HeroDef {
   turret?: boolean;
   /** Stacks kept in `mode`, shown under the skill cooldowns: their name and how many at most. */
   stacks?: { label: string; max?: number };
+  /** Poseidon: while mode is 1 (a WATER JET hit), the next basic attack hits x2 and stuns this many seconds. */
+  chargedHit?: number;
   /** An alien form of this hero (ALIEN TRANSFORM): not on the hero select screen; turns back when the time runs out. */
   formOf?: HeroId;
   /** Melee knockback, times a normal one. */

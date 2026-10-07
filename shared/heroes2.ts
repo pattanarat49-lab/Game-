@@ -988,18 +988,21 @@ const ROSTER = {
       { do: "lane", len: 200, width: 50, look: "wave", color: "ff5010", dmg: 30 },
       { do: "field", at: 100, radius: 60, life: 3, tick: 0.5, look: "flames", color: "ff5010", dmg: 12 },
     ]]),
-  // 2026-10-07 (user's picture and wave frames): the sea god. E comes later.
+  // 2026-10-07 (user's picture and wave frames): the sea god.
   poseidon: hero("mage", "Poseidon", "God of the sea", 105, { ...blade(28, 0.55, 46, 0.6), attack: "punch", lineAttack: 16 }, "Trident thrusts down a lane.",
     ["WAVE CRASH", 8, "whips up a whirlpool around him, then hurls a huge wave down the lane: everything it crashes into is hit hard and slowed by 30% for 2.5s.", [
       { do: "lane", wait: 0.42, len: 250, width: 110, look: "tidal", color: "3a8cff", dmg: 85, slow: 2.5, slowPct: 0.3, knock: 1 },
       { do: "ring", radius: 70, look: "vortex", color: "3a8cff" },
     ]],
-    null),
+    ["WATER JET", 6, "a jet of water shoots forward down the lane; if it hits, his next trident thrust hits twice as hard and stuns for 1s.", [
+      { do: "lane", len: 230, width: 36, look: "waterjet", color: "3a8cff", dmg: 40, empower: true },
+    ]],
+    { chargedHit: 1, stacks: { label: "TIDE", max: 1 } }),
 } satisfies Record<string, Entry>;
 
 /** Tuning results (DAMAGE_BALANCE, win %, stars) per hero, filled in from the bot duels. */
 const TUNED: Record<string, [bal: number, win: number, stars: number]> = {
-  poseidon: [3.22, 49.0, 3],
+  poseidon: [2.28, 48.0, 3],
   ace: [2.87, 52.9, 4],
   ainz: [3.27, 52.9, 4],
   akainu: [3.0, 49.0, 3],

@@ -1450,9 +1450,17 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
   private fxArea(owner: string, inside: (x: number, y: number, r: number) => boolean, h: FxHit, from: { x: number; y: number }, dir?: number) {
     const s = this.state;
     const push = (x: number, y: number): [number, number] => (dir !== undefined ? [Math.cos(dir), Math.sin(dir)] : [x - from.x, y - from.y]);
+    let hit = false;
+    // WATER JET: a hit charges the caster's next basic attack.
+    const charge = () => {
+      const o = s.players.get(owner);
+      if (h.empower && !hit && o && heroOf(o.hero).chargedHit) o.mode = 1;
+      hit = true;
+    };
     s.enemies.forEach((e, eid) => {
       const def = ENEMIES[e.kind as EnemyKind];
       if (!inside(e.x, e.y, this.er(e))) return;
+      if (!def.block) charge();
       if (h.dmg) this.damageEnemy(eid, h.dmg, owner, h.ignoreArmor);
       if (!s.enemies.has(eid) || def.block) return;
       if (h.slow) e.slow = Math.max(e.slow, h.slow);
@@ -1467,6 +1475,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
     if (!this.pvpLive()) return;
     s.players.forEach((v, vid) => {
       if (v.dead || !this.isFoe(owner, vid) || !this.onBody(v, (bx, by) => inside(bx, by, this.pr(v)))) return;
+      charge();
       if (h.dmg) this.damagePlayer(vid, h.dmg * PVP_DAMAGE_SCALE, true, owner, false, h.ignoreArmor);
       if (v.dead) return;
       if (h.stun) v.stun = Math.max(v.stun, h.stun);
@@ -2395,8 +2404,10 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
           brain.attackTimer = hero.sword.attackCooldown;
           this.sweep(id, p.x, p.y, input.aim, hero.sword.range, hero.sword.arc, hero.sword.damage, "cut");
         } else if (hero.lineAttack) {
-          // A straight kick down a lane.
-          this.lineHit(id, p.x, p.y, input.aim, hero.range, hero.lineAttack, hero.damage, 0, 0);
+          // A straight kick down a lane. Poseidon after a WATER JET hit: twice as hard, and it stuns.
+          const charged = !!hero.chargedHit && p.mode === 1;
+          this.lineHit(id, p.x, p.y, input.aim, hero.range, hero.lineAttack, hero.damage * (charged ? 2 : 1), charged ? hero.chargedHit! : 0, 0);
+          if (charged) p.mode = 0;
         } else if (hero.attack === "rifle") {
           this.spawnBullet("snipe", p.x, p.y, input.aim, hero.shotSpeed, { owner: id, damage: hero.damage, pierce: hero.pierce, life: hero.range / hero.shotSpeed });
         } else if (hero.attack === "magic" && hero.skill.kind === "boost") {

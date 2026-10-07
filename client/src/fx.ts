@@ -127,6 +127,7 @@ export function drawFxZone(floor: G, sky: G, z: any, now: number): boolean {
       case "zoltrak":
       case "pinkbeam":
       case "tidal":
+      case "waterjet":
         // The picture frames are played by the scene (playZoltrak / playPinkBeam); this is only a soft glow under them.
         lane(w * 1.6, c, 0.12 * t);
         break;
