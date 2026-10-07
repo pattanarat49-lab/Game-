@@ -1191,6 +1191,20 @@ export const SNIPER_RIFLE: PixelSprite = {
   palette: { k: OUTLINE, n: "#8a5a32", l: "#b57d48", d: "#5a3820", m: "#3a3f48", G: "#9aa6b4", s: "#4a505c", w: "#cfd8e4", L: "#7fd8ff" },
 };
 
+/** Frieren's staff: a long wooden shaft with a red orb in a gold ring at the head. Held at (6, 3). */
+export const MAGE_STAFF: PixelSprite = {
+  grid: [
+    "...................kkkk..",
+    "..................kyyyyk.",
+    "kkkkkkkkkkkkkkkkkkyrRWryk",
+    "knnnnnnnnnnnnnnnnmyrRRryk",
+    "kkkkkkkkkkkkkkkkkkyrrrryk",
+    "..................kyyyyk.",
+    "...................kkkk..",
+  ],
+  palette: { k: OUTLINE, n: "#7a5232", m: "#e8c050", y: "#d8a838", r: "#a01828", R: "#e03040", W: "#ffd0d8" },
+};
+
 export const KNIFE: PixelSprite = {
   grid: [
     "kkk.kkkkkk..",

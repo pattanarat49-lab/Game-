@@ -65,7 +65,7 @@ import {
   LOKI_ORB,
   MAGIC_ORB,
   WATER_ORB,
-  RIFLE, SNIPER_RIFLE,
+  RIFLE, SNIPER_RIFLE, MAGE_STAFF,
   SNIPE_SHOT,
   SWORDSMAN,
   SWORDMASTER,
@@ -160,6 +160,7 @@ export class BootScene extends Phaser.Scene {
     this.addCanvas("sword", renderPixelSprite(SWORD));
     this.addCanvas("rifle", renderPixelSprite(RIFLE));
     this.addCanvas("sniperrifle", renderPixelSprite(SNIPER_RIFLE));
+    this.addCanvas("magestaff", renderPixelSprite(MAGE_STAFF));
     this.addCanvas("wave", renderPixelSprite(SWORD_WAVE));
     this.addCanvas("snipe", renderPixelSprite(SNIPE_SHOT));
     this.addCanvas("knife", renderPixelSprite(KNIFE));

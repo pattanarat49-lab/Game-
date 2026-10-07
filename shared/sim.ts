@@ -1427,7 +1427,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
     s.enemies.forEach((e, eid) => {
       const def = ENEMIES[e.kind as EnemyKind];
       if (!inside(e.x, e.y, this.er(e))) return;
-      if (h.dmg) this.damageEnemy(eid, h.dmg, owner);
+      if (h.dmg) this.damageEnemy(eid, h.dmg, owner, h.ignoreArmor);
       if (!s.enemies.has(eid) || def.block) return;
       if (h.slow) e.slow = Math.max(e.slow, h.slow);
       if (def.boss) return;
@@ -1441,7 +1441,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
     if (!this.pvpLive()) return;
     s.players.forEach((v, vid) => {
       if (v.dead || !this.isFoe(owner, vid) || !this.onBody(v, (bx, by) => inside(bx, by, this.pr(v)))) return;
-      if (h.dmg) this.damagePlayer(vid, h.dmg * PVP_DAMAGE_SCALE, true, owner);
+      if (h.dmg) this.damagePlayer(vid, h.dmg * PVP_DAMAGE_SCALE, true, owner, false, h.ignoreArmor);
       if (v.dead) return;
       if (h.stun) v.stun = Math.max(v.stun, h.stun);
       if (h.slow) this.slowPlayer(v, h.slow, h.slowPct);
@@ -4708,11 +4708,12 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
     q.hp = Math.min(q.maxHp, q.hp + amount * HERO_HIT_SCALE);
   }
 
-  private damagePlayer(id: string, amount: number, ignoreIframes = false, attacker?: string, raw = false) {
+  /** `pierce`: goes straight through armour, shields and immortality (ZOLTRAAK). */
+  private damagePlayer(id: string, amount: number, ignoreIframes = false, attacker?: string, raw = false, pierce = false) {
     const p = this.state.players.get(id);
     const brain = this.brains.get(id);
     if (!p || !brain || p.dead || p.dashing) return;
-    if (heroOf(p.hero).invincible || p.barrier > 0) return;
+    if (!pierce && (heroOf(p.hero).invincible || p.barrier > 0)) return;
     if (p.vanish > 0) return; // eaten (safe inside) or inside a foe
     if (attacker && attacker !== ENEMY && (p.domain > 0) !== (this.state.players.get(this.rootOf(attacker))?.domain ?? 0) > 0) return; // a domain shuts the world out
     if (brain.decoy && amount > 0) {
@@ -4724,15 +4725,16 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
     if (attacker && attacker !== ENEMY && !raw) amount *= this.dmgMul(attacker) * HERO_HIT_SCALE;
     // HARDEN: each stack takes a share off every hit.
     const hard = heroOf(p.hero).skill;
-    if (hard.kind === "harden" && !raw) amount *= Math.max(0, 1 - hard.damage * p.mode);
+    if (hard.kind === "harden" && !raw && !pierce) amount *= Math.max(0, 1 - hard.damage * p.mode);
     const s2 = heroOf(p.hero).skill2;
     if (p.active2 > 0 && s2?.kind === "dive") return; // DRAGOON DIVE: high in the air, out of reach
-    if (p.active2 > 0 && s2?.kind === "gaia" && !raw) amount *= s2.width ?? 0.5; // GAIA SHELL
+    if (p.active2 > 0 && s2?.kind === "gaia" && !raw && !pierce) amount *= s2.width ?? 0.5; // GAIA SHELL
     if (p.buff > 0 && hard.kind === "rage" && !raw) amount *= RAGE_TAKEN; // BLOOD RAGE leaves him open
-    for (const b of fxBuffs(p)) {
-      if (b.invuln) return;
-      if (!raw) amount *= b.armor ?? 1;
-    }
+    if (!pierce)
+      for (const b of fxBuffs(p)) {
+        if (b.invuln) return;
+        if (!raw) amount *= b.armor ?? 1;
+      }
     // Under Yaotsu's reality change, ordinary humans hit for 1.
     if (this.state.reality > 0 && attacker && (attacker === ENEMY || this.isFoe(this.state.realityBy, attacker))) {
       amount = Math.min(amount, 1);
@@ -4934,12 +4936,12 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
     this.enemyBrains.set(id, { shootTimer: (def.shootEvery ?? 0) * Math.random() + 1, burstAngle: 0, beamTimer: 3, kbx: 0, kby: 0 });
   }
 
-  private damageEnemy(eid: string, damage: number, owner?: string) {
+  private damageEnemy(eid: string, damage: number, owner?: string, pierce = false) {
     const e = this.state.enemies.get(eid);
     if (!e) return;
     const killer = this.state.players.get(this.rootOf(owner));
     if (e.kind === "knight" && e.move === 3 && e.beamState === 2) return; // in the air: nothing reaches him
-    if (e.kind === "knight" && e.move === 5 && e.beamState === 2 && killer) {
+    if (e.kind === "knight" && e.move === 5 && e.beamState === 2 && killer && !pierce) {
       // Shield up: blows from the front glance off.
       let diff = Math.atan2(killer.y - e.y, killer.x - e.x) - e.beamAngle;
       diff = Math.atan2(Math.sin(diff), Math.cos(diff));

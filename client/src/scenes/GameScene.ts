@@ -120,9 +120,10 @@ interface Effect {
  */
 const HELD_WITH_ART: Record<string, { ox: number; oy: number; hands: number; scale: number } | undefined> = {
   simo: { ox: 8 / 28, oy: 4.5 / 7, hands: 9, scale: 2 / 3 },
+  frieren: { ox: 6 / 25, oy: 3.5 / 7, hands: 8, scale: 2 / 3 },
 };
 
-const WEAPON_TEXTURE: Record<string, string | undefined> = { isekai: "sword", simo: "sniperrifle", okita: "sword", sakamoto: "knife", hanuman: "trident", rick: "raygun", kid: "pistol", doraemon: "aircannon", agamemnon: "bronzesword", gladiator: "gladius", steve: "diamondsword", zenitsu: "sword" };
+const WEAPON_TEXTURE: Record<string, string | undefined> = { isekai: "sword", simo: "sniperrifle", frieren: "magestaff", okita: "sword", sakamoto: "knife", hanuman: "trident", rick: "raygun", kid: "pistol", doraemon: "aircannon", agamemnon: "bronzesword", gladiator: "gladius", steve: "diamondsword", zenitsu: "sword" };
 const BULLET_TEXTURE: Record<string, string> = {
   snipe: "snipe",
   wave: "wave",

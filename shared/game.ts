@@ -265,6 +265,8 @@ export interface FxHit {
   slowPct?: number;
   /** Seconds the foe cannot use skills (ANTI-MAGIC CUT). */
   silence?: number;
+  /** Goes straight through armour, shields and immortality (ZOLTRAAK). */
+  ignoreArmor?: boolean;
 }
 
 /** Where a "drop" or "field" goes: this far ahead along the aim, on the caster ("self"), or on the nearest foe ("target"). */
