@@ -123,6 +123,8 @@ interface Effect {
  * the grip point in the picture (ox, oy), how many art pixels above the feet the hands are, and the size
  * (2/3 = one weapon pixel per art pixel).
  */
+const AUTO_AIM_RANGE = 300; // DEFAULT attack mode: how far (world px) the sword button looks for a foe
+
 const HELD_WITH_ART: Record<string, { ox: number; oy: number; hands: number; scale: number } | undefined> = {
   simo: { ox: 8 / 28, oy: 4.5 / 7, hands: 9, scale: 2 / 3 },
   frieren: { ox: 6 / 25, oy: 3.5 / 7, hands: 8, scale: 2 / 3 },
@@ -565,6 +567,7 @@ export class GameScene extends Phaser.Scene {
     this.updateCharge(me, alive);
 
     if (touch) {
+      if (!touch.advanced && touch.shooting) this.autoAim(touch);
       this.aim = touch.aimAngle;
       this.reach = touch.aimReach;
       const dir = touch.directions;
@@ -3105,6 +3108,29 @@ export class GameScene extends Phaser.Scene {
   // --------------------------------------------------------------- zones
 
   /** Lasting skill areas, plus the stopped-time and domain overlays. */
+  /** DEFAULT attack mode: point the held attack at the closest foe in reach (or keep facing the way we walk). */
+  private autoAim(touch: { aimAngle: number }) {
+    const state = this.room?.state;
+    if (!state) return;
+    const { x, y } = this.predicted;
+    let best = AUTO_AIM_RANGE;
+    let angle: number | undefined;
+    const consider = (tx: number, ty: number) => {
+      const d = Math.hypot(tx - x, ty - y);
+      if (d < best) {
+        best = d;
+        angle = Math.atan2(ty - y, tx - x);
+      }
+    };
+    state.enemies?.forEach((e: any) => {
+      if (!e.dead && !ENEMIES[e.kind as EnemyKind]?.block) consider(e.x, e.y);
+    });
+    if (ringStage(state.stage) && state.phase === "fight") state.players?.forEach((p: any, id: string) => {
+      if (!p.dead && this.rivalOfMe(state, id) && !this.goneFromView(state, p, id)) consider(p.x, p.y);
+    });
+    if (angle !== undefined) touch.aimAngle = angle;
+  }
+
   /** Is this hero on the other side from us (as the server's isFoe sees it)? */
   private rivalOfMe(state: any, id: string): boolean {
     const myId = this.room!.sessionId;

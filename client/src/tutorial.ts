@@ -2,6 +2,7 @@
 // A panel at the top says what to do next; SKIP TUTORIAL leaves at any time.
 
 import Phaser from "phaser";
+import { attackMode } from "./settings";
 import { heroOf } from "../../shared/game";
 
 interface Step {
@@ -65,7 +66,9 @@ export class TutorialView {
       {
         title: "ATTACK",
         text: touch
-          ? "Hold the <b>sword stick</b> (bottom right) to attack, and drag it toward a straw dummy to aim. Hit it 3 times."
+          ? attackMode() === "advance"
+            ? "Hold the <b>sword stick</b> (bottom right) to attack, and drag it toward a straw dummy to aim. Hit it 3 times."
+            : "Hold the <b>sword button</b> (bottom right): your hero attacks the closest straw dummy. Hit it 3 times."
           : "Aim with the <b>mouse</b> and <b>click</b> (or hold) to attack a straw dummy. Hit it 3 times.",
         done: () => this.hits >= 3,
       },

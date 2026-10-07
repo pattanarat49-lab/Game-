@@ -1,4 +1,5 @@
 import Phaser from "phaser";
+import { attackMode } from "./settings";
 
 /**
  * Twin-stick touch controls for phones and tablets.
@@ -7,7 +8,9 @@ import Phaser from "phaser";
  * When only the left stick is used, your hero faces (and aims) where you walk.
  * Letting go of the move stick while it is pushed dashes that way (there is no dash button).
  * Buttons in the bottom-right corner: the hero's skill, and a second skill if the hero has one.
- * Under them sits the attack stick (a pixel sword in the middle): hold it to attack, drag it to aim.
+ * Under them sits the attack button (a pixel sword). In the DEFAULT attack mode (see settings.ts) it is a plain
+ * button that aims at the closest foe by itself, and the right half of the screen has no aim stick. In ADVANCE
+ * mode it is a stick: hold it to attack, drag it to aim (and the free aim stick on the right half works too).
  * Skill buttons work like small sticks: hold, drag to aim, and release to use the skill.
  * While a skill is held a CANCEL spot appears above it: let go there and the skill is not used.
  */
@@ -65,6 +68,8 @@ export class TouchControls {
   readonly skill2Button?: Button;
   /** The basic-attack stick under the skill buttons. */
   readonly attackButton: Button;
+  /** ADVANCE attack mode: the sword is a joystick. Otherwise attacks aim themselves (GameScene.autoAim). */
+  readonly advanced = attackMode() === "advance";
   /** Last aim angle, kept after the aim stick is released. */
   aimAngle = 0;
   /** How far the skill knob (or aim stick) is pushed, 0-1: placed skills land that far out in their circle. */
@@ -185,6 +190,7 @@ export class TouchControls {
       return;
     }
     const stick = p.x < this.scene.scale.width / 2 ? this.move : this.aim;
+    if (stick === this.aim && !this.advanced) return; // DEFAULT mode: the sword button aims for you
     if (stick.pointerId !== null) return;
     stick.pointerId = p.id;
     stick.baseX = p.x;
@@ -195,7 +201,7 @@ export class TouchControls {
 
   private onMove(p: Phaser.Input.Pointer) {
     const a = this.attackButton;
-    if (a.pointerId === p.id) {
+    if (a.pointerId === p.id && this.advanced) {
       // Dragging the attack stick aims the attacks; a plain hold attacks the way you face.
       let dx = p.x - a.x;
       let dy = p.y - a.y;
@@ -340,8 +346,9 @@ export class TouchControls {
     g.lineStyle(3, pressed ? 0xffd23f : 0xffffff, pressed ? 0.9 : 0.5).strokeCircle(a.x, a.y, a.r);
     const kx = a.x + a.dragX;
     const ky = a.y + a.dragY;
-    g.fillStyle(pressed ? 0xd83a3a : 0x6a2a2a, pressed ? 0.95 : 0.85).fillCircle(kx, ky, 26);
-    g.lineStyle(2, 0x000000, 0.6).strokeCircle(kx, ky, 26);
+    const knob = this.advanced ? 26 : 34; // a plain button (DEFAULT mode) is one big knob
+    g.fillStyle(pressed ? 0xd83a3a : 0x6a2a2a, pressed ? 0.95 : 0.85).fillCircle(kx, ky, pressed && !this.advanced ? knob - 3 : knob);
+    g.lineStyle(2, 0x000000, 0.6).strokeCircle(kx, ky, knob);
     const px = 3; // one sword pixel = 3 screen pixels
     const ox = Math.round(kx - (SWORD[0].length * px) / 2);
     const oy = Math.round(ky - (SWORD.length * px) / 2);

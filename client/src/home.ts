@@ -6,6 +6,7 @@
 import { HEROES, HERO_CLASSES, HERO_IDS, HeroId, StageId, heroClass } from "../../shared/game";
 import { heroPortrait, paintPortrait } from "./heroArt";
 import { showHeroInfo } from "./heroInfo";
+import { AttackMode, attackMode, setAttackMode } from "./settings";
 
 export interface HomeActions {
   online: boolean; // false in the solo build: no online modes, no account
@@ -90,6 +91,20 @@ const CSS = `
 .hm-card.fav { border-color: #e8487a; box-shadow: 0 0 10px rgba(232, 72, 122, 0.6); }
 .hm-card.fav::before { content: "\\2665"; position: absolute; right: 5px; top: 2px; color: #ff5a8a; font-size: 12px; }
 .hm-count { font-size: 9px; color: #c8cce0; }
+#hm-setting { position: absolute; right: 12px; top: 12px; z-index: 4; font-family: "Press Start 2P", monospace; font-size: 12px; padding: 10px 12px; color: #fff;
+  background: #2a3458; border: 3px solid #5a6aa0; border-radius: 8px; box-shadow: 0 4px 0 #141a30; cursor: pointer; display: flex; align-items: center; gap: 8px; }
+#hm-setting:active { transform: translateY(2px); box-shadow: 0 2px 0 #141a30; }
+#hm-setting svg { width: 18px; height: 18px; image-rendering: pixelated; }
+.hm-set { width: min(100%, 640px); background: #141a30; border: 4px solid #4a5a8a; border-radius: 10px; padding: 16px; display: flex; flex-direction: column; gap: 14px; }
+.hm-set h3 { margin: 0; font-size: 13px; color: #ffd23f; font-weight: normal; }
+.hm-switch { display: flex; align-items: center; gap: 12px; font-size: 11px; }
+.hm-switch .lbl { opacity: 0.45; transition: opacity .15s; }
+.hm-switch .lbl.on { opacity: 1; color: #ffd23f; }
+.hm-switch button { position: relative; width: 74px; height: 36px; border-radius: 18px; border: 3px solid #5a6aa0; background: #2fae6a; cursor: pointer; padding: 0; flex: none; transition: background .15s; }
+.hm-switch button.adv { background: #d8693a; }
+.hm-switch button::after { content: ""; position: absolute; top: 3px; left: 3px; width: 24px; height: 24px; border-radius: 50%; background: #fff; box-shadow: 0 2px 0 #0008; transition: left .15s; }
+.hm-switch button.adv::after { left: 41px; }
+.hm-set p { margin: 0; font-size: 9px; line-height: 1.8; color: #c8cce0; }
 `;
 
 export class Home {
@@ -131,6 +146,16 @@ export class Home {
       <button type="button" class="hm-hit" id="hm-char" aria-label="Characters" style="left:1158px;top:637px;width:240px;height:125px"></button>
       <div id="home-error"></div>`;
     root.append(stage);
+    // SETTING sits in the top-right corner of the screen (outside the scaled picture, so it is always reachable).
+    const setting = document.createElement("button");
+    setting.type = "button";
+    setting.id = "hm-setting";
+    setting.innerHTML = `<svg viewBox="0 0 9 9" shape-rendering="crispEdges"><path fill="#ffd23f" d="M3 0h3v1h1v1h1v1h1v3h-1v1h-1v1h-1v1h-3v-1h-1v-1h-1v-1h-1v-3h1v-1h1v-1h1z"/><path fill="#2a3458" d="M3 3h3v3h-3z"/></svg>SETTING`;
+    setting.addEventListener("click", (e) => {
+      e.stopPropagation();
+      this.showSettings();
+    });
+    root.append(setting);
     this.stage = stage;
     this.pic = stage.querySelector("#hm-pic")!;
     this.nameEl = stage.querySelector("#hm-name")!;
@@ -221,6 +246,40 @@ export class Home {
     el.querySelector(".hm-back")!.addEventListener("click", close);
     document.body.append(el);
     return { el, close };
+  }
+
+  /** SETTING: the attack mode switch (DEFAULT aims for you, ADVANCE is the sword joystick). */
+  showSettings() {
+    const { el } = this.screen("SETTING");
+    const box = document.createElement("div");
+    box.className = "hm-set";
+    box.innerHTML = `<h3>ATTACK BUTTON</h3>
+      <div class="hm-switch"><span class="lbl" data-m="default">DEFAULT</span><button type="button" aria-label="Attack mode"></button><span class="lbl" data-m="advance">ADVANCE</span></div>
+      <p></p>`;
+    const sw = box.querySelector("button")!;
+    const text = box.querySelector("p")!;
+    const show = (m: AttackMode) => {
+      sw.classList.toggle("adv", m === "advance");
+      box.querySelectorAll<HTMLElement>(".lbl").forEach((l) => l.classList.toggle("on", l.dataset.m === m));
+      text.textContent =
+        m === "advance"
+          ? "ADVANCE: the sword button is a joystick. Hold it to attack and drag it to aim. The right side of the screen is an aim stick too."
+          : "DEFAULT: tap or hold the sword button and your hero attacks the closest enemy by itself.";
+    };
+    sw.addEventListener("click", () => {
+      const m: AttackMode = attackMode() === "advance" ? "default" : "advance";
+      setAttackMode(m);
+      show(m);
+    });
+    box.querySelectorAll<HTMLElement>(".lbl").forEach((l) =>
+      l.addEventListener("click", () => {
+        setAttackMode(l.dataset.m as AttackMode);
+        show(l.dataset.m as AttackMode);
+      }),
+    );
+    box.querySelectorAll<HTMLElement>(".lbl").forEach((l) => (l.style.cursor = "pointer"));
+    show(attackMode());
+    el.append(box);
   }
 
   /** START GAME: pick a mode (then heroes are picked on the select screen in the game). */
