@@ -1802,7 +1802,8 @@ export const INTERMISSION_TIME = 6;
 
 export type EnemyKind =
   | "cinderling" | "brute" | "caster" | "warden" | "godzilla" | "monkey" | "bananamonkey" | "kingkong" | "swordsman" | "swordmaster" | "swordgod"
-  | "dirtblock" | "tntblock" | "craftblock" | "rockwall" | "dummy";
+  | "dirtblock" | "tntblock" | "craftblock" | "rockwall" | "dummy"
+  | "knight" | "stonecrawler" | "stonewisp";
 
 export interface EnemyDef {
   hp: number;
@@ -1842,6 +1843,10 @@ export const ENEMIES: Record<EnemyKind, EnemyDef> = {
   dummy: { hp: 300, speed: 0, radius: 11, touchDamage: 0, score: 0 },
   tntblock: { hp: 1, speed: 0, radius: 8, touchDamage: 0, score: 0, block: true },
   craftblock: { hp: 1, speed: 0, radius: 8, touchDamage: 0, score: 0, block: true },
+  // Dungeon: the Ancient Knight, a moss-covered stone knight, and the stone minions he raises.
+  knight: { hp: 4000, speed: 34, radius: 16, touchDamage: 25, score: 3000, boss: true },
+  stonecrawler: { hp: 90, speed: 80, radius: 9, touchDamage: 14, score: 20 },
+  stonewisp: { hp: 60, speed: 45, radius: 6, touchDamage: 6, score: 20, shootEvery: 2, shotDamage: 14, shot: "boulder", keepAway: 120 },
   godzilla: { hp: 7000, speed: 24, radius: 22, touchDamage: 105, score: 2000, shootEvery: 3, shotDamage: ENEMY_SHOT_DAMAGE_BASE * 3, boss: true },
 };
 
@@ -1878,6 +1883,20 @@ export const SWORD_GOD = {
   waves: { windup: 0.45, active: 0.2, count: 5, spread: 0.24, speed: 270, damage: 26 }, // a fan of flying sword slashes
   flurry: { windup: 0.35, active: 0.9, cuts: 3, range: 58, arc: 1.7, lunge: 26, damage: 32 }, // three quick forward cuts
 };
+/**
+ * The Ancient Knight's moves, one for each animation on the user's sheet. Each winds up first
+ * (beamState 1, a warning shows), then strikes (beamState 2). Seconds, pixels and damage per hit.
+ */
+export const ANCIENT_KNIGHT = {
+  rest: 1.2, // walking after you between moves
+  cleave: { windup: 0.7, active: 0.35, length: 135, width: 48, damage: 70 }, // sword raised high, brought straight down
+  sweep: { windup: 0.6, active: 0.3, radius: 120, arc: 3.6, damage: 45, knock: 1.6 }, // a wide sideways swing
+  leap: { windup: 0.45, air: 0.85, range: 320, radius: 110, damage: 60, stun: 1 }, // jumps on you, rocks burst up
+  summon: { windup: 1.1, active: 0.4, crawlers: 2, wisps: 1, max: 6 }, // calls stone minions out of the ground
+  guard: { windup: 0.25, active: 2.4, arc: 2.6, cut: 0.2 }, // shield up: hits from the front do 20%
+};
+export const ANCIENT_KNIGHT_MOVES = ["", "cleave", "sweep", "leap", "summon", "guard"] as const;
+
 export const SWORD_GOD_MOVES = ["", "dash", "whirl", "waves", "flurry"] as const;
 
 // King Kong's charge: he winds up (a warning lane shows), then rushes along it.

@@ -118,7 +118,7 @@ export class HudScene extends Phaser.Scene {
     } else if (state.stage === "dungeon") {
       this.waveText.setText(`DUNGEON  MONSTERS ${state.enemies.size}`);
       state.enemies.forEach((e: any) => {
-        if (e.kind !== "warden" || e.hp >= e.maxHp) return; // the boss bar once the fight is on
+        if (e.kind !== "knight" || e.hp >= e.maxHp) return; // the boss bar once the fight is on
         const w = Math.min(500, this.scale.width - 480);
         const x = (this.scale.width - w) / 2;
         this.bars.fillStyle(0x000000, 0.7).fillRect(x - 4, 36, w + 8, 14);

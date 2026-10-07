@@ -27,6 +27,7 @@ import {
   KNOCKBACK_DECAY,
   ROCKS,
   SWORD_GOD,
+  ANCIENT_KNIGHT,
   stageOf,
   ringStage,
   areaOf,
@@ -175,6 +176,8 @@ interface EnemyView {
   vx: number; // smoothed on-screen velocity, for L's foresight
   vy: number;
   ghost?: Phaser.GameObjects.Image;
+  /** Ancient Knight: the move and phase showing, and for how long. */
+  knight?: { key: string; t: number; landed: number };
 }
 
 /** A position, stamped with the time it was true (on our clock). */
@@ -243,6 +246,9 @@ const ENEMY_SCALE: Record<EnemyKind, number> = {
   swordsman: 1,
   swordmaster: 1,
   swordgod: 1.3,
+  knight: 1.25,
+  stonecrawler: 1,
+  stonewisp: 1,
   dirtblock: 1.3,
   tntblock: 1.3,
   craftblock: 1.3,
@@ -2615,7 +2621,7 @@ export class GameScene extends Phaser.Scene {
       seen.add(id);
       let view = this.enemies.get(id);
       if (!view) {
-        const sprite = this.add.image(e.x, e.y, e.kind).setOrigin(0.5, 0.75).setScale(ENEMY_SCALE[e.kind as EnemyKind]);
+        const sprite = this.add.image(e.x, e.y, e.kind).setOrigin(0.5, e.kind === "knight" ? 0.9 : 0.75).setScale(ENEMY_SCALE[e.kind as EnemyKind]);
         sprite.setAlpha(0);
         this.tweens.add({ targets: sprite, alpha: 1, duration: 300 });
         view = { sprite, bar: this.add.graphics(), x: e.x, y: e.y, vx: 0, vy: 0 };
@@ -2647,18 +2653,20 @@ export class GameScene extends Phaser.Scene {
         this.beams.lineStyle(1, 0xd070ff, 0.35).lineBetween(s.x, s.y - 3, gx, gy - 3);
       } else view.ghost?.setVisible(false);
       s.setDepth(s.y);
+      if (e.kind === "knight" && !asHuman) this.animKnight(view, e, s, dt);
       const was = this.enemyHp.get(id);
       if (was !== undefined && e.hp < was - 0.5) this.popDamage(s.x, s.y - s.displayHeight * 0.7, was - e.hp, "#ffe27a");
       if (this.enemyHp.size > 400) this.enemyHp.clear();
       this.enemyHp.set(id, e.hp);
       if (e.hitFlash > 0) s.setTintFill(0xffffff);
       else if (state.timeStop > 0) s.setTint(0x8a93b8);
-      else if (e.beamState === 1 && Math.floor(this.time.now / 80) % 2 === 0) s.setTint(0x9fd8ff);
+      else if (e.beamState === 1 && Math.floor(this.time.now / 80) % 2 === 0) s.setTint(e.kind === "knight" ? 0xd8ff9a : 0x9fd8ff);
       else s.clearTint();
       if (e.beamState > 0) {
         s.setFlipX(Math.cos(e.beamAngle) < 0);
         if (e.kind === "kingkong") this.drawCharge(s.x, s.y, e.beamAngle, e.beamState);
         else if (e.kind === "swordgod") this.drawSwordGod(s.x, s.y, e.beamAngle, e.beamState, e.move);
+        else if (e.kind === "knight") this.drawKnight(view.x, view.y, e.beamAngle, e.beamState, e.move);
         else this.drawBeam(s.x, s.y - 14, e.beamAngle, e.beamState);
       }
       view.x = e.x;
@@ -2677,6 +2685,14 @@ export class GameScene extends Phaser.Scene {
 
     for (const [id, view] of this.enemies) {
       if (seen.has(id)) continue;
+      if (view.knight) {
+        // The Ancient Knight crumbles back into the ground.
+        this.knightDeath(view.sprite);
+        view.bar.destroy();
+        this.enemies.delete(id);
+        this.tracks.delete(`e${id}`);
+        continue;
+      }
       const big = !!ENEMIES[view.sprite.texture.key as EnemyKind]?.boss;
       this.sparks.explode(big ? 60 : 14, view.sprite.x, view.sprite.y - 4);
       if (big) this.cameras.main.shake(400, 0.01);
@@ -2686,6 +2702,147 @@ export class GameScene extends Phaser.Scene {
       this.enemies.delete(id);
       this.tracks.delete(`e${id}`);
     }
+  }
+
+  /**
+   * The Ancient Knight, drawn from the user's animation sheet (art/props/knight_<pose>_<n>.png, facing right):
+   * idle and walk loops, and a pose for each move's wind-up and strike, with the sheet's effects on the hits.
+   */
+  private animKnight(view: EnemyView, e: any, s: Phaser.GameObjects.Image, dt: number) {
+    const K = ANCIENT_KNIGHT;
+    const key = `${e.move}:${e.beamState}`;
+    const k = (view.knight ??= { key, t: 0, landed: 99 });
+    if (k.key !== key) {
+      const [was, wasState] = k.key.split(":").map(Number);
+      const cos = Math.cos(e.beamAngle);
+      const sin = Math.sin(e.beamAngle);
+      if (key === "1:2") {
+        // The cleave lands: a pillar of green light and rock where the blade hits.
+        this.knightFx("kfx_pillar", view.x + cos * K.cleave.length * 0.7, view.y + sin * K.cleave.length * 0.7, 0.98, 1.2, 450, true);
+        this.cameras.main.shake(180, 0.008);
+      } else if (key === "2:2") this.knightSweep(view.x, view.y, e.beamAngle);
+      else if (key === "4:2") this.knightFx("kfx_quake", view.x, view.y + 6, 0.85, 1, 800, false);
+      if (was === 3 && wasState === 2) {
+        // Landing from the leap: the ground bursts.
+        this.knightFx("kfx_burst", view.x, view.y + 8, 0.92, 1.4, 650, true);
+        this.knightFx("kfx_quake", view.x, view.y + 8, 0.85, 1, 700, false);
+        this.cameras.main.shake(300, 0.016);
+        k.landed = 0;
+      }
+      k.key = key;
+      k.t = 0;
+    }
+    k.t += dt;
+    k.landed += dt;
+    const moving = Math.hypot(view.vx, view.vy) > 8;
+    let tex: string;
+    let lift = 0;
+    switch (e.move) {
+      case 1:
+        tex = e.beamState === 1 ? "knight_vs_0" : k.t < 0.1 ? "knight_vs_1" : "knight_vs_2";
+        break;
+      case 2:
+        tex = e.beamState === 1 ? "knight_hs_0" : "knight_hs_1";
+        break;
+      case 3:
+        if (e.beamState === 1) tex = "knight_leap_1";
+        else {
+          tex = "knight_leap_0";
+          lift = Math.sin(Math.PI * Math.min(1, k.t / K.leap.air)) * 70;
+        }
+        break;
+      case 4:
+        tex = e.beamState === 1 ? `knight_sum_${Math.min(2, Math.floor((k.t / K.summon.windup) * 3))}` : "knight_sum_3";
+        break;
+      case 5:
+        tex = e.beamState === 1 ? "knight_guard_0" : k.t < 0.1 ? "knight_guard_1" : "knight_guard_2";
+        break;
+      default:
+        if (k.landed < 0.35) tex = "knight_leap_1";
+        else if (moving) tex = `knight_walk_${Math.floor(this.time.now / 170) % 3}`;
+        else tex = `knight_idle_${Math.floor(this.time.now / 320) % 4}`;
+    }
+    if (s.texture.key !== tex) s.setTexture(tex);
+    if (lift > 0) {
+      // In the air: his shadow stays on the ground below.
+      this.beams.fillStyle(0x000000, 0.35).fillEllipse(s.x, s.y + 4, 46 * (1 - lift / 140), 14 * (1 - lift / 140));
+      s.y -= lift;
+      s.setDepth(s.y + lift + 1);
+    }
+  }
+
+  /** One of the Ancient Knight's effect pictures, rising at `x,y` and fading. */
+  private knightFx(key: string, x: number, y: number, originY: number, scale: number, ms: number, rise: boolean) {
+    const img = this.add.image(x, y, key).setOrigin(0.5, originY).setScale(scale, rise ? scale * 0.3 : scale).setDepth(y + 2);
+    this.tweens.add({ targets: img, scaleY: scale, duration: rise ? 120 : 1, ease: "Back.easeOut" });
+    this.tweens.add({ targets: img, alpha: 0, delay: ms * 0.45, duration: ms * 0.55, onComplete: () => img.destroy() });
+  }
+
+  /** The Ancient Knight's sideways sweep: a green crescent swinging round in front of him. */
+  private knightSweep(x: number, y: number, angle: number) {
+    const K = ANCIENT_KNIGHT.sweep;
+    const g = this.add.graphics().setDepth(y + 3);
+    const arc = { t: 0 };
+    this.tweens.add({
+      targets: arc,
+      t: 1,
+      duration: 380,
+      onUpdate: () => {
+        g.clear();
+        const swept = Math.min(1, arc.t * 2.2);
+        const a0 = angle - K.arc / 2;
+        const a1 = a0 + K.arc * swept;
+        const fade = 1 - Math.max(0, arc.t - 0.45) / 0.55;
+        for (const [r, w, c, al] of [[K.radius * 0.8, 18, 0x7fae3a, 0.35], [K.radius * 0.8, 9, 0xd8f08a, 0.8], [K.radius * 0.8, 3, 0xfaffe0, 1]] as const) {
+          g.lineStyle(w, c, al * fade).beginPath().arc(x, y - 10, r, a0, a1).strokePath();
+        }
+      },
+      onComplete: () => g.destroy(),
+    });
+    this.cameras.main.shake(120, 0.006);
+  }
+
+  /** Warnings while the Ancient Knight winds up: the cleave's lane and the sweep's arc. */
+  private drawKnight(x: number, y: number, angle: number, state: number, move: number) {
+    if (state !== 1) return;
+    const K = ANCIENT_KNIGHT;
+    const g = this.beams;
+    const pulse = 0.25 + 0.15 * Math.sin(this.time.now / 70);
+    const cos = Math.cos(angle);
+    const sin = Math.sin(angle);
+    if (move === 1) {
+      const w = K.cleave.width / 2;
+      const len = K.cleave.length;
+      const pts = [
+        { x: x - sin * w, y: y + cos * w },
+        { x: x + cos * len - sin * w, y: y + sin * len + cos * w },
+        { x: x + cos * len + sin * w, y: y + sin * len - cos * w },
+        { x: x + sin * w, y: y - cos * w },
+      ];
+      g.fillStyle(0xff3a2a, pulse).fillPoints(pts, true);
+      g.lineStyle(2, 0xffd060, 0.8).strokePoints(pts, true);
+    } else if (move === 2) {
+      g.fillStyle(0xff3a2a, pulse).slice(x, y, K.sweep.radius, angle - K.sweep.arc / 2, angle + K.sweep.arc / 2).fillPath();
+      g.lineStyle(2, 0xffd060, 0.8).beginPath().arc(x, y, K.sweep.radius, angle - K.sweep.arc / 2, angle + K.sweep.arc / 2).strokePath();
+    } else if (move === 4) {
+      g.lineStyle(2, 0x9adf5a, pulse * 2).strokeCircle(x, y, 40 + 10 * Math.sin(this.time.now / 90));
+    }
+  }
+
+  /** The Ancient Knight falls: the sheet's five collapse frames, then the rubble fades. */
+  private knightDeath(s: Phaser.GameObjects.Image) {
+    let frame = 0;
+    s.clearTint().setTexture("knight_die_0");
+    this.cameras.main.shake(500, 0.012);
+    this.time.addEvent({
+      delay: 170,
+      repeat: 4,
+      callback: () => {
+        frame++;
+        if (frame <= 4) s.setTexture(`knight_die_${frame}`);
+        if (frame === 4) this.tweens.add({ targets: s, alpha: 0, delay: 900, duration: 900, onComplete: () => s.destroy() });
+      },
+    });
   }
 
   /** King Kong's charge: a flashing warning lane, then dust trailing behind him. */
@@ -2892,6 +3049,14 @@ export class GameScene extends Phaser.Scene {
       sky.lineStyle(2, 0x404048, 1).lineBetween(z.x - Math.cos(a) * 9, z.y - Math.sin(a) * 9, z.x, z.y);
       sky.fillStyle(0xd8dce8, 1).fillTriangle(z.x, z.y, z.x - Math.cos(a - 0.4) * 5, z.y - Math.sin(a - 0.4) * 5, z.x - Math.cos(a + 0.4) * 5, z.y - Math.sin(a + 0.4) * 5);
       sky.fillStyle(0xffe040, 1).fillCircle(z.x - Math.cos(a) * 10, z.y - Math.sin(a) * 10, 2);
+      return true;
+    }
+    if (kind === "knightmark") {
+      // Where the Ancient Knight's leap comes down: a closing ring of warning.
+      const left = z.life / z.maxLife;
+      floor.fillStyle(0xff3a2a, 0.18 + 0.12 * Math.sin(now / 70)).fillCircle(z.x, z.y, z.radius);
+      floor.lineStyle(2, 0xffd060, 0.9).strokeCircle(z.x, z.y, z.radius);
+      floor.lineStyle(2, 0xff5a3a, 0.9).strokeCircle(z.x, z.y, z.radius * left);
       return true;
     }
     if (kind === "blood") {

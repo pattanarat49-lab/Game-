@@ -62,6 +62,7 @@ import {
   KONG_CHARGE_WIDTH,
   KNOCKBACK_DECAY,
   SWORD_GOD,
+  ANCIENT_KNIGHT,
   KNOCKBACK_DISTANCE,
   WORLD_H,
   WORLD_W,
@@ -483,6 +484,8 @@ interface EnemyBrain {
   hit?: Set<string>;
   cutsLeft?: number;
   cutTimer?: number;
+  /** Ancient Knight: where his leap comes down. */
+  leapTo?: { x: number; y: number };
   /** A placed block: who built it. */
   owner?: string;
   /** Dungeon: where it stands guard, whether it has noticed a hero, and its way through the corridors. */
@@ -681,7 +684,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       });
     }
     for (const g of DUNGEON.guards) this.spawnEnemyAt(g.kind as EnemyKind, g.x, g.y);
-    this.spawnEnemyAt("warden", DUNGEON.boss.x, DUNGEON.boss.y);
+    this.spawnEnemyAt("knight", DUNGEON.boss.x, DUNGEON.boss.y);
     this.state.notice = "Find and defeat the Pyre Warden";
   }
 
@@ -706,7 +709,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
     const s = this.state;
     let boss = false;
     s.enemies.forEach((e) => {
-      if (e.kind === "warden") boss = true;
+      if (e.kind === "knight") boss = true;
     });
     if (boss) return;
     if (!this.dungeonCleared) {
@@ -4935,6 +4938,13 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
     const e = this.state.enemies.get(eid);
     if (!e) return;
     const killer = this.state.players.get(this.rootOf(owner));
+    if (e.kind === "knight" && e.move === 3 && e.beamState === 2) return; // in the air: nothing reaches him
+    if (e.kind === "knight" && e.move === 5 && e.beamState === 2 && killer) {
+      // Shield up: blows from the front glance off.
+      let diff = Math.atan2(killer.y - e.y, killer.x - e.x) - e.beamAngle;
+      diff = Math.atan2(Math.sin(diff), Math.cos(diff));
+      if (Math.abs(diff) < ANCIENT_KNIGHT.guard.arc / 2) damage *= ANCIENT_KNIGHT.guard.cut;
+    }
     // Heroes hit monsters exactly as softly as they hit each other (HERO_DAMAGE_SCALE).
     const dealt = damage * this.dmgMul(owner) * (killer ? HERO_DAMAGE_SCALE : 1);
     this.leech(owner, Math.min(Math.max(0, e.hp), dealt));
@@ -5084,6 +5094,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       }
       if (e.kind === "kingkong" && !human && this.updateCharge(e, brain, dx, dy, dt)) return;
       if (e.kind === "swordgod" && !human && this.updateSwordGod(e, brain, dx, dy, dist, dt)) return;
+      if (e.kind === "knight" && !human && this.updateKnight(e, brain, p, dx, dy, dist, dt)) return;
 
       // Ranged enemies keep their distance; everyone else charges.
       let dirX = dx / dist;
@@ -5197,6 +5208,117 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       brain.beamTimer = SWORD_GOD.rest;
     }
     return true;
+  }
+
+  /**
+   * The Ancient Knight. Walks after you between moves, then picks one that suits the distance:
+   * close in, the overhead cleave, the wide sweep or his shield; further off, the leap or a summons.
+   * Each move winds up (beamState 1) so it can be dodged, then strikes (beamState 2).
+   * Returns true while a move is underway.
+   */
+  private updateKnight(e: E, brain: EnemyBrain, p: P, dx: number, dy: number, dist: number, dt: number): boolean {
+    const K = ANCIENT_KNIGHT;
+    const def = ENEMIES.knight;
+    brain.beamTimer -= dt;
+    if (e.beamState === 0) {
+      if (brain.beamTimer > 0) return false;
+      let minions = 0;
+      this.state.enemies.forEach((o) => {
+        if (o.kind === "stonecrawler" || o.kind === "stonewisp") minions++;
+      });
+      const r = Math.random();
+      if (dist > 150) e.move = r < 0.55 && dist < K.leap.range ? 3 : minions < K.summon.max && r < 0.85 ? 4 : 1;
+      else e.move = r < 0.4 ? 1 : r < 0.75 ? 2 : r < 0.88 || minions >= K.summon.max ? 5 : 4;
+      e.beamState = 1;
+      e.beamAngle = Math.atan2(dy, dx);
+      brain.beamTimer = [0, K.cleave.windup, K.sweep.windup, K.leap.windup, K.summon.windup, K.guard.windup][e.move];
+      if (e.move === 3) {
+        // Where he will come down: on you, as far as he can jump.
+        const reach = Math.min(dist, K.leap.range);
+        const spot = this.move(e.x, e.y, (dx / dist) * reach, (dy / dist) * reach, def.radius);
+        brain.leapTo = { x: spot.x, y: spot.y };
+        this.addZone("knightmark", spot.x, spot.y, K.leap.radius, K.leap.windup + K.leap.air, { owner: "", every: Infinity, damage: 0 });
+      }
+      return true;
+    }
+    if (e.beamState === 1) {
+      // The cleave and the sweep keep turning to you while he winds up; the leap is locked on its spot.
+      if (e.move === 1 || e.move === 2 || e.move === 5) e.beamAngle = Math.atan2(dy, dx);
+      if (brain.beamTimer > 0) return true;
+      e.beamState = 2;
+      brain.hit = new Set();
+      brain.beamTimer = [0, K.cleave.active, K.sweep.active, K.leap.air, K.summon.active, K.guard.active][e.move];
+      if (e.move === 1) this.knightLane(e, brain, K.cleave.length, K.cleave.width, K.cleave.damage);
+      if (e.move === 2) {
+        this.swordGodCut(e, brain, K.sweep.radius, K.sweep.arc, K.sweep.damage);
+        brain.hit.forEach((pid) => {
+          const v = this.state.players.get(pid);
+          if (v) this.knockPlayer(pid, v.x - e.x, v.y - e.y, K.sweep.knock);
+        });
+      }
+      if (e.move === 4) this.knightSummon(e);
+      return true;
+    }
+    // Striking.
+    if (e.move === 3 && brain.leapTo) {
+      // In the air, gliding to the spot; he lands when the time runs out.
+      const left = Math.max(brain.beamTimer, dt);
+      const k = Math.min(1, dt / left);
+      e.x += (brain.leapTo.x - e.x) * k;
+      e.y += (brain.leapTo.y - e.y) * k;
+    }
+    if (e.move === 5) {
+      // Shield up: turn to face you, edging forward slowly.
+      e.beamAngle = Math.atan2(dy, dx);
+      const moved = this.move(e.x, e.y, (dx / dist) * def.speed * 0.4 * MOVE_SCALE * dt, (dy / dist) * def.speed * 0.4 * MOVE_SCALE * dt, def.radius);
+      [e.x, e.y] = [moved.x, moved.y];
+    }
+    if (brain.beamTimer <= 0) {
+      if (e.move === 3) {
+        // Landing: the ground bursts all around him.
+        brain.hit = new Set();
+        this.swordGodCut(e, brain, K.leap.radius, Math.PI * 2, K.leap.damage);
+        brain.hit.forEach((pid) => {
+          const v = this.state.players.get(pid);
+          if (v && !v.dead) v.stun = Math.max(v.stun, K.leap.stun);
+        });
+        brain.leapTo = undefined;
+      }
+      e.beamState = 0;
+      e.move = 0;
+      brain.beamTimer = K.rest;
+    }
+    return true;
+  }
+
+  /** The Ancient Knight's overhead cleave: everyone in the lane in front of him. */
+  private knightLane(e: E, brain: EnemyBrain, length: number, width: number, damage: number) {
+    const cos = Math.cos(e.beamAngle);
+    const sin = Math.sin(e.beamAngle);
+    this.state.players.forEach((p, pid) => {
+      if (p.dead || brain.hit?.has(pid)) return;
+      const along = (p.x - e.x) * cos + (p.y - e.y) * sin;
+      const side = Math.abs(-(p.x - e.x) * sin + (p.y - e.y) * cos);
+      if (along < -10 || along > length || side > width / 2 + PLAYER_RADIUS) return;
+      brain.hit?.add(pid);
+      this.damagePlayer(pid, damage, true, ENEMY);
+    });
+  }
+
+  /** The Ancient Knight calls Stone Crawlers and a Stone Wisp up out of the ground around him. */
+  private knightSummon(e: E) {
+    const K = ANCIENT_KNIGHT.summon;
+    const kinds: EnemyKind[] = [...Array(K.crawlers).fill("stonecrawler"), ...Array(K.wisps).fill("stonewisp")];
+    kinds.forEach((kind, i) => {
+      const a = e.beamAngle + Math.PI / 2 + (i * Math.PI * 2) / kinds.length;
+      const spot = this.move(e.x, e.y, Math.cos(a) * 46, Math.sin(a) * 46, ENEMIES[kind].radius);
+      this.spawnEnemyAt(kind, spot.x, spot.y);
+      // spawnEnemyAt leaves dungeon monsters asleep; these come out fighting.
+      let lastId = "";
+      this.state.enemies.forEach((_o, id) => (lastId = id));
+      const b = this.enemyBrains.get(lastId);
+      if (b) b.awake = true;
+    });
   }
 
   /** One Sword God cut: hits each player in range (and arc) once per strike. Dashing dodges it. */
