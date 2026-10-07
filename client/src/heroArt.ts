@@ -20,6 +20,8 @@ const LAYOUT: Record<string, ArtLayout> = {
   mossgolem: { scale: 0.8, originY: 0.97 },
   oni: { scale: 0.75, originY: 0.97 },
   kaido: { scale: 0.8, originY: 0.97 },
+  // DRAGON FORM: the user's dragon frames (dragon_idle_n / dragon_move_n props), facing right.
+  kaidodragon: { scale: 0.8, originY: 0.95 },
   bigmom: { scale: 0.8, originY: 0.97 },
   whitebeard: { scale: 0.75, originY: 0.97 },
   blackbeard: { scale: 0.75, originY: 0.97 },
@@ -135,12 +137,17 @@ export function paintPortrait(canvas: HTMLCanvasElement, hero: string) {
   img.src = front;
 }
 
+/** Heroes drawn from their own frame animations (prop textures <name>_idle_n / <name>_move_n) instead of a walk. */
+export const DRAGON_FRAMES: Record<string, { name: string; idle: number; move: number; time: number }> = {
+  kaidodragon: { name: "dragon", idle: 5, move: 5, time: 0.12 },
+};
+
 /** Heroes that walk with stepping feet: every hero drawn from a front picture. */
 /** No legs to step with (chess pieces, a bird): they only hop. */
 const HOP_ONLY = new Set(["pawn", "queen", "angrybird"]);
 
 export function walksWithFeet(hero: string): boolean {
-  return frontOnly(hero);
+  return frontOnly(hero) && !DRAGON_FRAMES[hero];
 }
 
 /**

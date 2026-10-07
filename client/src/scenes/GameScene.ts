@@ -66,7 +66,7 @@ import { TutorialView } from "../tutorial";
 import { isTouchDevice } from "../touch";
 import { DUNGEON, OPEN_WORLD } from "../../../shared/world";
 import { BLOCK } from "../../../shared/maps";
-import { attackArtLayout, attackFrame, facingOf, frontOnly, hasHeroArt, heroArtLayout, SWING_TIME, WALK_FRAMES, WALK_FRAME_TIME, walksWithFeet, walkContact, walkOriginY } from "../heroArt";
+import { DRAGON_FRAMES, attackArtLayout, attackFrame, facingOf, frontOnly, hasHeroArt, heroArtLayout, SWING_TIME, WALK_FRAMES, WALK_FRAME_TIME, walksWithFeet, walkContact, walkOriginY } from "../heroArt";
 
 interface PlayerView {
   body: Phaser.GameObjects.Image;
@@ -95,6 +95,8 @@ interface PlayerView {
   walkY?: number;
   walkT?: number; // time spent walking (picks the walk frame)
   walkStill?: number; // time standing still since the last step
+  dragonLeft?: boolean; // DRAGON FORM: facing left (it faces the way it goes)
+  dragonX?: number;
   walkFrame?: number; // the walk pose shown last frame (a new contact pose kicks up dust)
   swing?: number; // seconds left of a hand-made basic-attack swing animation
 }
@@ -522,6 +524,7 @@ export class GameScene extends Phaser.Scene {
     // Nobody moves or attacks while picking heroes.
     let input = selecting || this.world?.typing ? { ...EMPTY_INPUT, aim: this.aim } : this.readInput();
     if (state.stage === "world") input = { ...input, shoot: false, skill: false, skill2: false }; // the Open World is peaceful
+    if (me && heroOf(me.hero).noAttack) input = { ...input, shoot: false }; // DRAGON FORM: no basic attack
     this.predictLocal(input, dt);
     this.predictEffects(input, dt);
     this.sendInput(input, dt);
@@ -919,8 +922,18 @@ export class GameScene extends Phaser.Scene {
       const walking = art && !swing && walksWithFeet(shown) && (view.walkT ?? 0) > 0;
       const walkFrame = walking ? Math.floor((view.walkT ?? 0) / WALK_FRAME_TIME) % WALK_FRAMES : 0;
       if (!walking) view.walkFrame = undefined;
-      const texture = swing ? swing.texture : walking ? `hero_${shown}_walk_${walkFrame}` : art ? `${look}_${facingOf(aim, shown)}` : look;
+      let texture = swing ? swing.texture : walking ? `hero_${shown}_walk_${walkFrame}` : art ? `${look}_${facingOf(aim, shown)}` : look;
       if (art) body.setFlipX(swing ? swing.flip : frontOnly(shown) && Math.cos(aim) < 0);
+      const anim = art ? DRAGON_FRAMES[shown] : undefined;
+      if (anim) {
+        // DRAGON FORM: the user's idle / slither frames, turned the way it is going.
+        const going = (view.walkT ?? 0) > 0;
+        const n = Math.floor(this.time.now / 1000 / anim.time) % (going ? anim.move : anim.idle);
+        texture = `${anim.name}_${going ? "move" : "idle"}_${n}`;
+        if (moved > 0.15) view.dragonLeft = body.x < (view.dragonX ?? body.x);
+        view.dragonX = body.x;
+        body.setFlipX(!!view.dragonLeft);
+      }
       if (disguised) view.weapon?.setVisible(false);
       const artScale = layout ? layout.scale : 1;
       body.setScale(k * artScale * (titanNow && !humanized ? 2.6 : humanized ? 1 : SUMMON_SCALE[p.hero] ?? 1));
@@ -950,7 +963,7 @@ export class GameScene extends Phaser.Scene {
           this.walkDust(body.x + side * 4 * px, feetY - px, px);
         }
         view.walkFrame = walkFrame;
-      } else if (art) {
+      } else if (art && !anim) {
         // Walking: a little step bounce and sway while the hero moves.
         const step = this.time.now / 85;
         if (moved > 0.15 && !p.dead) {
@@ -1023,7 +1036,7 @@ export class GameScene extends Phaser.Scene {
         view.bike.setPosition(body.x, body.y + 2 * k).setDepth(body.depth + 0.3);
         if (riding && Math.random() < 0.3) this.sparks.explode(1, body.x - Math.sign(Math.cos(aim)) * 12 * k, body.y);
       }
-      view.label.setPosition(body.x, body.y - (titanNow ? 66 : 18) * k);
+      view.label.setPosition(body.x, body.y - (titanNow ? 66 : DRAGON_FRAMES[shown] ? 34 : 18) * k);
       if (p.hero === "yaotsu") this.drawGlitch(view, p.dead);
       if (p.hero === "hacker") {
         // The Hacker always flickers a little; during ERROR he is mostly glitch, streaking from jump to jump.
@@ -1040,7 +1053,7 @@ export class GameScene extends Phaser.Scene {
         body.setAlpha(0);
         view.weapon?.setVisible(false);
       }
-      if (heroOf(p.hero).ram) this.drawTrail(view, p.dead);
+      if (heroOf(p.hero).ram && !heroOf(p.hero).ramBody) this.drawTrail(view, p.dead); // the dragon slithers without afterimages
       view.label.setDepth(1000);
 
       if (p.hp < view.lastHp - 0.5) {

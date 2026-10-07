@@ -70,6 +70,7 @@ function skillNumbers(id: string, hero: HeroDef, sk: SkillDef): string {
       return sk.kind === "rubberpunch" ? `${dmg} · Stun 1s` : sk.kind === "yoyo" ? `Yoyo damage ${D(sk.damage)} per hit` : dmg;
     case "truck": return `${dmg} · Lands after ${s(sk.duration, 2)}`;
     case "omnitrix": return `Alien for ${s(sk.duration, 10)}`;
+    case "dragonform": return `Dragon for ${s(sk.duration, 12)}`;
     case "eat": return `Heals ${H(sk.damage)} HP`;
     case "diamond": return `Sword for ${s(sk.duration, 10)} · Damage ${D(hero.sword?.damage ?? 0)} per swing`;
     case "build": return `TNT blast damage ${D(sk.damage)}`;

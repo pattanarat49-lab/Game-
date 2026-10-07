@@ -1251,16 +1251,29 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
 
   /** Speed Raptor's charge: hit every foe it is touching (each one again only every RAM_REHIT seconds). */
   private ramInto(id: string, p: P, brain: PlayerBrain, damage: number) {
+    const hero = heroOf(p.hero);
+    const knock = hero.ramKnock ?? 1;
+    // How far a spot is from the rammer's body: its feet, or the whole long body (the dragon, drawn level).
+    const body = hero.ramBody;
+    const away = (x: number, y: number) => {
+      if (!body) return Math.hypot(x - p.x, y - p.y);
+      const dx = Math.max(0, Math.abs(x - p.x) - body.len / 2);
+      const dy = Math.max(0, Math.abs(y - (p.y - body.half)) - body.half);
+      return Math.hypot(dx, dy);
+    };
+    const reach = body ? 0 : PLAYER_RADIUS;
     this.state.enemies.forEach((e, eid) => {
       const def = ENEMIES[e.kind as EnemyKind];
-      if (def.block || Math.hypot(e.x - p.x, e.y - p.y) > PLAYER_RADIUS + this.er(e) + 4 || !this.canRehit(brain, eid, RAM_REHIT)) return;
+      if (def.block || away(e.x, e.y) > reach + this.er(e) + 4 || !this.canRehit(brain, eid, RAM_REHIT)) return;
       this.damageEnemy(eid, damage, id);
-      if (!def.boss && this.state.enemies.has(eid)) this.knockEnemy(eid, e.x - p.x, e.y - p.y, 1);
+      if (!def.boss && this.state.enemies.has(eid)) this.knockEnemy(eid, e.x - p.x, e.y - p.y, knock);
     });
     this.state.players.forEach((v, vid) => {
-      if (v.dead || !this.isFoe(id, vid) || this.bodyDist(v, p.x, p.y) > PLAYER_RADIUS + this.pr(v) + 4 || !this.canRehit(brain, `p:${vid}`, RAM_REHIT)) return;
+      if (v.dead || !this.isFoe(id, vid)) return;
+      const at = this.bodyPoint(v, p.x, p.y - (body?.half ?? 0));
+      if ((body ? away(at.x, at.y) : this.bodyDist(v, p.x, p.y)) > reach + this.pr(v) + 4 || !this.canRehit(brain, `p:${vid}`, RAM_REHIT)) return;
       this.damagePlayer(vid, damage * PVP_DAMAGE_SCALE, true, id);
-      this.knockPlayer(vid, v.x - p.x, v.y - p.y, 1);
+      this.knockPlayer(vid, v.x - p.x, v.y - p.y, knock);
     });
   }
 
@@ -2316,7 +2329,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
 
       // Basic attack
       p.titan = Math.max(0, p.titan - dt);
-      if (input.shoot && brain.attackTimer <= 0 && !doves) {
+      if (input.shoot && brain.attackTimer <= 0 && !doves && !hero.noAttack) {
         const bat = p.active2 > 0 && hero.skill2?.kind === "bat";
         const rage = p.buff > 0 && hero.skill.kind === "rage";
         brain.attackTimer = hero.attackCooldown * (bat ? hero.skill2!.width ?? 0.35 : 1) * (rage ? hero.skill.width ?? 0.6 : 1);
@@ -3204,6 +3217,19 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
         // TRUCK SMASH: a truck falls on the spot he aimed at (time keeps flowing: it can be dodged).
         const spot = this.move(p.x, p.y, Math.cos(p.aim) * skill.radius, Math.sin(p.aim) * skill.radius, 4);
         this.addZone("truck", spot.x, spot.y, TRUCK_RADIUS, Math.max(0.1, (skill.duration ?? 2) - 0.05), { owner: id, every: Infinity, damage: skill.damage });
+        break;
+      }
+      case "dragonform": {
+        // DRAGON FORM: into the dragon with the same share of HP; back with the HP he had (endForm).
+        if (!skill.form) break;
+        const share = p.hp / p.maxHp;
+        brain.formHp = p.hp;
+        p.hero = skill.form;
+        p.maxHp = this.maxHpOf(id, skill.form);
+        p.hp = Math.max(1, Math.round(p.maxHp * share));
+        p.buff = skill.duration ?? 12;
+        p.skillCooldown = 0.5;
+        brain.attackTimer = 0;
         break;
       }
       case "omnitrix": {
@@ -5929,6 +5955,8 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
         return dist < 200;
       case "omnitrix":
         return dist < 220;
+      case "dragonform":
+        return dist < 240;
       case "mitosis":
         return dist < 280 && hpLeft > 0.4; // split while there is HP to share
       case "eat":

@@ -83,7 +83,7 @@ export class HudScene extends Phaser.Scene {
       const skill = hero.skill.kind === "thunderdash" && me.mode === 1 ? "AGAIN! (chain)" : hero.skill.kind === "shadowstep" && me.mode === 1 ? "BACK! (shadow)" : hero.skill.kind === "empower" && me.mode === 1 ? "READY (next hit)" : hero.skill.kind === "swap" ? `NOW ${me.mode === 1 ? "GUN" : "KNIFE"}` : hero.skill.kind === "passive" ? "PASSIVE" : active1 > 0 ? `ACTIVE ${active1.toFixed(1)}s` : me.skillCooldown > 0 ? `${me.skillCooldown.toFixed(1)}s` : "READY";
       const lines = [`DASH   ${dash}`, `${hero.skill.name.padEnd(6)} ${skill}`];
       // ALIEN TRANSFORM: how long until the alien turns back into the kid.
-      const formLeft = hero.formOf ? `ALIEN  BACK IN ${(me.buff ?? 0).toFixed(1)}s` : "";
+      const formLeft = hero.formOf ? `${hero.formOf === "kaido" ? "DRAGON" : "ALIEN"}  BACK IN ${(me.buff ?? 0).toFixed(1)}s` : "";
       if (hero.formOf && hero.skill.kind === "passive") lines[1] = formLeft;
       else if (hero.formOf) lines.push(formLeft);
       const skill2Ready = hero.skill2 ? 1 - me.skill2Cooldown / hero.skill2.cooldown : 1;

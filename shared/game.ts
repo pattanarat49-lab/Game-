@@ -83,6 +83,7 @@ type BaseHeroId =
   | "quad"
   | "echo"
   | "raptor"
+  | "kaidodragon"
   | "zenitsu"
   | "pawn"
   | "queen"
@@ -170,6 +171,7 @@ export type SkillKind =
   | "diamond" // a diamond sword for a while: basic attacks become strong, fast, long sword swings
   | "build" // place a random block: dirt (a shield), TNT (explodes when hit) or a craft table (break it for 2x damage)
   | "eyebeam" // a laser from the eyes that keeps firing and follows the aim
+  | "dragonform" // DRAGON FORM: turns into the hero named by `form` for `duration` s; the cooldown starts when he turns back
   | "omnitrix" // turn into a random alien for a while (no skills, except the alien's own)
   | "mitosis" // every copy of you splits in two, sharing its HP half and half
   | "eat" // eat a snack: heal a share of max HP
@@ -247,6 +249,8 @@ export interface SkillDef {
   waitGone?: "pet" | "portal";
   /** What the skill does, in words (shown on the hero details). */
   desc?: string;
+  /** DRAGON FORM: the form hero it turns into. */
+  form?: HeroId;
   /** "combo" skills: what happens, in order (each step can wait a moment after the cast). */
   steps?: FxStep[];
   /** "combo" skills: bots use it when a foe is within `radius`, or (when set) only below this share of HP. */
@@ -345,6 +349,12 @@ export interface HeroDef {
   slowHit?: number;
   /** Running into a foe hits it for this much (again every RAM_REHIT seconds while still touching). */
   ram?: number;
+  /** How hard a ram knocks back, times a normal knockback. */
+  ramKnock?: number;
+  /** A long body that rams with all of it: a box `len` long and `half` * 2 tall, lying left-right (the dragon). */
+  ramBody?: { len: number; half: number };
+  /** Has no basic attack (DRAGON FORM). */
+  noAttack?: boolean;
 }
 
 const BASE_HEROES: Record<BaseHeroId, HeroDef> = {
@@ -1598,6 +1608,29 @@ const BASE_HEROES: Record<BaseHeroId, HeroDef> = {
     ram: 14,
     skill: { kind: "passive", name: "ALIEN", cooldown: 1, damage: 0, radius: 0 },
   },
+  kaidodragon: {
+    // The Beast Emperor's DRAGON FORM (user request 2026-10-07): no basic attack, rams with the whole dragon.
+    name: "Azure Dragon",
+    role: "Dragon form",
+    blurb: "",
+    stars: 4,
+    formOf: "kaido",
+    maxHp: 170, // the same as the Beast Emperor (set again below)
+    speed: 225, // twice a hero's walk (HERO_WALK / MOVE_SCALE * 2)
+    attack: "punch",
+    attackCooldown: 1,
+    damage: 0,
+    range: 20,
+    arc: 0,
+    aoe: 0,
+    shotSpeed: 0,
+    pierce: 0,
+    noAttack: true,
+    ram: 105, // 2.5 times his club swing (set again below)
+    ramKnock: 3,
+    ramBody: { len: 96, half: 20 },
+    skill: { kind: "passive", name: "DRAGON", cooldown: 1, damage: 0, radius: 0 },
+  },
 };
 
 export const HEROES: Record<HeroId, HeroDef> = { ...BASE_HEROES, ...newHeroDefs() };
@@ -1621,6 +1654,15 @@ for (const def of Object.values(HEROES)) {
   def.range += MELEE_REACH;
   if (!def.lineAttack) def.arc = Math.max(def.arc, def.attack === "sword" ? 2.4 : 1.7);
 }
+
+// DRAGON FORM (user request 2026-10-07): 12 s as a dragon twice as fast, no basic attack, ramming for 2.5x his club
+// swing with knockback; the cooldown counts from turning back. His DRAGON BREATH still works as a dragon.
+HEROES.kaido.skill = { kind: "dragonform", name: "DRAGON FORM", cooldown: HEROES.kaido.skill.cooldown, damage: 0, radius: 0, duration: 12, form: "kaidodragon",
+  desc: "turns into a huge dragon for 12s: twice as fast, no basic attack, ramming into foes with the whole body hits for 2.5x his club swing and knocks them back. The cooldown starts once he turns back." };
+HEROES.kaidodragon.maxHp = HEROES.kaido.maxHp;
+HEROES.kaidodragon.ram = HEROES.kaido.damage * 2.5;
+HEROES.kaidodragon.speed = (HERO_WALK / MOVE_SCALE) * 2;
+HEROES.kaidodragon.skill2 = HEROES.kaido.skill2;
 
 /**
  * Pickable heroes, ranked by how strong they are in the PvP Arena: weakest first, strongest last.
