@@ -478,14 +478,14 @@ export class GameScene extends Phaser.Scene {
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => lobby.destroy());
   }
 
-  /** Classic 3v3: a row of pixel hearts over the head, one per life left (spent ones grey). */
-  private drawLives(g: Phaser.GameObjects.Graphics, x: number, y: number, lives: number) {
+  /** Classic 3v3: a row of pixel hearts over the head, one per life left (spent ones grey), red or blue for the team. */
+  private drawLives(g: Phaser.GameObjects.Graphics, x: number, y: number, lives: number, team: number) {
     const heart = ["0110110", "1111111", "1111111", "0111110", "0011100", "0001000"];
     for (let i = 0; i < CLASSIC_LIVES; i++) {
       const hx = Math.round(x + (i - (CLASSIC_LIVES - 1) / 2) * 9 - 3.5);
       const hy = Math.round(y - 7);
       g.fillStyle(0x000000, 0.6).fillRect(hx - 1, hy - 1, 9, 8);
-      g.fillStyle(i < lives ? 0xff3a5a : 0x5a5060, 1);
+      g.fillStyle(i < lives ? (team === 2 ? 0x3a9aff : 0xff3a5a) : 0x5a5060, 1);
       heart.forEach((row, ry) => [...row].forEach((c, rx) => c === "1" && g.fillRect(hx + rx, hy + ry, 1, 1)));
     }
   }
@@ -1095,7 +1095,7 @@ export class GameScene extends Phaser.Scene {
         view.bar.fillStyle(team ? TEAM_MARKERS[team] : PLAYER_MARKERS[(disguised && !isMe ? disguised : p).color % 4], team ? 0.8 : 0.5).fillEllipse(body.x, body.y + 1, 14 * k, 5 * k);
         view.bar.fillStyle(0x000000, 0.7).fillRect(body.x - 12, body.y + 3 + 2 * k, 24, 2);
         view.bar.fillStyle(0x4cd964, 1).fillRect(body.x - 12, body.y + 3 + 2 * k, 24 * (p.hp / p.maxHp), 2);
-        if (state.stage === "classic" && !p.owner) this.drawLives(view.bar, body.x, view.label.y - 11, p.lives ?? 0);
+        if (state.stage === "classic" && !p.owner) this.drawLives(view.bar, body.x, view.label.y - 11, p.lives ?? 0, team ?? 1);
         if (p.big > 0) {
           // BIG LIGHT: a soft yellow glow while enlarged.
           view.bar.lineStyle(1, 0xfff07a, 0.6).strokeEllipse(body.x, body.y + 1, 18 * k, 7 * k);
