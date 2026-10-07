@@ -87,7 +87,7 @@ function hero(cls: HeroClass, name: string, role: string, maxHp: number, basic: 
 }
 
 /** Queen's Bond's CURSED QUEEN: calls out the big curse (HP = this share of his max HP) for `duration`. */
-const RIKA_SKILL: SkillDef = { kind: "summon", name: "CURSED QUEEN", cooldown: 16, damage: 1, radius: 0, count: 1, duration: 10, pet: "rika" as SkillDef["pet"], desc: "calls out his giant curse queen for 10s: she follows him and smashes his foes with huge claws that knock them back." };
+const RIKA_SKILL: SkillDef = { kind: "summon", name: "CURSED QUEEN", cooldown: 16, damage: 2, radius: 0, count: 1, duration: 10, pet: "rika" as SkillDef["pet"], desc: "calls out his giant curse queen for 10s (as much HP as twice his own): she follows him and smashes his foes with huge claws that knock them back, and fires PURE LOVE with him." };
 
 /** ODM GEAR (same as the Giant Shifter's): a wire into the wall ahead, and he zips along it. */
 const ODM_TEXT = "fires a wire into the wall (or rock) ahead and zips along it at high speed (0.5s cooldown).";
@@ -962,8 +962,8 @@ const ROSTER = {
     ["CURSED QUEEN", 16, "calls out his giant curse queen for 10s: she follows him and smashes his foes with huge claws that knock them back.", [
       { do: "ring", radius: 50, look: "shock", color: "e0e0f0" },
     ]],
-    ["PURE LOVE", 14, "one huge, strong beam of cursed energy, wherever he aims.", [
-      { do: "lane", len: 280, width: 44, look: "beam", color: "b0a0ff", dmg: 110 },
+    ["PURE LOVE", 14, "one huge, strong pink beam of cursed energy, wherever he aims. If his Cursed Queen is out, she fires the same beam at the same target.", [
+      { do: "lane", len: 280, width: 44, look: "pinkbeam", color: "ff60d0", dmg: 110 },
     ]], { skill: RIKA_SKILL }),
   maki: hero("fighter", "Cursed Tool Master", "Weapon expert", 105, blade(30, 0.45, 40, 1.4), "Polearm swings.",
     ["PLAYFUL CLOUD", 8, "three wide staff swings.", [

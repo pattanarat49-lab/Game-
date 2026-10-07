@@ -2271,6 +2271,36 @@ export class GameScene extends Phaser.Scene {
    * a magic circle opens at the staff, the beam shoots out with its ring and arrowhead, a starburst hits
    * the far end, then sparkles and a fading ring are left behind.
    */
+  /** PURE LOVE: the user's pink beam shoots out to full length, flickers, fades; a starburst where it ends. */
+  private playPinkBeam(x: number, y: number, aim: number, len: number, width: number) {
+    const add = Phaser.BlendModes.ADD;
+    const beam = this.add.image(x, y, "pinkbeam_beam").setOrigin(0, 0.5).setRotation(aim).setDepth(955).setBlendMode(add);
+    const sx = len / beam.width;
+    const sy = (width * 1.25) / beam.height;
+    beam.setScale(sx * 0.15, sy * 0.6);
+    this.tweens.add({ targets: beam, scaleX: sx, scaleY: sy, duration: 110, ease: "Quad.easeOut" });
+    const head = this.add.image(x, y, "pinkbeam_move").setOrigin(0, 0.5).setRotation(aim).setDepth(956).setBlendMode(add);
+    head.setScale((len / head.width) * 0.15, (width * 0.6) / head.height);
+    beam.setAlpha(0.85);
+    this.tweens.add({ targets: head, scaleX: len / head.width, duration: 110, ease: "Quad.easeOut" });
+    let n = 0;
+    const flicker = this.time.addEvent({ delay: 60, repeat: 5, callback: () => {
+      n++;
+      beam.setAlpha(n % 2 ? 0.65 : 0.85);
+      head.setTexture(n % 2 ? "pinkbeam_fade" : "pinkbeam_move");
+    } });
+    this.time.delayedCall(120, () => {
+      const hit = this.add.image(x + Math.cos(aim) * len, y + Math.sin(aim) * len, "pinkbeam_hit").setOrigin(0.62, 0.5).setDepth(957).setBlendMode(add);
+      hit.setScale(0.4);
+      this.tweens.add({ targets: hit, scale: 0.9, alpha: 0, duration: 380, ease: "Quad.easeOut", onComplete: () => hit.destroy() });
+      this.cameras.main.shake(110, 0.005);
+    });
+    this.time.delayedCall(420, () => {
+      flicker.remove();
+      this.tweens.add({ targets: [beam, head], alpha: 0, scaleY: 0.2, duration: 160, onComplete: () => { beam.destroy(); head.destroy(); } });
+    });
+  }
+
   private playZoltrak(x: number, y: number, aim: number, len: number) {
     const cos = Math.cos(aim);
     const sin = Math.sin(aim);
@@ -3173,6 +3203,11 @@ export class GameScene extends Phaser.Scene {
       seen.add(id);
       const age = z.maxLife - z.life;
       const fade = Math.max(0, Math.min(1, age / 0.4, z.life / 0.6));
+      if (z.kind.startsWith("fxl:pinkbeam:") && !this.zoltraks.has(id)) {
+        this.zoltraks.add(id);
+        const [, , , angS, lenS, widthS] = z.kind.split(":");
+        this.playPinkBeam(z.x, z.y, Number(angS), Number(lenS), Number(widthS));
+      }
       if (z.kind.startsWith("fxl:zoltrak:") && !this.zoltraks.has(id)) {
         this.zoltraks.add(id);
         const [, , , angS, lenS] = z.kind.split(":");

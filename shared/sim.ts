@@ -1486,6 +1486,36 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
     };
   }
 
+  /**
+   * PURE LOVE with the Cursed Queen out: she fires the same beam too, from where she floats, at the same target
+   * (the first foe in his beam, or the end of it when it hit nobody).
+   */
+  private queenBeam(id: string, p: P, st: FxStep & { do: "lane" }, aim: number) {
+    const s = this.state;
+    const inLane = this.laneTest(p.x, p.y, aim, st.len, st.width);
+    const along = (x: number, y: number) => (x - p.x) * Math.cos(aim) + (y - p.y) * Math.sin(aim);
+    let target = { x: p.x + Math.cos(aim) * st.len, y: p.y + Math.sin(aim) * st.len };
+    let best = Infinity;
+    s.enemies.forEach((e) => {
+      if (ENEMIES[e.kind as EnemyKind].block || !inLane(e.x, e.y, this.er(e))) return;
+      const d = along(e.x, e.y);
+      if (d < best) [best, target] = [d, { x: e.x, y: e.y }];
+    });
+    s.players.forEach((v, vid) => {
+      if (v.dead || !this.isFoe(id, vid) || !inLane(v.x, v.y, this.pr(v))) return;
+      const d = along(v.x, v.y);
+      if (d < best) [best, target] = [d, { x: v.x, y: v.y - BODY_HEIGHT / 2 }];
+    });
+    s.players.forEach((q) => {
+      if (q.owner !== id || q.hero !== "rika" || q.dead) return;
+      const from = { x: q.x, y: q.y - 20 }; // from her chest, not her feet
+      const a = Math.atan2(target.y - from.y, target.x - from.x);
+      const len = Math.max(st.len, Math.hypot(target.x - from.x, target.y - from.y) + 20);
+      this.fxArea(id, this.laneTest(from.x, from.y, a, len, st.width), st, from, a);
+      this.fxLaneZone(id, "pinkbeam", st.color, from.x, from.y, a, len, st.width, 0.55);
+    });
+  }
+
   private fxLaneZone(owner: string, look: string, color: string, x: number, y: number, angle: number, len: number, width: number, life = 0.45) {
     this.addZone(`fxl:${look}:${color}:${angle.toFixed(3)}:${Math.round(len)}:${Math.round(width)}`, x, y, len, life, { owner, every: Infinity, damage: 0 });
   }
@@ -1538,6 +1568,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
         this.fxArea(id, this.laneTest(p.x, p.y, aim, st.len, st.width), st, { x: p.x, y: p.y }, aim);
         this.fxLaneZone(id, st.look ?? "beam", st.color, p.x, p.y, aim, st.len, st.width, 0.55);
         if (st.knock || st.dmg) this.cutBulletsInLane(id, p.x, p.y, aim, st.len, st.width);
+        if (st.look === "pinkbeam") this.queenBeam(id, p, st, aim);
         break;
       case "ring":
         if (st.look === "pull") {
