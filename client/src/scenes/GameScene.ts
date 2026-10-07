@@ -63,7 +63,8 @@ import type { HudScene } from "./HudScene";
 import { LocalRoom } from "../localRoom";
 import { drawFxAura, drawFxZone, fxBuffStep, fxGuide, fxShotTexture } from "../fx";
 import { Lobby } from "../lobby";
-import { drawClassicGround } from "../classicMap";
+import { drawClassicGround, drawRoyaleGround } from "../classicMap";
+import { ROYALE_MAP } from "../../../shared/royale";
 import { MAP_H, MAP_Y, classicMap, inBush, mapBlocksShot, seesInto } from "../../../shared/maps";
 import { RiftSim, TITAN_ATTACK_COOLDOWN } from "../../../shared/sim";
 import { WorldView } from "../worldView";
@@ -361,7 +362,11 @@ export class GameScene extends Phaser.Scene {
     const stage = stageOf(this.registry.get("stage"));
     const open = stage === "world" || stage === "dungeon";
     if (stage === "classic") this.classicGround = this.add.image(0, 0, this.classicTexture(0)).setOrigin(0).setDepth(-10);
-    else if (!open) this.add.image(0, 0, `ground_${stage}`).setOrigin(0).setDepth(-10);
+    else if (stage === "royale") {
+      if (!this.textures.exists("ground_royale")) this.textures.addCanvas("ground_royale", drawRoyaleGround(ROYALE_MAP));
+      this.add.image(0, 0, "ground_royale").setOrigin(0).setDepth(-10);
+      this.stormRing = this.add.graphics().setDepth(945);
+    } else if (!open) this.add.image(0, 0, `ground_${stage}`).setOrigin(0).setDepth(-10);
     if (stage === "dojo" || stage === "tutorial") {
       // Straw training dummies stand where the other stages have pillars.
       for (const rock of ROCKS) this.add.image(rock.x, rock.y + rock.r * 0.4, "dummy").setOrigin(0.5, 1).setScale(rock.r / 8).setDepth(rock.y);
@@ -396,12 +401,15 @@ export class GameScene extends Phaser.Scene {
     this.cameraTarget = this.add.zone(CENTER_X, CENTER_Y, 1, 1);
     const cam = this.cameras.main;
     if (stage === "classic") cam.setBounds(0, MAP_Y - 64, WORLD_W, MAP_H + 128); // room above and below for names and the HUD
-    else if (open) {
+    else if (stage === "royale") {
+      cam.setBounds(-60, -60, ROYALE_MAP.cols * BLOCK + 120, ROYALE_MAP.rows * BLOCK + 120);
+      cam.setBackgroundColor("#1a5a9a");
+    } else if (open) {
       const m = stage === "world" ? OPEN_WORLD : DUNGEON;
       cam.setBounds(0, 0, m.cols * BLOCK, m.rows * BLOCK);
       this.cameras.main.setBackgroundColor(stage === "world" ? "#2a6232" : "#09070c");
     } else cam.setBounds(0, 0, WORLD_W, WORLD_H);
-    cam.setZoom(stage === "classic" ? CLASSIC_ZOOM : stage === "world" ? WORLD_ZOOM : 2);
+    cam.setZoom(stage === "classic" || stage === "royale" ? CLASSIC_ZOOM : stage === "world" ? WORLD_ZOOM : 2);
     // Lock the camera to our hero; smoothing on top of rounded pixels makes sprites shimmer.
     cam.startFollow(this.cameraTarget, true, 1, 1);
     cam.setRoundPixels(true);
@@ -409,7 +417,7 @@ export class GameScene extends Phaser.Scene {
     if (this.registry.get("solo")) {
       this.room = new LocalRoom(this.registry.get("playerName"), this.registry.get("hero"), stage, this.registry.get("botHero"), statsJson());
       this.registry.set("room", this.room);
-      if (stage === "pve" || stage === "classic") this.openLobby(stage);
+      if (stage === "pve" || stage === "classic" || stage === "royale") this.openLobby(stage);
       if (open) this.openWorld(stage, false);
       if (stage === "tutorial") {
         const tut = new TutorialView(this, this.room, isTouchDevice(), (skipped) => this.game.events.emit("tutorial-done", skipped));
@@ -465,7 +473,7 @@ export class GameScene extends Phaser.Scene {
     const hero = me ? heroOf(me.hero).name : "";
     if (phase === "victory" && this.lastPhase !== "victory" && me) {
       const stage = state.stage as string;
-      const mode = stage === "pvp" ? "PvP" : stage === "duel" ? "Bot Duel" : stage === "pve" ? "Training" : stage === "classic" ? "3v3" : "";
+      const mode = stage === "pvp" ? "PvP" : stage === "duel" ? "Bot Duel" : stage === "pve" ? "Training" : stage === "classic" ? "3v3" : stage === "royale" ? "Royale" : "";
       let won: boolean | null = null;
       if (stage === "classic") won = state.winner === "NO" ? null : state.winner === (me.team === 1 ? "RED" : "BLUE");
       else if (stage === "pve") won = state.winner === "TEAM";
@@ -503,6 +511,7 @@ export class GameScene extends Phaser.Scene {
     const ratings = matchRatings(ps.map((p, i) => ({ won: won[i], kos: p.kos ?? 0, assists: p.assists ?? 0, falls: p.falls ?? 0, dealt: p.dealt ?? 0, taken: p.taken ?? 0 })));
     const side = (p: any, id: string, i: number): [number, string] => {
       if (state.stage === "classic") return [p.team, p.team === 1 ? "RED TEAM" : "BLUE TEAM"];
+      if (state.stage === "royale") return state.winner === p.name ? [1, "LAST ONE STANDING"] : [2, "ELIMINATED"];
       if (state.stage === "pve") return id === "bot" ? [2, "BOT"] : [1, "YOUR TEAM"];
       return [i + 1, p.name];
     };
@@ -533,7 +542,7 @@ export class GameScene extends Phaser.Scene {
         team: (team) => room.send("team", team),
         map: (map) => room.send("map", map),
       },
-      stage === "pve" ? "pve" : stage === "classic" ? "classic" : "pvp",
+      stage === "pve" ? "pve" : stage === "classic" ? "classic" : stage === "royale" ? "royale" : "pvp",
     );
     this.lobby = lobby;
     this.events.once(Phaser.Scenes.Events.DESTROY, () => lobby.destroy());
@@ -626,7 +635,7 @@ export class GameScene extends Phaser.Scene {
     this.syncBullets(state, dt);
     this.drawEffects(dt);
     this.drawAimGuide(state);
-    this.drawLava(state.lavaRadius);
+    this.drawLava(state.stage === "royale" ? 5000 : state.lavaRadius); // Battle Royale's ring is the storm, not lava
     this.drawZones(state, dt);
     this.world?.update(state);
     this.tutorial?.update(state);
@@ -860,6 +869,7 @@ export class GameScene extends Phaser.Scene {
         this.predicted.y += (me.y - this.predicted.y) * k;
       }
     }
+    this.drawStorm(state);
     // Out of lives: the camera follows a teammate who is still fighting (SPECTATE).
     const watched = this.spectate(state, me);
     const wv = watched ? this.players.get(watched) : undefined;
@@ -868,15 +878,33 @@ export class GameScene extends Phaser.Scene {
   }
 
   private specIndex = 0;
+  /** Battle Royale: the storm outside the ring. */
+  private stormRing?: Phaser.GameObjects.Graphics;
+
+  /** Battle Royale: everything outside the safe circle is storm (dark purple), with a glowing edge. */
+  private drawStorm(state: any) {
+    const g = this.stormRing;
+    if (!g) return;
+    g.clear();
+    const r = state.lavaRadius ?? 5000;
+    if (state.phase !== "fight" || r >= 3000) return;
+    const { x, y } = ROYALE_MAP.center;
+    const far = 2200;
+    g.lineStyle(far, 0x5a1a8a, 0.3).strokeCircle(x, y, r + far / 2);
+    const pulse = 0.6 + 0.4 * Math.sin(this.time.now / 160);
+    g.lineStyle(4, 0xd060ff, pulse).strokeCircle(x, y, r);
+    g.lineStyle(1, 0xffffff, 0.6 * pulse).strokeCircle(x, y, r - 3);
+  }
   private specBar?: HTMLDivElement;
 
   /** Classic 3v3 with no lives left: whom we watch (a living teammate), with a bar to switch between them. */
   private spectate(state: any, me: any): string | undefined {
-    const out = state.stage === "classic" && me && me.dead && !(me.lives > 0) && !me.late && state.phase === "fight";
+    const royale = state.stage === "royale";
+    const out = (state.stage === "classic" || royale) && me && me.dead && !(me.lives > 0) && !me.late && state.phase === "fight";
     const mates: string[] = [];
     if (out) {
       state.players.forEach((p: any, id: string) => {
-        if (!p.owner && !p.dead && p.team === me.team) mates.push(id);
+        if (!p.owner && !p.dead && (royale || p.team === me.team)) mates.push(id); // Battle Royale: watch anyone still in
       });
     }
     if (!mates.length) {
@@ -1021,7 +1049,7 @@ export class GameScene extends Phaser.Scene {
       // Heroes are drawn HERO_SCALE times their sprite; BIG LIGHT makes them bigger still.
       const k = HERO_SCALE * (p.big > 0 && !p.dead ? BIG_SCALE : 1);
       body.setDepth(body.y);
-      const out = p.dead && state.stage === "classic" && !(p.lives > 0); // Classic: out of lives, gone from the map
+      const out = p.dead && (state.stage === "classic" || state.stage === "royale") && !(p.lives > 0); // Classic: out of lives, gone from the map
       body.setAlpha(out ? 0 : p.dead ? 0.25 : p.dashing ? 0.6 : 1);
       // Other players' dashes: a burst where the dash began, pointing the way they went (ours plays on the key press).
       if (!isMe) {
@@ -1161,7 +1189,7 @@ export class GameScene extends Phaser.Scene {
       // Classic 3v3: tall grass hides a rival completely, unless we stand in the same patch of grass
       // (then it shows see-through); our own side shows faintly inside it.
       let bushed = false;
-      const grassMap = state.stage === "classic" ? classicMap(state.map ?? 0) : undefined;
+      const grassMap = state.stage === "classic" ? classicMap(state.map ?? 0) : state.stage === "royale" ? ROYALE_MAP : undefined;
       if (grassMap && !p.dead && inBush(grassMap, p.x, p.y)) {
         const mine = state.players.get(this.room!.sessionId);
         const team = p.owner ? state.players.get(p.owner)?.team : p.team;
@@ -1391,7 +1419,7 @@ export class GameScene extends Phaser.Scene {
       }
       view.bar.setDepth(999);
 
-      if (isMe && !p.dead && inLava(p.x, p.y, state.lavaRadius) && Math.random() < 0.15) {
+      if (isMe && !p.dead && state.stage !== "royale" && inLava(p.x, p.y, state.lavaRadius) && Math.random() < 0.15) {
         this.cameras.main.flash(80, 255, 80, 0, false);
       }
     });
@@ -2304,7 +2332,7 @@ export class GameScene extends Phaser.Scene {
     const y = this.predicted.y - 5 * HERO_SCALE;
     const aiming = this.aimingSkill();
     const skill = aiming === 2 ? hero.skill2 : aiming === 1 ? hero.skill : undefined;
-    this.guideMap = state.stage === "classic" ? classicMap(state.map ?? 0) : undefined;
+    this.guideMap = state.stage === "classic" ? classicMap(state.map ?? 0) : state.stage === "royale" ? ROYALE_MAP : undefined;
     this.drawFormWheel(skill?.kind === "omnitrix" ? me.hero : undefined, x, y);
     if (hero.skill2?.kind === "kunai" && me.mode > 0 && this.drawKunaiPick(g, state, x, y + 5)) return;
     if (skill?.kind === "mimic" || skill?.kind === "eater") {

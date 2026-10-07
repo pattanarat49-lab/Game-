@@ -113,6 +113,8 @@ const CSS = `
 #lobby.classic .col .side canvas { width: min(6vh, 6vw); }
 #lobby.classic .col .side .rates, #lobby.classic .col .side .cls { display: none; }
 #lobby.classic .col { gap: 0.6vh; }
+#lobby.royale .col .side canvas { width: min(4.2vh, 4.5vw); }
+#lobby.royale .col .side .hname { display: none; }
 `;
 
 interface Side {
@@ -150,6 +152,8 @@ export class Lobby {
   private setReady: (ready: boolean) => void;
   private pve: boolean;
   private classic: boolean;
+  /** Battle Royale: eight slots, no sides, no maps (shares the Classic layout). */
+  private royale: boolean;
   private mapButtons: HTMLButtonElement[] = [];
   private mapName?: HTMLElement;
   private joinButtons: HTMLButtonElement[] = [];
@@ -159,11 +163,12 @@ export class Lobby {
   /** PvE: tapping a hero picks it for the bot instead of for me. */
   private botMode = false;
 
-  constructor(private actions: LobbyActions, mode: "pvp" | "pve" | "classic" = "pvp") {
+  constructor(private actions: LobbyActions, mode: "pvp" | "pve" | "classic" | "royale" = "pvp") {
     this.pick = actions.pick;
     this.setReady = actions.setReady;
     this.pve = mode === "pve";
-    this.classic = mode === "classic";
+    this.royale = mode === "royale";
+    this.classic = mode === "classic" || this.royale;
     if (!document.getElementById("lobby-style")) {
       const style = document.createElement("style");
       style.id = "lobby-style";
@@ -173,8 +178,9 @@ export class Lobby {
     this.root = document.createElement("div");
     this.root.id = "lobby";
     this.root.hidden = true;
-    const sub = this.pve ? "TRAINING - 1 TO 4 PLAYERS VS BOT" : this.classic ? "CLASSIC 3V3 - RED VS BLUE" : "PVP ARENA - 1 VS 1";
+    const sub = this.pve ? "TRAINING - 1 TO 4 PLAYERS VS BOT" : this.royale ? "BATTLE ROYALE - 8 PLAYERS, LAST ONE STANDING" : this.classic ? "CLASSIC 3V3 - RED VS BLUE" : "PVP ARENA - 1 VS 1";
     if (this.classic) this.root.classList.add("classic");
+    if (this.royale) this.root.classList.add("royale");
     this.root.innerHTML = `<div class="title">PLAYER SELECT<small>${sub}</small></div><div class="row"></div><div class="bottom"></div>`;
     const row = this.root.querySelector(".row")!;
     // Class filter over the hero grid.
@@ -228,6 +234,15 @@ export class Lobby {
       const cols = [1, 2].map((team) => {
         const col = document.createElement("div");
         col.className = `col ${team === 1 ? "red" : "blue"}`;
+        if (this.royale) {
+          // Battle Royale: four slots down each side, filled in join order.
+          for (let i = 0; i < 4; i++) {
+            const side = this.side("", `P${(team - 1) * 4 + i + 1}`);
+            this.teamSlots[team].push(side);
+            col.append(side.root);
+          }
+          return col;
+        }
         const join = document.createElement("button");
         join.type = "button";
         join.className = `join ${team === 1 ? "red" : "blue"}`;
@@ -253,7 +268,9 @@ export class Lobby {
     this.readyBtn.addEventListener("click", () => this.setReady(!this.me?.ready));
     const hint = document.createElement("div");
     hint.className = "hint";
-    hint.textContent = this.classic
+    hint.textContent = this.royale
+      ? "Pick a hero, then READY. Empty slots are filled by bots. One life: the last hero standing wins."
+      : this.classic
       ? "Pick a side, a hero and a map, then READY. Empty slots are filled by bots."
       : this.pve
       ? "Pick a hero, then READY. Tap the BOT slot, then a hero, to choose who the bot plays."
@@ -293,7 +310,7 @@ export class Lobby {
     box.className = "botbox";
     const maps = document.createElement("div");
     maps.className = "maps";
-    CLASSIC_MAPS.forEach((m, i) => {
+    (this.royale ? [] : CLASSIC_MAPS).forEach((m, i) => {
       const b = document.createElement("button");
       b.type = "button";
       b.title = m.name;
@@ -343,7 +360,7 @@ export class Lobby {
   update(state: any, myId: string) {
     // Classic 3v3 late joiners pick their hero here too, while the match goes on.
     const late = !!state?.players?.get(myId)?.late;
-    const show = (state?.stage === "pvp" || state?.stage === "pve" || state?.stage === "classic") && !state.ranked && (state.phase === "select" || late);
+    const show = (state?.stage === "pvp" || state?.stage === "pve" || state?.stage === "classic" || state?.stage === "royale") && !state.ranked && (state.phase === "select" || late);
     this.root.hidden = !show;
     if (!show) return;
     if (this.pve) return this.updatePve(state, myId);
@@ -426,8 +443,10 @@ export class Lobby {
   /** Classic 3v3: Red's and Blue's players, the map and the bots' difficulty. */
   private updateClassic(state: any, myId: string) {
     const teams: Record<number, [string, any][]> = { 1: [], 2: [] };
+    let n = 0;
     state.players.forEach((p: any, id: string) => {
-      if (!p.owner && teams[p.team]) teams[p.team].push([id, p]);
+      if (this.royale && !p.owner) teams[n++ < 4 ? 1 : 2].push([id, p]);
+      else if (!this.royale && !p.owner && teams[p.team]) teams[p.team].push([id, p]);
     });
     const me = state.players.get(myId);
     this.me = me ? { hero: me.hero, ready: me.ready } : undefined;
@@ -438,11 +457,11 @@ export class Lobby {
         side.root.classList.toggle("you", id === myId);
         side.who.textContent = p ? `${p.name}${id === myId ? " (YOU)" : ""}` : "BOT (random)";
       });
-      this.joinButtons[team].disabled = me?.team === team || teams[team].length >= 3 || !!me?.ready;
+      if (this.joinButtons[team]) this.joinButtons[team].disabled = me?.team === team || teams[team].length >= 3 || !!me?.ready;
     }
     const map = state.map ?? 0;
     this.mapButtons.forEach((b, i) => b.classList.toggle("on", i === map));
-    if (this.mapName) this.mapName.textContent = CLASSIC_MAPS[map]?.name ?? "";
+    if (this.mapName) this.mapName.textContent = this.royale ? "ROYALE ISLAND" : CLASSIC_MAPS[map]?.name ?? "";
     this.levelButtons.forEach((b, i) => b.classList.toggle("on", i === (state.botLevel ?? 2)));
     for (const [id, tile] of this.tiles) {
       tile.classList.toggle("locked", !this.botMode && heroLocked(id));
@@ -464,7 +483,9 @@ export class Lobby {
       if (!p.owner && !p.ready) waiting++;
     });
     this.notice.textContent = me?.late
-      ? "Match in progress: pick a hero and press READY to take a bot's place"
+      ? this.royale
+        ? "Match in progress: pick a hero, you join the next one"
+        : "Match in progress: pick a hero and press READY to take a bot's place"
       : state.notice || (ready && waiting ? `Waiting for ${waiting} player${waiting > 1 ? "s" : ""} to get ready...` : "");
     this.mapButtons.forEach((b) => (b.disabled = !!me?.late));
   }

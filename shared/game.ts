@@ -1,6 +1,7 @@
 import { NEW_HEROES, NewHeroId, newHeroDefs } from "./heroes2";
 import { ClassicMap, classicMap, mapBlocksShot, moveOnMap } from "./maps";
 import { DUNGEON, OPEN_WORLD } from "./world";
+import { ROYALE_MAP } from "./royale";
 // Game rules shared by the client (prediction, rendering) and the server (authority).
 
 export const TILE = 16;
@@ -2136,7 +2137,7 @@ export const RING = { x: CENTER_X, y: CENTER_Y, half: 150 };
 
 /** Stages fought in the boxing ring (hero against hero). */
 export function ringStage(stage: string): boolean {
-  return stage === "pvp" || stage === "duel" || stage === "pve" || stage === "classic";
+  return stage === "pvp" || stage === "duel" || stage === "pve" || stage === "classic" || stage === "royale";
 }
 
 /** Where heroes can go on a stage: the open field (false), the boxing ring (true) or a Classic map. */
@@ -2144,6 +2145,7 @@ export type Area = boolean | ClassicMap;
 export function areaOf(stage: string, map = 0): Area {
   if (stage === "world") return OPEN_WORLD;
   if (stage === "dungeon") return DUNGEON;
+  if (stage === "royale") return ROYALE_MAP;
   return stage === "classic" ? classicMap(map) : ringStage(stage);
 }
 
@@ -2161,7 +2163,7 @@ export const ASSIST_WINDOW = 6;
 
 /** Stages that open on the player select screen. */
 export function selectStage(stage: string): boolean {
-  return stage === "pvp" || stage === "pve" || stage === "classic";
+  return stage === "pvp" || stage === "pve" || stage === "classic" || stage === "royale";
 }
 
 /** PvE Squad bot difficulty, Easy to Nightmare. Hard is the Bot Duel bot as it always was. */
@@ -2221,7 +2223,7 @@ export function inLava(x: number, y: number, lavaRadius: number): boolean {
 }
 
 // Stages
-export type StageId = "lava" | "jungle" | "dojo" | "boss" | "pvp" | "duel" | "pve" | "classic" | "world" | "dungeon" | "tutorial";
+export type StageId = "lava" | "jungle" | "dojo" | "boss" | "pvp" | "duel" | "pve" | "classic" | "royale" | "world" | "dungeon" | "tutorial";
 
 export interface StageDef {
   name: string;
@@ -2239,6 +2241,7 @@ export const STAGES: Record<StageId, StageDef> = {
   world: { name: "Open World", blurb: "Meet everyone in a big meadow village: chat, look up players, ask for duels, and take the portal to the dungeon together." },
   tutorial: { name: "Tutorial", blurb: "Learn to move, attack, use skills and dash on training dummies." },
   dungeon: { name: "Dungeon", blurb: "Rooms full of monsters and a boss at the end. Beat it and the way back opens." },
+  royale: { name: "Battle Royale", blurb: "8 heroes on a big round island with tall grass and cover. One life each, the last one standing wins. The storm ring closes in when the fight drags on. Bots fill empty slots. Solo or online." },
   classic: { name: "Classic 3v3", blurb: "Red vs Blue, 3 heroes a side, on 6 maps with walls, tall grass and water. Bots fill empty slots. 3 lives each; the last team standing wins. Solo or online." },
 };
 

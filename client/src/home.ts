@@ -356,6 +356,7 @@ export class Home {
       { title: "PvP ARENA", tag: "1 VS 1 · ONLINE", text: "Fight another player in the boxing ring. First to 3 knockouts wins.", online: "pvp" },
       { title: "TRAINING", tag: "UP TO 4 PLAYERS VS BOT", text: "Team up with friends against one strong bot. Pick its hero and difficulty.", solo: "pve", online: "pve" },
       { title: "CLASSIC 3v3", tag: "RED VS BLUE", text: "3 heroes a side on maps with walls, tall grass and water. Bots fill empty slots. 3 lives each.", solo: "classic", online: "classic" },
+      { title: "BATTLE ROYALE", tag: "8 PLAYERS · LAST ONE STANDING", text: "A big round island with tall grass and cover. One life each. The storm ring closes in when the fight drags on.", solo: "royale", online: "royale" },
     ];
     const grid = document.createElement("div");
     grid.className = "hm-modes";

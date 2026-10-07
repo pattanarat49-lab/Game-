@@ -1,5 +1,6 @@
 import { accountForToken, accountProfile, accountStats, addRankPoints, ownedHeroes } from "./accounts";
 import { Client, Room } from "colyseus";
+import { ROYALE_PLAYERS } from "../../shared/royale";
 import { CLASSIC_TEAM_SIZE, MAX_PLAYERS, PlayerInput, RANKED_CODE, masteryLevel, matchRatings, rankDelta, stageOf } from "../../shared/game";
 import { RiftSim, TICK_MS, newRoomCode } from "../../shared/sim";
 import { WORLD_MAX_PLAYERS } from "../../shared/world";
@@ -48,6 +49,7 @@ export class RiftRoom extends Room<RiftState> {
     this.onMessage("duelans", (client, ans: { from?: string; ok?: boolean }) => this.answerDuel(client, String(ans?.from ?? ""), !!ans?.ok));
     if (this.state.stage === "pvp") this.maxClients = 2; // the PvP Arena is a 1v1
     if (this.state.stage === "classic") this.maxClients = CLASSIC_TEAM_SIZE * 2;
+    if (this.state.stage === "royale") this.maxClients = ROYALE_PLAYERS;
     if (this.state.stage === "world") this.maxClients = WORLD_MAX_PLAYERS;
     // ~30 updates a second so other players and enemies move smoothly.
     this.setPatchRate(TICK_MS);

@@ -33,21 +33,21 @@ function shade(hex: string, f: number): string {
 }
 
 /** Draws the map's blocks onto `ctx` with its top-left corner at (ox, oy), `b` pixels per block. */
-export function paintMap(ctx: CanvasRenderingContext2D, m: ClassicMap, ox: number, oy: number, b: number) {
+export function paintMap(ctx: CanvasRenderingContext2D, m: ClassicMap, ox: number, oy: number, b: number, spawnRings = true) {
   const t = m.theme;
   const rand = seeded(91);
-  const at = (c: number, r: number) => (c < 0 || r < 0 || c >= MAP_COLS_C || r >= MAP_ROWS_C ? -1 : m.tiles[r * MAP_COLS_C + c]);
+  const at = (c: number, r: number) => (c < 0 || r < 0 || c >= m.cols || r >= m.rows ? -1 : m.tiles[r * m.cols + c]);
   const px = Math.max(1, Math.round(b / 10)); // one "art pixel"
-  for (let r = 0; r < MAP_ROWS_C; r++) {
-    for (let c = 0; c < MAP_COLS_C; c++) {
+  for (let r = 0; r < m.rows; r++) {
+    for (let c = 0; c < m.cols; c++) {
       const x = ox + c * b;
       const y = oy + r * b;
       ctx.fillStyle = (c + r) % 2 ? t.floor2 : t.floor;
       ctx.fillRect(x, y, b, b);
     }
   }
-  // Spawn circles.
-  for (const [team, color] of [[1, "#ff4a5a"], [2, "#3a9aff"]] as const) {
+  // Spawn circles (Classic only).
+  for (const [team, color] of spawnRings ? ([[1, "#ff4a5a"], [2, "#3a9aff"]] as const) : []) {
     for (const s of m.spawns[team]) {
       const cx = ox + ((s.x - MAP_X) / BLOCK) * b;
       const cy = oy + ((s.y - MAP_Y) / BLOCK) * b;
@@ -64,8 +64,8 @@ export function paintMap(ctx: CanvasRenderingContext2D, m: ClassicMap, ox: numbe
       ctx.stroke();
     }
   }
-  for (let r = 0; r < MAP_ROWS_C; r++) {
-    for (let c = 0; c < MAP_COLS_C; c++) {
+  for (let r = 0; r < m.rows; r++) {
+    for (let c = 0; c < m.cols; c++) {
       const tile = at(c, r);
       const x = ox + c * b;
       const y = oy + r * b;
@@ -155,5 +155,41 @@ export function drawMapThumb(m: ClassicMap, b = 3): HTMLCanvasElement {
   canvas.width = MAP_COLS_C * b;
   canvas.height = MAP_ROWS_C * b;
   paintMap(canvas.getContext("2d")!, m, 0, 0, b);
+  return canvas;
+}
+
+/** Battle Royale: the whole island at full size (the sea round it is part of the map). */
+export function drawRoyaleGround(m: ClassicMap): HTMLCanvasElement {
+  const canvas = document.createElement("canvas");
+  canvas.width = m.cols * BLOCK;
+  canvas.height = m.rows * BLOCK;
+  const ctx = canvas.getContext("2d")!;
+  paintMap(ctx, m, 0, 0, BLOCK, false);
+  // Sand along the shore: floor blocks next to the sea get a lighter, speckled edge.
+  const at = (c: number, r: number) => (c < 0 || r < 0 || c >= m.cols || r >= m.rows ? T_WATER : m.tiles[r * m.cols + c]);
+  const rand = seeded(5);
+  for (let r = 0; r < m.rows; r++)
+    for (let c = 0; c < m.cols; c++) {
+      if (at(c, r) === T_WATER) continue;
+      let shore = false;
+      for (let dr = -2; dr <= 2 && !shore; dr++) for (let dc = -2; dc <= 2; dc++) if (Math.hypot(dc, dr) <= 2.2 && at(c + dc, r + dr) === T_WATER && Math.hypot(c + dc - m.cols / 2, r + dr - m.rows / 2) > m.cols / 2 - 6) shore = true;
+      if (!shore || at(c, r) !== 0) continue;
+      ctx.fillStyle = (c + r) % 2 ? "#ead9a0" : "#e2d096";
+      ctx.fillRect(c * BLOCK, r * BLOCK, BLOCK, BLOCK);
+      ctx.fillStyle = "#c8b47a";
+      for (let i = 0; i < 3; i++) ctx.fillRect(c * BLOCK + Math.floor(rand() * (BLOCK - 2)), r * BLOCK + Math.floor(rand() * (BLOCK - 2)), 2, 2);
+    }
+  // Foam where the sea meets the island.
+  ctx.fillStyle = "rgba(255,255,255,0.55)";
+  for (let r = 0; r < m.rows; r++)
+    for (let c = 0; c < m.cols; c++) {
+      if (at(c, r) !== T_WATER) continue;
+      const x = c * BLOCK;
+      const y = r * BLOCK;
+      if (at(c, r - 1) !== T_WATER) ctx.fillRect(x, y + 2, BLOCK, 2);
+      if (at(c, r + 1) !== T_WATER) ctx.fillRect(x, y + BLOCK - 4, BLOCK, 2);
+      if (at(c - 1, r) !== T_WATER) ctx.fillRect(x + 2, y, 2, BLOCK);
+      if (at(c + 1, r) !== T_WATER) ctx.fillRect(x + BLOCK - 4, y, 2, BLOCK);
+    }
   return canvas;
 }

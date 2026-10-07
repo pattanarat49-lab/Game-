@@ -96,6 +96,7 @@ import {
   aimPickScore,
 } from "./game";
 import { DUNGEON, OPEN_WORLD, PORTAL_COUNTDOWN, PORTAL_RADIUS } from "./world";
+import { ROYALE_MAP, ROYALE_PLAYERS, ROYALE_SIGHT, ROYALE_BURN, royaleRadius } from "./royale";
 import { BLOCK, CLASSIC_MAPS, ClassicMap, MAP_X, MAP_Y, Team, bushPatches, classicMap, distanceField, seesInto, mapLineClear, stepAlong } from "./maps";
 
 export const TICK_MS = 1000 / 30;
@@ -770,10 +771,20 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
     return ringStage(this.state.stage);
   }
 
-  /** Classic 3v3 is fought on a map with walls, not in the ring. */
+  /** Classic 3v3 (and Battle Royale) is fought on a map with walls, not in the ring. */
   private get classic() {
-    return this.state.stage === "classic";
+    return this.state.stage === "classic" || this.state.stage === "royale";
   }
+
+  /** Battle Royale: everyone for themselves (each hero is its own team), one life, a closing storm ring. */
+  private get royale() {
+    return this.state.stage === "royale";
+  }
+  /** Battle Royale: seconds since the fight began (for the storm ring). */
+  private royaleClock = 0;
+  private royaleTick = 0;
+  /** Battle Royale: the walking distance to the middle of the island, for bots fleeing the storm. */
+  private royaleField?: Int16Array;
 
   /** Where heroes can move: the field, the ring's ropes, or the Classic map's walls and water. */
   private get area() {
@@ -816,7 +827,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       this.state.players.forEach((q, qid) => {
         if (!q.owner && qid !== id && !this.brains.get(qid)?.bot) real[q.team] = (real[q.team] ?? 0) + 1;
       });
-      player.team = real[1] <= real[2] ? 1 : 2;
+      player.team = this.royale ? this.openTeam() : real[1] <= real[2] ? 1 : 2;
       player.late = true;
       player.dead = true;
       player.lives = 0;
@@ -828,7 +839,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
   /** Classic 3v3: a late joiner takes over a bot on their side (its lives and spot), or the other side's if theirs has none. */
   private joinLate(id: string) {
     const p = this.state.players.get(id);
-    if (!p || !p.late) return;
+    if (!p || !p.late || this.royale) return; // Battle Royale: wait for the next match
     let bot: string | undefined;
     for (const team of [p.team, 3 - p.team]) {
       this.state.players.forEach((q, qid) => {
@@ -871,6 +882,9 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
   /** Classic 3v3: the side with fewer players (Red first). */
   private openTeam(): number {
     const n = this.teamCounts();
+    if (this.royale) {
+      for (let t = 1; t <= 255; t++) if (!n[t]) return t;
+    }
     return n[1] <= n[2] ? 1 : 2;
   }
 
@@ -886,7 +900,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
   /** Classic 3v3 player select: switch sides while there is room on the other one. */
   setTeam(id: string, team: number) {
     const p = this.state.players.get(id);
-    if (!this.classic || !p || p.owner || this.state.phase !== "select" || (team !== 1 && team !== 2) || p.team === team) return;
+    if (!this.classic || this.royale || !p || p.owner || this.state.phase !== "select" || (team !== 1 && team !== 2) || p.team === team) return;
     if (this.teamCounts()[team] >= CLASSIC_TEAM_SIZE) return;
     p.team = team;
     p.ready = false;
@@ -894,7 +908,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
 
   /** Classic 3v3 player select: pick the map. */
   setMap(map: number) {
-    if (this.classic && this.state.phase === "select" && Number.isInteger(map) && map >= 0 && map < CLASSIC_MAPS.length) this.state.map = map;
+    if (this.classic && !this.royale && this.state.phase === "select" && Number.isInteger(map) && map >= 0 && map < CLASSIC_MAPS.length) this.state.map = map;
   }
 
   /** PvE Squad player select: anyone can change the bot's hero and difficulty. */
@@ -1207,7 +1221,20 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       const brain = this.brains.get(id);
       if (brain) brain.target = undefined;
     });
-    if (this.classic) {
+    if (this.royale) {
+      // Battle Royale: bots fill the island up to eight, each on its own; one life each.
+      s.scoreA = s.scoreB = 0;
+      let k = 0;
+      for (let n = this.realPlayerCount(); n < ROYALE_PLAYERS; n++) {
+        this.addBot(HERO_IDS[Math.floor(Math.random() * HERO_IDS.length)], `bot${++k}`, s.botLevel); // its own team (addPlayer)
+      }
+      s.players.forEach((p) => {
+        p.lives = 1;
+        if (!p.owner) this.placeAtSpawn(p);
+      });
+      this.royaleClock = 0;
+      s.lavaRadius = ROYALE_MAP.radius;
+    } else if (this.classic) {
       // Classic 3v3: bots playing random heroes fill the empty slots on both sides.
       s.scoreA = s.scoreB = 0;
       s.players.forEach((p) => (p.lives = CLASSIC_LIVES));
@@ -2301,6 +2328,8 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
     } else if (s.phase === "intermission") {
       s.phaseTimer -= dt;
       if (s.phaseTimer <= 0) s.phase = "fight";
+    } else if (s.phase === "fight" && this.royale) {
+      this.updateRoyale(dt);
     } else if (s.phase === "victory") {
       s.phaseTimer -= dt;
       if (s.phaseTimer <= 0) {
@@ -5067,7 +5096,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
 
   /** Classic 3v3 FINAL STAND: the last hero standing on a side, on their last life, gets +50% HP and damage. */
   private updateStands() {
-    if (!this.classic || !this.pvpLive()) return;
+    if (!this.classic || this.royale || !this.pvpLive()) return;
     for (const team of [1, 2]) {
       const left: P[] = [];
       this.state.players.forEach((q) => {
@@ -5094,6 +5123,11 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
   private classicKnockout(fallen: P, killer?: P) {
     const s = this.state;
     if (killer && killer.team !== fallen.team) killer.score++;
+    if (this.royale) {
+      fallen.lives = 0;
+      this.royaleCheck();
+      return;
+    }
     if (fallen.team === 1) s.scoreB++;
     else s.scoreA++;
     fallen.lives = Math.max(0, fallen.lives - 1);
@@ -5107,6 +5141,39 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       s.phaseTimer = 8;
       s.winner = standing[1] ? "RED" : standing[2] ? "BLUE" : "NO";
     } else this.updateStands();
+  }
+
+  /** Battle Royale: one hero (or nobody) left standing ends the match. */
+  private royaleCheck() {
+    const s = this.state;
+    if (!this.pvpLive()) return;
+    const standing: P[] = [];
+    s.players.forEach((p) => {
+      if (!p.owner && !p.late && !p.dead) standing.push(p);
+    });
+    if (standing.length > 1) return;
+    s.phase = "victory";
+    s.phaseTimer = 8;
+    s.winner = standing[0]?.name ?? "NO";
+  }
+
+  /** Battle Royale: the storm ring closes in once the fight has gone on a while; outside it, heroes burn. */
+  private updateRoyale(dt: number) {
+    const s = this.state;
+    this.royaleClock += dt;
+    s.phaseTimer = this.royaleClock; // the HUD counts down to the storm from this
+    s.lavaRadius = royaleRadius(this.royaleClock);
+    this.royaleTick += dt;
+    if (this.royaleTick >= 0.5) {
+      this.royaleTick -= 0.5;
+      const { x, y } = ROYALE_MAP.center;
+      const burn: [string, P][] = [];
+      s.players.forEach((p, id) => {
+        if (!p.dead && Math.hypot(p.x - x, p.y - y) > s.lavaRadius) burn.push([id, p]);
+      });
+      for (const [id, p] of burn) this.damagePlayer(id, p.maxHp * ROYALE_BURN, true, undefined, true, true);
+    }
+    this.royaleCheck();
   }
 
   /** PvE Squad: someone fell. The round goes to the team when the bot is down, to the bot when every player is. */
@@ -5162,6 +5229,20 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       const r = Math.random() * 40;
       const at = this.move(spot.x, spot.y, Math.cos(a) * r, Math.sin(a) * r, PLAYER_RADIUS);
       [p.x, p.y] = [at.x, at.y];
+      p.warp = (p.warp + 1) % 256;
+      return;
+    }
+    if (this.royale) {
+      // Battle Royale: eight spots round the island, in join order.
+      let mine = 0;
+      let n = 0;
+      this.state.players.forEach((q) => {
+        if (q.owner) return;
+        if (q === p) mine = n;
+        n++;
+      });
+      const spot = ROYALE_MAP.spawns[1][mine % ROYALE_MAP.spawns[1].length];
+      [p.x, p.y] = [spot.x, spot.y];
       p.warp = (p.warp + 1) % 256;
       return;
     }
@@ -5957,13 +6038,31 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
     const input: PlayerInput = { ...EMPTY_INPUT, aim: p.aim };
     let foe: P | undefined;
     let dist = Infinity;
-    const map = this.classic ? classicMap(this.state.map) : undefined;
+    const map = this.classic ? (this.area as ClassicMap) : undefined;
     this.state.players.forEach((v, vid) => {
       if (v.dead || !this.isFoe(id, vid) || this.hidden(v, id)) return;
       const d = Math.hypot(v.x - p.x, v.y - p.y);
+      if (this.royale && d > ROYALE_SIGHT) return; // the island is big: only rivals close by
       if (map && !seesInto(map, p.x, p.y, v.x, v.y)) return; // Classic: no seeing into tall grass (unless in the same patch)
       if (d < dist) [dist, foe] = [d, v];
     });
+    if (this.royale && !p.dead && this.pvpLive()) {
+      // Battle Royale: caught outside the storm ring (or about to be), head for the middle first.
+      const c = ROYALE_MAP.center;
+      if (Math.hypot(p.x - c.x, p.y - c.y) > this.state.lavaRadius - BLOCK * 2) {
+        const step = stepAlong((this.royaleField ??= distanceField(ROYALE_MAP, c.x, c.y)), p.x, p.y, ROYALE_MAP);
+        input.left = step.x < -0.3;
+        input.right = step.x > 0.3;
+        input.up = step.y < -0.3;
+        input.down = step.y > 0.3;
+        if (foe && dist < 220) {
+          input.aim = Math.atan2(foe.y - p.y, foe.x - p.x);
+          input.shoot = true;
+        } else if (step.x || step.y) input.aim = Math.atan2(step.y, step.x);
+        brain.input = input;
+        return;
+      }
+    }
     if (map && foe) [bot.lastSeen, bot.search] = [{ x: foe.x, y: foe.y }, undefined];
     if (map && !foe && !p.dead && this.pvpLive()) {
       // Classic: nobody in sight. Go where a rival was last seen, then search the tall grass patch by patch.
@@ -6048,8 +6147,10 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       if (Math.hypot(seen.x - p.x, seen.y - p.y) > BLOCK) return seen;
     }
     const options: { x: number; y: number; patch: number; d: number }[] = [];
+    const ring = ROYALE_MAP.center;
     bushPatches(map).forEach((tiles, patch) => {
       if (this.clock - (bot.checked?.get(patch) ?? -Infinity) < 20) return;
+      if (this.royale && Math.hypot(tiles[0].x - ring.x, tiles[0].y - ring.y) > this.state.lavaRadius - BLOCK * 3) return; // not out in the storm
       let best = tiles[0];
       for (const t of tiles) if (Math.hypot(t.x - p.x, t.y - p.y) < Math.hypot(best.x - p.x, best.y - p.y)) best = t;
       // Step a little into the patch, not just onto its edge.
@@ -6060,6 +6161,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
     const pick = options[Math.floor(Math.random() * Math.min(3, options.length))];
     if (pick) return pick;
     bot.checked?.clear();
+    if (this.royale) return ROYALE_MAP.center;
     return classicMap(this.state.map).spawns[p.team === 1 ? 2 : 1][1];
   }
 

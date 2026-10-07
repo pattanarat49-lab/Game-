@@ -1,4 +1,5 @@
 import Phaser from "phaser";
+import { ROYALE_MAP, ROYALE_SAFE_TIME, ROYALE_SHRINK_TIME } from "../../../shared/royale";
 import { BOT_LEVELS, CLASSIC_LIVES, DASH_COOLDOWN, PVP_KILLS_TO_WIN, WAVE_COUNT, heroOf, ringStage } from "../../../shared/game";
 import { PLAYER_COATS } from "../art";
 import type { GameScene } from "./GameScene";
@@ -129,6 +130,26 @@ export class HudScene extends Phaser.Scene {
       });
       banner = me?.dead ? `YOU FELL\nBack at the entrance in ${Math.ceil(me.respawnIn)}` : "";
       this.special.setText(String(state.notice ?? "").startsWith("BOSS DEFEATED") ? "BOSS DEFEATED!\nThe portal home is open by the stairs" : "").setColor("#9ad8ff");
+    } else if (state.stage === "royale") {
+      // Battle Royale: how many are left, and when the storm comes.
+      let alive = 0;
+      let all = 0;
+      state.players.forEach((p: any) => {
+        if (p.owner || p.late) return;
+        all++;
+        if (!p.dead) alive++;
+      });
+      const t = state.phase === "fight" ? state.phaseTimer : 0;
+      const storm = t < ROYALE_SAFE_TIME ? `STORM IN ${Math.ceil(ROYALE_SAFE_TIME - t)}s` : t < ROYALE_SAFE_TIME + ROYALE_SHRINK_TIME ? "STORM CLOSING IN!" : "FINAL CIRCLE";
+      this.waveText.setText(`BATTLE ROYALE  ${alive}/${all} ALIVE  ${state.phase === "fight" ? storm : ""}`);
+      const outside = me && !me.dead && state.phase === "fight" && Math.hypot(me.x - ROYALE_MAP.center.x, me.y - ROYALE_MAP.center.y) > state.lavaRadius;
+      if (state.phase === "victory") banner = state.winner === "NO" ? `NO ONE SURVIVED!
+Back to select in ${Math.ceil(state.phaseTimer)}` : `${state.winner === me?.name ? "#1 VICTORY ROYALE!" : `${state.winner} WINS!`}
+Back to select in ${Math.ceil(state.phaseTimer)}`;
+      else if (state.phase === "intermission") banner = `LAST ONE STANDING WINS
+FIGHT! in ${Math.ceil(state.phaseTimer)}`;
+      else if (me?.dead) banner = `ELIMINATED  #${alive + 1}\nWatching the others`;
+      else if (outside) banner = "IN THE STORM!\nGet inside the circle";
     } else if (state.stage === "classic") {
       // Classic 3v3: the two teams' KOs.
       // Classic 3v3: lives left on each side; the last team standing wins.
@@ -241,7 +262,7 @@ export class HudScene extends Phaser.Scene {
       rows.push(`${marker}${side}${p.name}  ${p.score}${ringStage(state.stage) ? " KO" : ""}`);
     });
     const shown = rows.length > 8 ? [...rows.slice(0, 8), `  +${rows.length - 8} more`] : rows;
-    this.scores.setText(`UNTITLED VERSUS ${count}${state.stage === "world" ? "" : `/${state.stage === "classic" ? 6 : 4}`}\n${shown.join("\n")}`);
+    this.scores.setText(`UNTITLED VERSUS ${count}${state.stage === "world" ? "" : `/${state.stage === "classic" ? 6 : state.stage === "royale" ? 8 : 4}`}\n${shown.join("\n")}`);
     let i = 0;
     state.players.forEach((p: any) => {
       if (p.owner) return;
