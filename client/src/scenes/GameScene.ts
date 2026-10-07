@@ -872,10 +872,10 @@ export class GameScene extends Phaser.Scene {
         const held = HELD_WITH_ART[p.hero];
         const left = Math.cos(aim) < 0;
         if (held) {
-          // Held in both hands and turned to the aim; behind the body when aiming up.
+          // Held in both hands, turned to the aim, always drawn in front of the body.
           view.weapon.setOrigin(held.ox, left ? 1 - held.oy : held.oy);
           view.weapon.setPosition(body.x, body.y - held.hands * (2 / 3) * k + bob).setScale(held.scale * k);
-          view.weapon.setDepth(body.y + (Math.sin(aim) < -0.35 ? -0.5 : 0.5));
+          view.weapon.setDepth(body.y + 0.5);
         } else {
           view.weapon.setPosition(body.x, body.y - 5 * k + bob).setScale(k);
           view.weapon.setDepth(body.y + 0.5);

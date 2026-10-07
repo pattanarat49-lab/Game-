@@ -1673,7 +1673,7 @@ export const DAMAGE_BALANCE: Partial<Record<HeroId, number>> = {
   vampire: 0.72,
   gojo: 1.99,
   rider: 1.22,
-  simo: 0.6,
+  simo: 0.72, // +20% on user request 2026-10-07
   rick: 2.52,
   okita: 1.31,
   deku: 2.52,
