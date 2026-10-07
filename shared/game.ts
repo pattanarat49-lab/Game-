@@ -27,11 +27,13 @@ export const BIG_SLOW = 0.5;
 /** Walking speed of heroes, summons and monsters, times their listed speed. */
 export const MOVE_SCALE = 0.8;
 /** Flying speed of every shot (heroes' and monsters'), times its listed speed; shots live longer to keep their reach. */
-export const SHOT_SPEED_SCALE = 0.55;
+export const SHOT_SPEED_SCALE = 0.55 * 1.2; // x1.2 for every shot (user request 2026-10-07)
 /** Heroes' own shots fly slower still (user request 2026-10-05), with the same reach. */
 export const HERO_SHOT_SCALE = 0.75;
 /** Every hero walks at the same pace (user request 2026-10-05); only the Speed Raptor and the motorcycle go faster. */
 export const HERO_WALK = 90;
+/** Every hero (and anything walking on hero speed) moves this much faster (user request 2026-10-07). */
+export const HERO_SPEED_BOOST = 1.2;
 export const DASH_SPEED = 340;
 export const DASH_TIME = 0.15;
 // Knockback for skills that throw foes back (basic attacks no longer knock back, user request 2026-10-06). Bosses don't budge.
@@ -2118,7 +2120,7 @@ export function heroSpeed(p: { hero: string; big: number; active2?: number; buff
   if (hero.skill2?.kind === "yoyo" && p.mode === 1) bike *= 1.3; // YOYO MODE: lighter on his feet
   if (hero.skill.kind === "deathnote" && (p.buff ?? 0) > 0) bike *= 0.2; // NAME WRITTEN: writing, barely moving
   const slowed = (p.slow ?? 0) > 0 ? 1 - ((p.slowPct ?? 0) > 0 ? p.slowPct! : 1 - BURN_SLOW) : 1;
-  return base * (hero.walk ?? 1) * (p.big > 0 ? BIG_SLOW : 1) * slowed * bike;
+  return base * HERO_SPEED_BOOST * (hero.walk ?? 1) * (p.big > 0 ? BIG_SLOW : 1) * slowed * bike;
 }
 
 /** The boxing ring the PvP Arena and Bot Duel are fought in: a small square with no cover. */
