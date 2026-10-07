@@ -359,6 +359,8 @@ export interface HeroDef {
   turret?: boolean;
   /** Stacks kept in `mode`, shown under the skill cooldowns: their name and how many at most. */
   stacks?: { label: string; max?: number };
+  /** Lane basic attacks (lineAttack) that also cut down hostile shots in the lane (Poseidon's trident). */
+  laneParry?: boolean;
   /** An alien form of this hero (ALIEN TRANSFORM): not on the hero select screen; turns back when the time runs out. */
   formOf?: HeroId;
   /** Melee knockback, times a normal one. */

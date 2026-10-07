@@ -995,8 +995,9 @@ const ROSTER = {
       { do: "ring", radius: 70, look: "vortex", color: "3a8cff" },
     ]],
     ["WATER JET", 3, "dashes far ahead until a wall or an obstacle stops him, hitting every foe on the way; hitting a foe resets WAVE CRASH.", [
-      { do: "dash", len: 380, width: 30, quiet: true, color: "3a8cff", dmg: 25, resetSkill1: true },
-    ]]),
+      { do: "dash", len: 380, width: 30, color: "3a8cff", dmg: 25, resetSkill1: true },
+    ]],
+    { laneParry: true }),
 } satisfies Record<string, Entry>;
 
 /** Tuning results (DAMAGE_BALANCE, win %, stars) per hero, filled in from the bot duels. */

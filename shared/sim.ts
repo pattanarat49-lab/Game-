@@ -2404,8 +2404,9 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
           brain.attackTimer = hero.sword.attackCooldown;
           this.sweep(id, p.x, p.y, input.aim, hero.sword.range, hero.sword.arc, hero.sword.damage, "cut");
         } else if (hero.lineAttack) {
-          // A straight kick down a lane.
+          // A straight kick down a lane (Poseidon's trident also cuts down the shots in it).
           this.lineHit(id, p.x, p.y, input.aim, hero.range, hero.lineAttack, hero.damage, 0, 0);
+          if (hero.laneParry) this.cutBulletsInLane(id, p.x, p.y, input.aim, hero.range, hero.lineAttack + 10);
         } else if (hero.attack === "rifle") {
           this.spawnBullet("snipe", p.x, p.y, input.aim, hero.shotSpeed, { owner: id, damage: hero.damage, pierce: hero.pierce, life: hero.range / hero.shotSpeed });
         } else if (hero.attack === "magic" && hero.skill.kind === "boost") {
