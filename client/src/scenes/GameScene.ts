@@ -303,6 +303,8 @@ export class GameScene extends Phaser.Scene {
   private zoneFloor!: Phaser.GameObjects.Graphics;
   private zoneSky!: Phaser.GameObjects.Graphics;
   private zoneImages = new Map<string, Phaser.GameObjects.Image>();
+  /** ZOLTRAAK casts already played (zone ids), so each plays once. */
+  private zoltraks = new Set<string>();
   private zoneTexts = new Map<string, Phaser.GameObjects.Text>(); // countdowns over zones (the Trojan Horse)
   private wasTimeStopped = false;
   private classicGround?: Phaser.GameObjects.Image;
@@ -2170,6 +2172,60 @@ export class GameScene extends Phaser.Scene {
     this.playFrames("swordslash", 3, 60, x, y, aim, 40 / 114, 60 / 117, reach / 72, Math.cos(aim) < 0);
   }
 
+  /**
+   * Frieren's ZOLTRAAK, from the user's sheet (art/props/zoltrak_*.png, all drawn pointing right):
+   * a magic circle opens at the staff, the beam shoots out with its ring and arrowhead, a starburst hits
+   * the far end, then sparkles and a fading ring are left behind.
+   */
+  private playZoltrak(x: number, y: number, aim: number, len: number) {
+    const cos = Math.cos(aim);
+    const sin = Math.sin(aim);
+    const flip = cos < 0;
+    const at = (d: number) => ({ x: x + cos * d, y: y + sin * d });
+    const img = (key: string, d: number, ox: number, oy: number, scale = 1) => {
+      const p = at(d);
+      return this.add.image(p.x, p.y, key).setOrigin(ox, oy).setRotation(aim).setFlipY(flip).setScale(scale).setDepth(955);
+    };
+    // 1. The magic circle opens in front of the staff.
+    const circle = img("zoltrak_circle", 14, 10 / 21, 19 / 40, 0.2);
+    this.tweens.add({ targets: circle, scale: 1.3, duration: 110, ease: "Back.easeOut" });
+    // 2. Release: the circle flares and the beam starts.
+    this.time.delayedCall(130, () => {
+      circle.destroy();
+      const release = img("zoltrak_f3", 4, 0, 19 / 38, 1.3);
+      this.time.delayedCall(80, () => release.destroy());
+    });
+    // 3. The beam shoots out to full length, flickering between its two frames.
+    this.time.delayedCall(210, () => {
+      const beam = img("zoltrak_beam", 6, 0, 16.5 / 34);
+      const full = (len - 6) / 127;
+      beam.setScale(full * 0.25, 1.3);
+      this.tweens.add({ targets: beam, scaleX: full, duration: 110, ease: "Quad.easeOut" });
+      let n = 0;
+      const flicker = this.time.addEvent({ delay: 55, repeat: 5, callback: () => {
+        n++;
+        beam.setTexture(n % 2 ? "zoltrak_f5" : "zoltrak_beam");
+        beam.setScale(n % 2 ? (len - 6) / 120 : full, 1.3);
+      } });
+      this.time.delayedCall(330, () => {
+        flicker.remove();
+        this.tweens.add({ targets: beam, alpha: 0, scaleY: 0.3, duration: 120, onComplete: () => beam.destroy() });
+      });
+    });
+    // 4. Starburst where it hits.
+    this.time.delayedCall(320, () => {
+      const burst = img("zoltrak_burst", len, 73 / 114, 37 / 77, 0.5);
+      this.tweens.add({ targets: burst, scale: 1.15, duration: 120, ease: "Back.easeOut" });
+      this.cameras.main.shake(120, 0.006);
+      this.time.delayedCall(260, () => {
+        burst.destroy();
+        // 5. Sparkles and the ring fade away.
+        const fade = img("zoltrak_fade", len, 68 / 85, 30 / 58);
+        this.tweens.add({ targets: fade, alpha: 0, delay: 250, duration: 450, ease: "Quad.easeIn", onComplete: () => fade.destroy() });
+      });
+    });
+  }
+
   /** The normal dash: a burst left where the dash began, its point along `angle` and its trail behind. */
   /** A small puff of dust kicked up by a foot landing. */
   private walkDust(x: number, y: number, px: number) {
@@ -2863,6 +2919,11 @@ export class GameScene extends Phaser.Scene {
       seen.add(id);
       const age = z.maxLife - z.life;
       const fade = Math.max(0, Math.min(1, age / 0.4, z.life / 0.6));
+      if (z.kind.startsWith("fxl:zoltrak:") && !this.zoltraks.has(id)) {
+        this.zoltraks.add(id);
+        const [, , , angS, lenS] = z.kind.split(":");
+        this.playZoltrak(z.x, z.y, Number(angS), Number(lenS));
+      }
       if (drawFxZone(floor, sky, z, now)) return;
       if (this.drawNewZone(state, floor, sky, z, now, fade)) return;
       if (z.kind === "domain") {
@@ -3406,6 +3467,7 @@ export class GameScene extends Phaser.Scene {
       img.destroy();
       this.zoneImages.delete(id);
     }
+    for (const id of this.zoltraks) if (!seen.has(id)) this.zoltraks.delete(id);
     for (const [id, label] of this.zoneTexts) {
       if (seen.has(id)) continue;
       label.destroy();

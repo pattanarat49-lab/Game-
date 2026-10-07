@@ -124,6 +124,10 @@ export function drawFxZone(floor: G, sky: G, z: any, now: number): boolean {
         }
         break;
       }
+      case "zoltrak":
+        // The picture frames are played by GameScene.playZoltrak; this is only a soft glow under them.
+        lane(w * 1.6, c, 0.12 * t);
+        break;
       case "bolt":
         sky.lineStyle(5, c, 0.35 * t);
         jagged(sky, z.x, z.y, ex, ey, 18);

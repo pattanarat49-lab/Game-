@@ -755,8 +755,8 @@ const ROSTER = {
       { do: "heal", pct: 0.1, radius: 120, color: "ffa0d0" },
     ]]),
   frieren: hero("mage", "Elf Mage", "Thousand-year elf", 95, shoot(orb("e0e0ff"), 26, 0.65, 260), "Magic bolts.",
-    ["ZOLTRAAK", 6, "the killing magic: a thin white beam.", [
-      { do: "lane", len: 280, width: 14, look: "beam", color: "e8f0ff", dmg: 70 },
+    ["ZOLTRAAK", 6, "the killing magic: a magic circle fires a violet beam.", [
+      { do: "lane", len: 280, width: 14, look: "zoltrak", color: "b8a0ff", dmg: 70 },
     ]],
     ["FLOWER FIELD", 13, "a field of mana flowers around her for 4s: hurts foes and heals friends.", [
       { do: "field", at: "self", radius: 100, life: 4, tick: 0.5, look: "petals", color: "b0d0ff", dmg: 8, heal: 0.04 },
