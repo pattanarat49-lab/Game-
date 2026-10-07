@@ -1560,7 +1560,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
         this.fxArea(id, inCone, st, { x: p.x, y: p.y });
         if (st.reflect) this.reflectInCone(id, p, aim, st.range, st.arc);
         else this.cutBullets(id, p.x, p.y, aim, st.range, st.arc);
-        this.addZone(`fxc:${st.color}:${aim.toFixed(3)}:${st.arc.toFixed(3)}`, p.x, p.y, st.range, 0.35, { owner: id, every: Infinity, damage: 0 });
+        this.addZone(`fxc:${st.color}:${aim.toFixed(3)}:${st.arc.toFixed(3)}${st.look ? `:${st.look}` : ""}`, p.x, p.y, st.range, 0.35, { owner: id, every: Infinity, damage: 0 });
         break;
       }
       case "shots": {

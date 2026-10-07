@@ -125,12 +125,12 @@ const ROSTER = {
       { do: "buff", dur: 3, armor: 0.7, color: "8a00ff" },
     ]]),
   mihawk: hero("carry", "Hawkeye Swordsman", "World's best blade", 100, blade(37.5, 0.6, 44, 1.4), "Long black-blade swings.",
-    ["BLACK BLADE WAVE", 6, "a huge green flying cut that passes through everything in its way.", [
-      { do: "shots", n: 1, spread: 0, speed: 450, range: 320, pierce: 9, shape: "blade", size: 28, hitSize: 24, color: "40ff60", dmg: 225 },
+    ["BLACK BLADE WAVE", 6, "a huge crimson flying cut that passes through everything in its way.", [
+      { do: "shots", n: 1, spread: 0, speed: 450, range: 320, pierce: 9, shape: "hawkwave", size: 28, hitSize: 24, color: "ff3050", dmg: 225 },
     ]],
     ["CROSS CUT", 10, "two wide sweeping cuts, one after the other, that send shots back the way they came; the second one stuns.", [
-      { do: "cone", range: 90, arc: 2.8, reflect: true, color: "e0ffe0", dmg: 65 },
-      { do: "cone", wait: 0.25, range: 90, arc: 2.8, reflect: true, color: "40ff60", dmg: 65, stun: 0.6 },
+      { do: "cone", range: 90, arc: 2.8, reflect: true, color: "ff6080", dmg: 65, look: "hawkcut1" },
+      { do: "cone", wait: 0.25, range: 90, arc: 2.8, reflect: true, color: "ff3050", dmg: 65, stun: 0.6, look: "hawkcut2" },
     ]]),
   sukuna: hero("fighter", "Cursed King", "King of curses", 105, { ...punch(30), knock: 0 }, "Cursed punches (no knockback).",
     // DOMAIN EXPANSION: `damage` = how much harder he hits inside; `radius` = how far the target can be.

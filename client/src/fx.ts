@@ -236,7 +236,8 @@ export function drawFxZone(floor: G, sky: G, z: any, now: number): boolean {
     return true;
   }
   if (head === "fxc") {
-    const [, col, angS, arcS] = parts;
+    const [, col, angS, arcS, look] = parts;
+    if (look?.startsWith("hawkcut")) return true; // the swordsman's cuts are the user's frames, played by the scene
     const c = fxColor(col);
     const a = Number(angS);
     const arc = Number(arcS);

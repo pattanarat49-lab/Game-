@@ -296,8 +296,8 @@ export type FxStep = { wait?: number; times?: number; gap?: number; color: strin
   | { do: "blink"; to: "behind" | "aim" | "start"; range: number }
   | ({ do: "lane"; len: number; width: number; look?: "beam" | "slash" | "wave" | "chain" | "bolt" | "zoltrak" } & FxHit)
   | ({ do: "ring"; radius: number; look?: "burst" | "shock" | "petal" | "spin" | "pull" } & FxHit)
-  | ({ do: "cone"; range: number; arc: number; reflect?: boolean } & FxHit)
-  | ({ do: "shots"; n: number; spread: number; speed: number; range: number; pierce?: number; shape?: "orb" | "blade" | "star" | "spike" | "roach"; size?: number; home?: boolean; hitSize?: number; bounce?: number; split?: { n: number; range: number; speed: number; shape: "orb" | "blade" | "star" | "spike" | "roach"; size: number; color: string } & FxHit } & FxHit)
+  | ({ do: "cone"; range: number; arc: number; reflect?: boolean; look?: "hawkcut1" | "hawkcut2" } & FxHit)
+  | ({ do: "shots"; n: number; spread: number; speed: number; range: number; pierce?: number; shape?: "orb" | "blade" | "star" | "spike" | "roach" | "hawkwave"; size?: number; home?: boolean; hitSize?: number; bounce?: number; split?: { n: number; range: number; speed: number; shape: "orb" | "blade" | "star" | "spike" | "roach"; size: number; color: string } & FxHit } & FxHit)
   | ({ do: "drop"; at: FxAt; delay: number; radius: number; spots?: number; look?: "meteor" | "pillar" | "bolt" | "fist" | "blade" | "skull" } & FxHit)
   | ({ do: "field"; at: FxAt; follow?: boolean; radius: number; life: number; tick: number; heal?: number; cage?: boolean; fog?: boolean; look?: "storm" | "mist" | "flames" | "sand" | "petals" | "dark" | "ice" | "light" | "water" | "web" | "fog" | "flowerbed" } & FxHit)
   | ({ do: "push"; len: number; width: number; speed: number; wallStun: number; carrySelf?: boolean } & FxHit)

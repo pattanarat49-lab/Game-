@@ -2236,6 +2236,22 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
+  /** Play a list of effect frames once (glowing: added on top of what is under them). */
+  private playFrameList(keys: string[], delay: number, x: number, y: number, angle: number, originX: number, originY: number, scale: number, flip: boolean) {
+    const img = this.add.image(x, y, keys[0]).setOrigin(originX, originY).setRotation(angle).setScale(scale).setFlipY(flip).setDepth(955);
+    img.setBlendMode(Phaser.BlendModes.ADD);
+    let frame = 0;
+    this.time.addEvent({
+      delay,
+      repeat: keys.length - 1,
+      callback: () => {
+        frame++;
+        if (frame >= keys.length) img.destroy();
+        else img.setTexture(keys[frame]);
+      },
+    });
+  }
+
   /** DAGGER RUSH, from `x,y` along `aim` for `len`. In the frames the dash starts at (40, 58) and its streak runs 206px. */
   private playDaggerDash(x: number, y: number, aim: number, len: number) {
     this.playFrames("daggerdash", 12, 70, x, y, aim, 40 / 246, 58 / 100, len / 206, Math.cos(aim) < 0);
@@ -3171,6 +3187,16 @@ export class GameScene extends Phaser.Scene {
         const full = Math.max(1, Math.round(((z.radius * 2.1) / img.width) * 2) / 2);
         img.setPosition(z.x, z.y).setScale(full * (0.7 + 0.3 * Math.min(1, age / 0.25))).setAlpha(fade);
       }
+      if (z.kind.startsWith("fxc:") && z.kind.includes(":hawkcut") && !this.zoltraks.has(id)) {
+        // CROSS CUT: the user's red sword-cut frames, the first cut (0-3) then the cross (4-7), in front of him.
+        this.zoltraks.add(id);
+        const [, , angS, , look] = z.kind.split(":");
+        const a = Number(angS);
+        const first = look === "hawkcut1" ? 0 : 4;
+        const keys = [0, 1, 2, 3].map((i) => `hawkcut_${first + i}`);
+        const scale = (z.radius * 1.15) / this.textures.get(keys[0]).getSourceImage().width;
+        this.playFrameList(keys, 55, z.x + Math.cos(a) * z.radius * 0.45, z.y - 6 + Math.sin(a) * z.radius * 0.45, a, 0.5, 0.5, scale, Math.cos(a) < 0);
+      }
       if (drawFxZone(floor, sky, z, now)) return;
       if (this.drawNewZone(state, floor, sky, z, now, fade)) return;
       if (z.kind === "domain") {
@@ -3728,7 +3754,8 @@ export class GameScene extends Phaser.Scene {
       seen.add(id);
       let sprite = this.bullets.get(id);
       if (!sprite) {
-        const texture = b.kind.startsWith("fxo:") ? fxShotTexture(this, b.kind) : b.kind.startsWith("note:") ? this.noteTexture(b.kind) : b.kind.startsWith("card") ? b.kind : BULLET_TEXTURE[b.kind] ?? "snipe";
+        const hawk = b.kind.startsWith("fxo:hawkwave");
+        const texture = hawk ? "hawkwave_3" : b.kind.startsWith("fxo:") ? fxShotTexture(this, b.kind) : b.kind.startsWith("note:") ? this.noteTexture(b.kind) : b.kind.startsWith("card") ? b.kind : BULLET_TEXTURE[b.kind] ?? "snipe";
         sprite = this.add.image(b.x, b.y, texture).setDepth(900).setData("kind", b.kind);
         if (b.kind === "wave" || b.kind === "snipe" || b.kind === "bullet" || b.kind === "slash" || b.kind === "godslash" || b.kind === "laser" || b.kind === "knife") sprite.setRotation(Math.atan2(b.vy, b.vx));
         if (b.kind.startsWith("card")) sprite.setScale(1.3);
@@ -3746,6 +3773,12 @@ export class GameScene extends Phaser.Scene {
         if (b.kind === "bluebolt") sprite.setScale(1.3);
         if (b.kind.startsWith("fxo:blade") || b.kind.startsWith("fxo:spike") || b.kind.startsWith("fxo:roach")) sprite.setRotation(Math.atan2(b.vy, b.vx));
         if (b.kind.startsWith("note:")) sprite.setScale(1.2);
+        if (hawk) {
+          // BLACK BLADE WAVE: the user's crimson thrust, launched with its wind-up frames where it leaves the blade.
+          const a = Math.atan2(b.vy, b.vx);
+          sprite.setRotation(a).setScale(0.3).setOrigin(0.75, 0.5).setBlendMode(Phaser.BlendModes.ADD);
+          this.playFrameList(["hawkwave_0", "hawkwave_1", "hawkwave_2"], 60, b.x, b.y, a, 0.15, 0.5, 0.45, false);
+        }
         this.bullets.set(id, sprite);
       }
       // Bullets fly in straight lines, so extrapolate locally and drift toward the server.
