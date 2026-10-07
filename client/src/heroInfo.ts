@@ -81,6 +81,7 @@ function skillNumbers(id: string, hero: HeroDef, sk: SkillDef): string {
     case "slashes": return `8 cuts · Damage ${D(sk.damage)} each`;
     case "timestop": return `Lasts ${s(sk.duration, 4)}`;
     case "hurricane": return `Damage ${D(sk.damage)} every 0.35s · Lasts ${s(sk.duration, 3.5)}`;
+    case "mimic": return `Looks like the picked hero for ${s(sk.duration, 10)}`;
     case "asgard": return `Foes lose ${num(sk.damage * 100 * bal * HERO_DAMAGE_SCALE)}% of max HP a second · Lasts ${s(sk.duration, 10)}`;
     case "clone": return `Lasts ${s(sk.duration, 20)} · Up to 2`;
     case "swap": return `Gun damage ${D(hero.gun?.damage ?? 0)} per shot`;

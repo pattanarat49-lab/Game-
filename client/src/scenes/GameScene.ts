@@ -52,6 +52,7 @@ import {
   alienForms,
   formAngle,
   formFromAim,
+  aimPickScore,
 } from "../../../shared/game";
 import type { HudScene } from "./HudScene";
 import { LocalRoom } from "../localRoom";
@@ -1537,6 +1538,9 @@ export class GameScene extends Phaser.Scene {
       case "domain":
         cam.flash(250, 120, 60, 200);
         break;
+      case "mimic":
+        this.sparks.explode(16, x, y);
+        break;
       case "hurricane":
       case "asgard":
         cam.shake(150, 0.006);
@@ -2095,6 +2099,8 @@ export class GameScene extends Phaser.Scene {
     this.chargeLabel?.setVisible(false);
     const g = this.aimGuide;
     g.clear();
+    this.mimicGlow ??= this.add.graphics().setDepth(900);
+    this.mimicGlow.clear();
     this.drawFormWheel(undefined, 0, 0);
     const me = state.players.get(this.room!.sessionId);
     if (!me || me.dead) return;
@@ -2106,6 +2112,10 @@ export class GameScene extends Phaser.Scene {
     this.guideMap = state.stage === "classic" ? classicMap(state.map ?? 0) : undefined;
     this.drawFormWheel(skill?.kind === "omnitrix" ? me.hero : undefined, x, y);
     if (hero.skill2?.kind === "kunai" && me.mode > 0 && this.drawKunaiPick(g, state, x, y + 5)) return;
+    if (skill?.kind === "mimic") {
+      this.drawMimicPick(this.mimicGlow, state, skill.radius);
+      return;
+    }
     if (skill) {
       this.drawSkillGuide(g, skill, hero.range, x, y);
       if (isChargeSkill(skill) && this.charging2) this.drawChargeGauge(g, x, y);
@@ -2128,6 +2138,34 @@ export class GameScene extends Phaser.Scene {
       g.arc(x, y, hero.range, this.aim - hero.arc / 2, this.aim + hero.arc / 2);
       g.strokePath();
     }
+  }
+
+  /** ILLUSION held: a faint red light falls from the sky onto the hero the aim picks (the one he will look like). */
+  private drawMimicPick(g: Phaser.GameObjects.Graphics, state: any, range: number) {
+    const myId = this.room!.sessionId;
+    const px = this.predicted.x;
+    const py = this.predicted.y;
+    let best = Infinity;
+    let pick: { x: number; y: number } | undefined;
+    state.players.forEach((q: any, qid: string) => {
+      if (qid === myId || q.dead || q.owner || q.vanish > 0 || q.domain > 0) return;
+      const view = this.players.get(qid);
+      if (view && !view.body.visible) return;
+      if (Math.hypot(q.x - px, q.y - py) > range) return;
+      const score = aimPickScore(q.x - px, q.y - py, this.aim);
+      if (score === undefined || score >= best) return;
+      best = score;
+      pick = view ? { x: view.body.x, y: view.body.y } : { x: q.x, y: q.y };
+    });
+    if (!pick) return;
+    const top = this.cameras.main.worldView.y - 20;
+    const pulse = 0.75 + 0.25 * Math.sin(this.time.now / 160);
+    // The beam: a wide soft glow with a brighter core, narrowing a little as it reaches the ground.
+    g.fillStyle(0xff2a2a, 0.1 * pulse).fillTriangle(pick.x - 22, top, pick.x + 22, top, pick.x, pick.y + 2);
+    g.fillStyle(0xff2a2a, 0.1 * pulse).fillRect(pick.x - 13, top, 26, pick.y - top);
+    g.fillStyle(0xff6060, 0.14 * pulse).fillRect(pick.x - 5, top, 10, pick.y - top);
+    g.fillStyle(0xff3a3a, 0.28 * pulse).fillEllipse(pick.x, pick.y, 34, 11);
+    g.lineStyle(1, 0xff8080, 0.5 * pulse).strokeEllipse(pick.x, pick.y, 34, 11);
   }
 
   /** ALIEN TRANSFORM held: the aliens on a wheel around the hero; the one aimed at lights up. */
@@ -2174,6 +2212,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private chargeLabel?: Phaser.GameObjects.Text;
+  private mimicGlow?: Phaser.GameObjects.Graphics;
   private seenParry = new Set<string>();
   private enemyHp = new Map<string, number>();
   private popups: { text: Phaser.GameObjects.Text; life: number; vx: number }[] = [];

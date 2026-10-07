@@ -86,6 +86,7 @@ import {
   HERO_DAMAGE_SCALE,
   CLASSIC_RESPAWN,
   CLASSIC_TEAM_SIZE,
+  aimPickScore,
 } from "./game";
 import { DUNGEON, OPEN_WORLD, PORTAL_COUNTDOWN, PORTAL_RADIUS } from "./world";
 import { BLOCK, CLASSIC_MAPS, ClassicMap, MAP_X, MAP_Y, Team, bushPatches, classicMap, distanceField, seesInto, mapLineClear, stepAlong } from "./maps";
@@ -2512,17 +2513,8 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
     const s = this.state;
     p.silence = Math.max(0, p.silence - dt);
     if (p.slow <= 0) p.slowPct = 0;
-    if (p.hero === "loki") {
-      // The Trickster always looks like one of his rivals to them (the client draws him so).
-      let look = "";
-      s.players.forEach((q, qid) => {
-        if (!look && !q.owner && !q.dead && this.isFoe(id, qid)) look = qid;
-      });
-      if (!look) s.players.forEach((q, qid) => {
-        if (!look && !q.owner && this.isFoe(id, qid)) look = qid;
-      });
-      p.disguise = look;
-    }
+    // ILLUSION: the Trickster looks like the hero he copied until it runs out (or that hero is gone).
+    if (p.hero === "loki" && !p.owner && p.disguise && (p.buff <= 0 || !s.players.has(p.disguise))) p.disguise = "";
     if (hero.skill.kind !== "latch") p.latch = Math.max(0, p.latch - dt); // carried along by a push or an axe
     if (fxBuffs(p).some((b) => b.ccImmune)) {
       // Sword dance: nothing holds him.
@@ -2808,10 +2800,8 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       if (q.dead || !ok(qid, q)) return;
       const d = Math.hypot(q.x - p.x, q.y - p.y);
       if (d > range) return;
-      let diff = Math.atan2(q.y - p.y, q.x - p.x) - p.aim;
-      diff = Math.abs(Math.atan2(Math.sin(diff), Math.cos(diff)));
-      const score = diff * 200 + d * 0.15; // mostly the angle, a little the distance
-      if (diff < 1.2 && score < best) [best, pick] = [score, qid];
+      const score = aimPickScore(q.x - p.x, q.y - p.y, p.aim);
+      if (score !== undefined && score < best) [best, pick] = [score, qid];
     });
     return pick;
   }
@@ -3326,6 +3316,18 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
         const x = Math.min(this.W - 20, Math.max(20, p.x + Math.cos(p.aim) * 120));
         const y = Math.min(this.H - 20, Math.max(20, p.y + Math.sin(p.aim) * 120));
         this.addZone("hurricane", x, y, skill.radius, skill.duration ?? 3.5, { owner: id, every: 0.35, damage: skill.damage });
+        break;
+      }
+      case "mimic": {
+        // ILLUSION: copy the look of the hero the aim picks (friend or foe).
+        const pick = this.pickByAim(id, p, skill.radius, (qid, q) => qid !== id && !q.owner && !(q.vanish > 0) && !(q.domain > 0) && !this.hidden(q, id));
+        if (!pick) {
+          p.skillCooldown = Math.min(p.skillCooldown, 0.5);
+          break;
+        }
+        p.disguise = pick;
+        p.buff = skill.duration ?? 10;
+        this.addZone("fx:puff:ff4040", p.x, p.y, 20, 0.45, { owner: id, every: Infinity, damage: 0 });
         break;
       }
       case "asgard":
@@ -5955,6 +5957,8 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
         return dist < 200;
       case "omnitrix":
         return dist < 220;
+      case "mimic":
+        return dist < 400;
       case "dragonform":
         return dist < 240;
       case "mitosis":

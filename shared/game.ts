@@ -124,6 +124,7 @@ export type SkillKind =
   | "timestop" // everything but the caster freezes
   | "hurricane" // a storm cloud that keeps striking an area
   | "asgard" // an illusion kingdom that drains enemies standing in it
+  | "mimic" // ILLUSION: takes on the look of the hero the aim picks (within `radius`) for `duration` s
   | "clone" // a copy that fights on its own
   | "passive" // no button: the hero's power is always on
   | "rush" // dash through enemies, cutting everything on the way
@@ -271,6 +272,16 @@ export interface FxHit {
   silence?: number;
   /** Goes straight through armour, shields and immortality (ZOLTRAAK). */
   ignoreArmor?: boolean;
+}
+
+/**
+ * The hero a drag-picked skill (SWAP, ILLUSION) takes: nearest the line of the aim, mostly by angle, a little by distance.
+ * Shared so the client can light up the same hero the server will pick.
+ */
+export function aimPickScore(dx: number, dy: number, aim: number): number | undefined {
+  let diff = Math.atan2(dy, dx) - aim;
+  diff = Math.abs(Math.atan2(Math.sin(diff), Math.cos(diff)));
+  return diff < 1.2 ? diff * 200 + Math.hypot(dx, dy) * 0.15 : undefined;
 }
 
 /** Where a "drop" or "field" goes: this far ahead along the aim, on the caster ("self"), or on the nearest foe ("target"). */
@@ -688,7 +699,7 @@ const BASE_HEROES: Record<BaseHeroId, HeroDef> = {
   loki: {
     name: "Trickster",
     role: "Trickster god",
-    blurb: "Magic shots. ILLUSION raises a golden city for 10s (enemies inside lose a share of their HP every second). CLONE makes a copy that fights, and nobody can tell which one is real. Rivals always see him looking like one of their own side.",
+    blurb: "Magic shots. ILLUSION: hold to pick any hero (a faint red light falls on it), let go and for 10s he looks just like it to his rivals. CLONE makes a copy that fights, and nobody can tell which one is real.",
     stars: 5,
     maxHp: 120,
     speed: 110,
@@ -701,7 +712,8 @@ const BASE_HEROES: Record<BaseHeroId, HeroDef> = {
     shotSpeed: 260,
     pierce: 0,
     shot: "loki",
-    skill: { kind: "asgard", name: "ILLUSION", cooldown: 22, damage: 0.07, radius: 230, duration: 10 },
+    // ILLUSION (user request 2026-10-07): hold to pick a hero (a faint red light falls on it), let go to look just like it.
+    skill: { kind: "mimic", name: "ILLUSION", cooldown: 22, damage: 0, radius: 600, duration: 10 },
     // CLONE: an exact copy (same name, HP and look) that fights on its own for `duration` seconds.
     skill2: { kind: "clone", name: "CLONE", cooldown: 12, damage: 0.25, radius: 0, duration: 20 },
   },
