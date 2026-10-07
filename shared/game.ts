@@ -885,9 +885,9 @@ const BASE_HEROES: Record<BaseHeroId, HeroDef> = {
     shotSpeed: 0,
     pierce: 0,
     // THUNDER DASH: dashes `radius`, cutting a lane `width` wide; a hit opens a second dash for `duration` seconds.
-    skill: { kind: "thunderdash", name: "THUNDER DASH", cooldown: 6, damage: 40, radius: 150, width: 26, duration: 2 },
+    skill: { kind: "thunderdash", name: "THUNDER DASH", cooldown: 6, damage: 52, radius: 150, width: 26, duration: 2 },
     // SEVENTH FORM: dashes `radius` cutting a lane `width` wide; the lane crackles for `duration` seconds.
-    skill2: { kind: "seventh", name: "SEVENTH FORM", cooldown: 12, damage: 60, radius: 230, width: 70, duration: 3 },
+    skill2: { kind: "seventh", name: "SEVENTH FORM", cooldown: 12, damage: 78, radius: 230, width: 70, duration: 3 },
   },
   theworld: {
     name: "Time Emperor",
