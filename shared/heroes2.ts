@@ -659,7 +659,7 @@ const ROSTER = {
       { do: "drop", at: "target", delay: 0.6, radius: 60, look: "pillar", color: "a080ff", dmg: 60, stun: 1 },
     ]],
     ["100%", 15, "hits 100%: a psychic explosion throws everything away, then 60% harder hits for 3s.", [
-      { do: "ring", radius: 140, look: "shock", color: "e0e0ff", dmg: 30, knock: 3 },
+      { do: "ring", radius: 140, look: "psychic", color: "c060ff", dmg: 30, knock: 3 },
       { do: "buff", dur: 3, dmg: 1.6, armor: 0.7, color: "e0e0ff" },
     ]]),
   reigen: hero("support", "Fake Psychic", "Great psychic (not)", 95, punch(22), "Slaps.",

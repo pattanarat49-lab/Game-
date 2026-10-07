@@ -167,6 +167,10 @@ export function drawFxZone(floor: G, sky: G, z: any, now: number): boolean {
     const r = z.radius;
     const grow = 1 - t;
     switch (look) {
+      case "psychic":
+        // 100%: the user's explosion frames do the show (GameScene); just a faint purple floor here.
+        floor.fillStyle(c, 0.12 * t).fillCircle(z.x, z.y, r);
+        break;
       case "shock":
         for (let i = 0; i < 3; i++) {
           const k = Math.min(1, grow * 1.3 + i * 0.15);

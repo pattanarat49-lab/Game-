@@ -3223,6 +3223,13 @@ export class GameScene extends Phaser.Scene {
         const full = Math.max(1, Math.round(((z.radius * 2.1) / img.width) * 2) / 2);
         img.setPosition(z.x, z.y).setScale(full * (0.7 + 0.3 * Math.min(1, age / 0.25))).setAlpha(fade);
       }
+      if (z.kind.startsWith("fx:psychic:") && !this.zoltraks.has(id)) {
+        // 100%: the user's psychic explosion frames, the burst built up round him, then the flash and the dust.
+        this.zoltraks.add(id);
+        const keys = [...Array(10).keys()].map((i) => `mob100_${i}`);
+        this.playFrameList(keys, 75, z.x, z.y - 10, 0, 0.5, 0.62, (z.radius * 2.6) / 300, false);
+        this.time.delayedCall(75 * 7, () => this.cameras.main.shake(180, 0.006));
+      }
       if (z.kind.startsWith("fxc:") && z.kind.includes(":hawkcut") && !this.zoltraks.has(id)) {
         // CROSS CUT: the user's red sword-cut frames, the first cut (0-3) then the cross (4-7), in front of him.
         this.zoltraks.add(id);
