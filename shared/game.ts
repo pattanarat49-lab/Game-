@@ -359,6 +359,8 @@ export interface HeroDef {
   turret?: boolean;
   /** Stacks kept in `mode`, shown under the skill cooldowns: their name and how many at most. */
   stacks?: { label: string; max?: number };
+  /** No skills yet (Pen Blade): the skill buttons are hidden and Q does nothing. */
+  noSkills?: boolean;
   /** Lane basic attacks (lineAttack) that also cut down hostile shots in the lane (Poseidon's trident). */
   laneParry?: boolean;
   /** An alien form of this hero (ALIEN TRANSFORM): not on the hero select screen; turns back when the time runs out. */

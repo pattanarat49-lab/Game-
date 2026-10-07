@@ -70,6 +70,8 @@ export class TouchControls {
   readonly attackButton: Button;
   /** ADVANCE attack mode: the sword is a joystick. Otherwise attacks aim themselves (GameScene.autoAim). */
   readonly advanced = attackMode() === "advance";
+  /** A hero with no skills yet (Pen Blade): no skill button at all. */
+  private noSkill = false;
   /** Last aim angle, kept after the aim stick is released. */
   aimAngle = 0;
   /** How far the skill knob (or aim stick) is pushed, 0-1: placed skills land that far out in their circle. */
@@ -92,6 +94,7 @@ export class TouchControls {
     skill2Name?: string,
   ) {
     scene.input.addPointer(3); // up to 4 fingers at once
+    this.noSkill = !skillName;
     const { width, height } = scene.scale;
     const button = (x: number, y: number, r: number, label: string): Button => ({ x, y, r, label, pointerId: null, dragX: 0, dragY: 0, castUntil: 0, overCancel: false });
     // DEFAULT mode's sword button is 1.5x bigger (user request), so it sits lower right and the skills move up.
@@ -155,6 +158,7 @@ export class TouchControls {
   }
 
   private get buttons(): Button[] {
+    if (this.noSkill) return this.skill2Button ? [this.skill2Button] : [];
     return this.skill2Button ? [this.skillButton, this.skill2Button] : [this.skillButton];
   }
 
@@ -320,7 +324,7 @@ export class TouchControls {
       g.fillStyle(held.overCancel ? 0xd83a3a : 0x2a2028, held.overCancel ? 0.9 : 0.6).fillCircle(c.x, c.y, c.r);
       g.lineStyle(2, held.overCancel ? 0xffffff : 0xd83a3a, 0.9).strokeCircle(c.x, c.y, c.r);
     }
-    const buttons: [Button, number][] = [[this.skillButton, skillReady]];
+    const buttons: [Button, number][] = this.noSkill ? [] : [[this.skillButton, skillReady]];
     if (this.skill2Button) buttons.push([this.skill2Button, skill2Ready]);
     for (const [b, ready] of buttons) {
       const pressed = b.pointerId !== null;

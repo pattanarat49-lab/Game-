@@ -87,6 +87,7 @@ function hero(cls: HeroClass, name: string, role: string, maxHp: number, basic: 
 }
 
 /** Queen's Bond's CURSED QUEEN: calls out the big curse (HP = this share of his max HP) for `duration`. */
+const NO_SKILL: SkillDef = { kind: "passive", name: "NO SKILL YET", cooldown: 1, damage: 0, radius: 0, desc: "no skill yet: everything is in his sword." };
 const DOGS_SKILL: SkillDef = { kind: "summon", name: "DIVINE DOGS", cooldown: 12, damage: 0.4, radius: 0, count: 1, duration: 10, pet: "whitewolf" as SkillDef["pet"], pet2: "blackwolf" as SkillDef["pet"], desc: "calls a white and a black shadow wolf for 10s: they run 1.5x as fast as a hero, chase down his foes and bite them." };
 const RIKA_SKILL: SkillDef = { kind: "summon", name: "CURSED QUEEN", cooldown: 16, damage: 2, radius: 0, count: 1, duration: 10, pet: "rika" as SkillDef["pet"], desc: "calls out his giant curse queen for 10s (as much HP as twice his own): she follows him and smashes his foes with huge claws that knock them back, and fires PURE LOVE with him." };
 
@@ -998,10 +999,16 @@ const ROSTER = {
       { do: "dash", len: 380, width: 30, color: "3a8cff", dmg: 25, resetSkill1: true },
     ]],
     { laneParry: true }),
+  // 2026-10-07 (user's sheet, ref Goo Kim, renamed): no skills yet, just a very strong, very fast, wide, long sword swing.
+  penblade: hero("fighter", "Pen Blade", "Street swordsman", 110, blade(48, 0.3, 64, 3.0), "Very fast, very strong, wide sword swings that reach far.",
+    NO_SKILL,
+    null,
+    { noSkills: true }),
 } satisfies Record<string, Entry>;
 
 /** Tuning results (DAMAGE_BALANCE, win %, stars) per hero, filled in from the bot duels. */
 const TUNED: Record<string, [bal: number, win: number, stars: number]> = {
+  penblade: [1, 55.6, 5],
   poseidon: [2.28, 49.5, 3],
   ace: [2.87, 52.9, 4],
   ainz: [3.27, 52.9, 4],

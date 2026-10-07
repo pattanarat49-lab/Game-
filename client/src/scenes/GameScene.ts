@@ -1402,6 +1402,13 @@ export class GameScene extends Phaser.Scene {
     } else if (hero.sword && p.buff > 0) {
       this.effects.push({ kind: "sword", x, y, aim, range: hero.sword.range, arc: hero.sword.arc, age: 0, life: 0.18 });
       this.playSwordSlash(x, y, aim, hero.sword.range);
+    } else if (p.hero === "penblade") {
+      // Pen Blade: the user's golden crescent slash sweeps out in front of him.
+      this.effects.push({ kind: "sword", x, y, aim, range: hero.range, arc: hero.arc, age: 0, life: 0.14 });
+      const img = this.add.image(x + Math.cos(aim) * hero.range * 0.45, y - 4 + Math.sin(aim) * hero.range * 0.45, "gooslash").setOrigin(0.4, 0.5);
+      const s = (hero.range * 1.5) / img.height;
+      img.setRotation(aim).setFlipY(Math.cos(aim) < 0).setScale(s * 0.7).setDepth(955).setBlendMode(Phaser.BlendModes.ADD);
+      this.tweens.add({ targets: img, scale: s, alpha: 0, duration: 160, ease: "Quad.easeOut", onComplete: () => img.destroy() });
     } else if (p.hero === "poseidon") {
       // Poseidon: the user's water-trident thrust frames.
       const keys = [0, 1, 2, 3].map((i) => `postrident_${i}`);
@@ -2803,7 +2810,7 @@ export class GameScene extends Phaser.Scene {
 
   private syncEnemies(state: any, dt: number) {
     const me = state.players.get(this.room!.sessionId);
-    const foresight = !!me && !me.dead && heroOf(me.hero).skill.kind === "passive";
+    const foresight = !!me && !me.dead && heroOf(me.hero).skill.kind === "passive" && !heroOf(me.hero).noSkills;
     const ahead = foresight ? heroOf(me.hero).skill.duration ?? 0.5 : 0;
     const seen = new Set<string>();
     this.beams.clear();

@@ -44,11 +44,11 @@ export class HudScene extends Phaser.Scene {
     this.scores = this.add.text(this.scale.width - 20, 16, "", { ...FONT, fontSize: "10px", align: "right", lineSpacing: 6 }).setOrigin(1, 0);
     const hero = heroOf(this.registry.get("hero"));
     if (isTouchDevice()) {
-      this.touch = new TouchControls(this, hero.skill.name, hero.skill2?.name);
+      this.touch = new TouchControls(this, hero.noSkills ? "" : hero.skill.name, hero.skill2?.name);
       return;
     }
     this.add
-      .text(20, this.scale.height - 20, `WASD move  MOUSE aim/attack  SPACE dash  Q/RMB ${hero.skill.name}${hero.skill2 ? `  E ${hero.skill2.name}` : ""}  (hold to aim, release to cast, Esc to cancel)`, {
+      .text(20, this.scale.height - 20, `WASD move  MOUSE aim/attack  SPACE dash${hero.noSkills ? "" : `  Q/RMB ${hero.skill.name}`}${hero.skill2 ? `  E ${hero.skill2.name}` : ""}  (hold to aim, release to cast, Esc to cancel)`, {
         ...FONT,
         fontSize: "9px",
         color: "#c9b8c0",
@@ -101,7 +101,7 @@ export class HudScene extends Phaser.Scene {
       if (hero.formOf && hero.skill.kind !== "passive") this.drawCooldown(barX, 100, (me.buff ?? 0) / formTime);
       if (hero.skill2) this.drawCooldown(barX, 100, skill2Ready);
       if (hero.stacks && stackRow >= 0) this.drawStacks(barX, 68 + 16 * stackRow, me.mode ?? 0, hero.stacks.max);
-      this.touch?.setLabels(hero.skill.kind === "passive" ? "ALIEN" : hero.skill.name, hero.skill2?.name ?? "");
+      this.touch?.setLabels(hero.noSkills ? "" : hero.skill.kind === "passive" ? "ALIEN" : hero.skill.name, hero.skill2?.name ?? "");
       this.touch?.draw(1 - me.skillCooldown / hero.skill.cooldown, 1 - me.dashCooldown / DASH_COOLDOWN, skill2Ready);
     }
 
