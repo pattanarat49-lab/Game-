@@ -994,15 +994,14 @@ const ROSTER = {
       { do: "lane", wait: 0.42, len: 250, width: 110, look: "tidal", color: "3a8cff", dmg: 85, slow: 2.5, slowPct: 0.3, knock: 1 },
       { do: "ring", radius: 70, look: "vortex", color: "3a8cff" },
     ]],
-    ["WATER JET", 6, "a jet of water shoots forward down the lane; if it hits, his next trident thrust hits twice as hard and stuns for 1s.", [
-      { do: "lane", len: 230, width: 36, look: "waterjet", color: "3a8cff", dmg: 40, empower: true },
-    ]],
-    { chargedHit: 1, stacks: { label: "TIDE", max: 1 } }),
+    ["WATER JET", 3, "dashes far ahead until a wall or an obstacle stops him, hitting every foe on the way; hitting a foe resets WAVE CRASH.", [
+      { do: "dash", len: 380, width: 30, quiet: true, color: "3a8cff", dmg: 25, resetSkill1: true },
+    ]]),
 } satisfies Record<string, Entry>;
 
 /** Tuning results (DAMAGE_BALANCE, win %, stars) per hero, filled in from the bot duels. */
 const TUNED: Record<string, [bal: number, win: number, stars: number]> = {
-  poseidon: [2.28, 48.0, 3],
+  poseidon: [2.28, 49.5, 3],
   ace: [2.87, 52.9, 4],
   ainz: [3.27, 52.9, 4],
   akainu: [3.0, 49.0, 3],

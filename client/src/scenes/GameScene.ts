@@ -1402,11 +1402,10 @@ export class GameScene extends Phaser.Scene {
     } else if (hero.sword && p.buff > 0) {
       this.effects.push({ kind: "sword", x, y, aim, range: hero.sword.range, arc: hero.sword.arc, age: 0, life: 0.18 });
       this.playSwordSlash(x, y, aim, hero.sword.range);
-    } else if (hero.chargedHit) {
-      // Poseidon: the user's water-trident thrust frames (bigger while a WATER JET hit has charged it).
-      const big = p.mode === 1 ? 1.3 : 1;
+    } else if (p.hero === "poseidon") {
+      // Poseidon: the user's water-trident thrust frames.
       const keys = [0, 1, 2, 3].map((i) => `postrident_${i}`);
-      this.playFrameList(keys, 45, x, y - 4, aim, 0.05, 0.5, ((hero.range * 1.25) / 130) * big, Math.cos(aim) < 0, false, y + (Math.sin(aim) > 0 ? 6 : -6));
+      this.playFrameList(keys, 45, x, y - 4, aim, 0.05, 0.5, (hero.range * 1.25) / 130, Math.cos(aim) < 0, false, y + (Math.sin(aim) > 0 ? 6 : -6));
     } else if (hero.lineAttack) {
       this.effects.push({ kind: "tkick", x, y, aim, range: hero.range, arc: hero.lineAttack, age: 0, life: 0.14 });
     } else if (hero.attack === "rifle") {
@@ -2330,29 +2329,6 @@ export class GameScene extends Phaser.Scene {
    * the far end, then sparkles and a fading ring are left behind.
    */
   /** PURE LOVE: the user's pink beam shoots out to full length, flickers, fades; a starburst where it ends. */
-  /** WATER JET: the user's frames: the water gathers at the trident, shoots down the lane as one long jet, then breaks up at its end. */
-  private playWaterJet(x: number, y: number, aim: number, len: number, width: number) {
-    const cos = Math.cos(aim);
-    const sin = Math.sin(aim);
-    const left = cos < 0;
-    const depth = y + 5; // behind Poseidon
-    const gather = [3, 4, 5, 6, 7].map((i) => `posjetin_${i}`);
-    this.playFrameList(gather, 30, x + cos * 8, y + sin * 8, aim, 0.15, 0.5, (width * 1.4) / 70, left, false, depth);
-    const jet = this.add.image(x, y, "posjetlong_0").setOrigin(0, 0.5).setRotation(aim).setFlipY(left).setDepth(depth).setAlpha(0);
-    const sx = len / jet.width;
-    const sy = (width * 1.6) / jet.height;
-    jet.setScale(0.01, sy);
-    this.time.delayedCall(50, () => {
-      jet.setAlpha(1);
-      this.tweens.add({ targets: jet, scaleX: sx, duration: 160, ease: "Quad.easeOut" });
-    });
-    this.time.delayedCall(420, () => {
-      this.tweens.add({ targets: jet, alpha: 0, scaleY: sy * 0.4, duration: 180, onComplete: () => jet.destroy() });
-      const out = [0, 1, 2, 3, 4, 5].map((i) => `posjetout_${i}`);
-      this.playFrameList(out, 55, x + cos * len, y + sin * len, aim, 0.85, 0.5, (width * 1.6) / 65, left, false, depth);
-    });
-  }
-
   /** WAVE CRASH: the user's wave frames grow as the wave runs down the lane, then the crash frames at its end. */
   private playTidalWave(x: number, y: number, aim: number, len: number, width: number) {
     const cos = Math.cos(aim);
@@ -3386,11 +3362,6 @@ export class GameScene extends Phaser.Scene {
         this.zoltraks.add(id);
         const [, , , angS, lenS, widthS] = z.kind.split(":");
         this.playTidalWave(z.x, z.y - 6, Number(angS), Number(lenS), Number(widthS));
-      }
-      if (z.kind.startsWith("fxl:waterjet:") && !this.zoltraks.has(id)) {
-        this.zoltraks.add(id);
-        const [, , , angS, lenS, widthS] = z.kind.split(":");
-        this.playWaterJet(z.x, z.y - 6, Number(angS), Number(lenS), Number(widthS));
       }
       if (z.kind.startsWith("fx:psychic:") && !this.zoltraks.has(id)) {
         // 100%: the user's psychic explosion frames, the burst built up round him, then the flash and the dust.

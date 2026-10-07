@@ -1451,10 +1451,10 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
     const s = this.state;
     const push = (x: number, y: number): [number, number] => (dir !== undefined ? [Math.cos(dir), Math.sin(dir)] : [x - from.x, y - from.y]);
     let hit = false;
-    // WATER JET: a hit charges the caster's next basic attack.
+    // WATER JET: hitting a foe resets the caster's Q.
     const charge = () => {
       const o = s.players.get(owner);
-      if (h.empower && !hit && o && heroOf(o.hero).chargedHit) o.mode = 1;
+      if (h.resetSkill1 && !hit && o) o.skillCooldown = 0;
       hit = true;
     };
     s.enemies.forEach((e, eid) => {
@@ -1550,7 +1550,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
         const len = Math.hypot(end.x - p.x, end.y - p.y);
         const w = st.width ?? 26;
         this.fxArea(id, this.laneTest(p.x, p.y, aim, len, w), st, { x: p.x, y: p.y }, aim);
-        this.fxLaneZone(id, "dash", st.color, p.x, p.y, aim, len, w);
+        if (!st.quiet) this.fxLaneZone(id, "dash", st.color, p.x, p.y, aim, len, w);
         if (st.trail) {
           // Bombs dropped all along the way go off a moment later.
           const tr = st.trail;
@@ -2404,10 +2404,8 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
           brain.attackTimer = hero.sword.attackCooldown;
           this.sweep(id, p.x, p.y, input.aim, hero.sword.range, hero.sword.arc, hero.sword.damage, "cut");
         } else if (hero.lineAttack) {
-          // A straight kick down a lane. Poseidon after a WATER JET hit: twice as hard, and it stuns.
-          const charged = !!hero.chargedHit && p.mode === 1;
-          this.lineHit(id, p.x, p.y, input.aim, hero.range, hero.lineAttack, hero.damage * (charged ? 2 : 1), charged ? hero.chargedHit! : 0, 0);
-          if (charged) p.mode = 0;
+          // A straight kick down a lane.
+          this.lineHit(id, p.x, p.y, input.aim, hero.range, hero.lineAttack, hero.damage, 0, 0);
         } else if (hero.attack === "rifle") {
           this.spawnBullet("snipe", p.x, p.y, input.aim, hero.shotSpeed, { owner: id, damage: hero.damage, pierce: hero.pierce, life: hero.range / hero.shotSpeed });
         } else if (hero.attack === "magic" && hero.skill.kind === "boost") {
