@@ -94,9 +94,11 @@ export class TouchControls {
     scene.input.addPointer(3); // up to 4 fingers at once
     const { width, height } = scene.scale;
     const button = (x: number, y: number, r: number, label: string): Button => ({ x, y, r, label, pointerId: null, dragX: 0, dragY: 0, castUntil: 0, overCancel: false });
-    this.skillButton = button(width - 62, height - 182, 40, skillName);
-    if (skill2Name) this.skill2Button = button(width - 158, height - 166, 36, skill2Name);
-    this.attackButton = button(width - 104, height - 66, ATTACK_R, "");
+    // DEFAULT mode's sword button is 1.5x bigger (user request), so it sits lower right and the skills move up.
+    const big = !this.advanced;
+    this.skillButton = button(width - 62, height - (big ? 205 : 182), 40, skillName);
+    if (skill2Name) this.skill2Button = button(width - (big ? 172 : 158), height - (big ? 192 : 166), 36, skill2Name);
+    this.attackButton = big ? button(width - 92, height - 80, ATTACK_R * 1.5, "") : button(width - 104, height - 66, ATTACK_R, "");
     this.cancelSpot = { x: width - 62, y: Math.max(60, height - 330), r: 34 };
     this.gfx = scene.add.graphics().setDepth(100);
     this.cancelLabel = scene.add
@@ -346,10 +348,10 @@ export class TouchControls {
     g.lineStyle(3, pressed ? 0xffd23f : 0xffffff, pressed ? 0.9 : 0.5).strokeCircle(a.x, a.y, a.r);
     const kx = a.x + a.dragX;
     const ky = a.y + a.dragY;
-    const knob = this.advanced ? 26 : 34; // a plain button (DEFAULT mode) is one big knob
+    const knob = this.advanced ? 26 : 51; // a plain button (DEFAULT mode) is one big knob
     g.fillStyle(pressed ? 0xd83a3a : 0x6a2a2a, pressed ? 0.95 : 0.85).fillCircle(kx, ky, pressed && !this.advanced ? knob - 3 : knob);
     g.lineStyle(2, 0x000000, 0.6).strokeCircle(kx, ky, knob);
-    const px = 3; // one sword pixel = 3 screen pixels
+    const px = this.advanced ? 3 : 4.5; // one sword pixel = 3 screen pixels (x1.5 in DEFAULT mode)
     const ox = Math.round(kx - (SWORD[0].length * px) / 2);
     const oy = Math.round(ky - (SWORD.length * px) / 2);
     // A dark drop shadow first, then the sword, so it reads on any background.
