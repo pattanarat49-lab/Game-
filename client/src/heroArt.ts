@@ -22,6 +22,7 @@ const LAYOUT: Record<string, ArtLayout> = {
   kaido: { scale: 0.8, originY: 0.97 },
   // DRAGON FORM: the user's dragon frames (dragon_idle_n / dragon_move_n props), facing right.
   kaidodragon: { scale: 0.8, originY: 0.95 },
+  gongrown: { scale: 0.5, originY: 0.98 },
   bigmom: { scale: 0.8, originY: 0.97 },
   whitebeard: { scale: 0.75, originY: 0.97 },
   blackbeard: { scale: 0.75, originY: 0.97 },

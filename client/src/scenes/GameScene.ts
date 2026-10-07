@@ -858,7 +858,9 @@ export class GameScene extends Phaser.Scene {
       // The Trickster looks like one of our own side to us (his rivals); his own player sees the disguise too, under his own name.
       const isMe = id === this.room!.sessionId;
       const disguised = p.hero === "loki" && p.disguise && (this.rivalOfMe(state, id) || (p.owner || id) === this.room!.sessionId) ? state.players.get(p.disguise) : undefined;
-      const shown: string = disguised?.hero ?? p.hero;
+      // Jungle Boy's GROWN UP: the user's grown-up form picture while it lasts.
+      const grown = !disguised && p.hero === "gon" && p.active2 > 0 && !p.dead;
+      const shown: string = disguised?.hero ?? (grown ? "gongrown" : p.hero);
       const name: string = disguised && !isMe ? disguised.name : p.name;
       if (view.label.text !== name) view.label.setText(name);
       if (isMe) body.setPosition(this.predicted.x, this.predicted.y);
@@ -1050,7 +1052,7 @@ export class GameScene extends Phaser.Scene {
         view.bike.setPosition(body.x, body.y + 2 * k).setDepth(body.depth + 0.3);
         if (riding && Math.random() < 0.3) this.sparks.explode(1, body.x - Math.sign(Math.cos(aim)) * 12 * k, body.y);
       }
-      view.label.setPosition(body.x, body.y - (titanNow ? 66 : DRAGON_FRAMES[shown] ? 34 : 18) * k);
+      view.label.setPosition(body.x, body.y - (titanNow ? 66 : DRAGON_FRAMES[shown] ? 34 : grown ? 52 : 18) * k);
       if (p.hero === "yaotsu") this.drawGlitch(view, p.dead);
       if (p.hero === "hacker") {
         // The Hacker always flickers a little; during ERROR he is mostly glitch, streaking from jump to jump.
