@@ -286,7 +286,9 @@ export function aimPickScore(dx: number, dy: number, aim: number): number | unde
 }
 
 /** Where a "drop" or "field" goes: this far ahead along the aim, on the caster ("self"), or on the nearest foe ("target"). */
-export type FxAt = number | "self" | "target";
+/** Where a step lands: ahead by a fixed distance, on himself, on the nearest foe, or a spot the player picks
+ * (aim + how far the stick / cursor is pushed) up to `upTo` away, `scatter` adding a random offset per hit. */
+export type FxAt = number | "self" | "target" | { upTo: number; scatter?: number };
 
 /**
  * One piece of a "combo" skill. Colours are hex strings without "#" ("ff6a1a"); `look` picks how it is drawn.
@@ -299,8 +301,8 @@ export type FxStep = { wait?: number; times?: number; gap?: number; color: strin
   | ({ do: "ring"; radius: number; look?: "burst" | "shock" | "petal" | "spin" | "pull" | "psychic" } & FxHit)
   | ({ do: "cone"; range: number; arc: number; reflect?: boolean; look?: "hawkcut1" | "hawkcut2" } & FxHit)
   | ({ do: "shots"; n: number; spread: number; speed: number; range: number; pierce?: number; shape?: "orb" | "blade" | "star" | "spike" | "roach" | "hawkwave"; size?: number; home?: boolean; hitSize?: number; bounce?: number; split?: { n: number; range: number; speed: number; shape: "orb" | "blade" | "star" | "spike" | "roach"; size: number; color: string } & FxHit } & FxHit)
-  | ({ do: "drop"; at: FxAt; delay: number; radius: number; spots?: number; look?: "meteor" | "pillar" | "bolt" | "fist" | "blade" | "skull" } & FxHit)
-  | ({ do: "field"; at: FxAt; follow?: boolean; radius: number; life: number; tick: number; heal?: number; cage?: boolean; fog?: boolean; look?: "storm" | "mist" | "flames" | "sand" | "petals" | "dark" | "ice" | "light" | "water" | "web" | "fog" | "flowerbed" } & FxHit)
+  | ({ do: "drop"; at: FxAt; delay: number; radius: number; spots?: number; look?: "meteor" | "pillar" | "bolt" | "fist" | "blade" | "skull" | "icefall" } & FxHit)
+  | ({ do: "field"; at: FxAt; follow?: boolean; radius: number; life: number; tick: number; heal?: number; cage?: boolean; fog?: boolean; look?: "storm" | "mist" | "flames" | "sand" | "petals" | "dark" | "ice" | "light" | "water" | "web" | "fog" | "flowerbed" | "lotus" } & FxHit)
   | ({ do: "push"; len: number; width: number; speed: number; wallStun: number; carrySelf?: boolean } & FxHit)
   | { do: "rewind"; secs: number }
   | ({ do: "lock"; range: number; drag?: boolean; look?: "chain" | "bolt" | "grab" | "eye" } & FxHit)
@@ -2030,6 +2032,8 @@ export interface PlayerInput {
   skill2?: boolean;
   /** Charged skills (either slot): seconds the skill was held (charged) before it was let go. */
   charge2?: number;
+  /** Placed skills (FxAt upTo): how far out the player aims, 0 (at his feet) to 1 (the edge of the circle). */
+  reach?: number;
   /** Milliseconds behind the server that this player sees other heroes (ping + smoothing): hits on heroes are judged where they saw them. */
   lag?: number;
   /** Where the client has moved its own hero. The server follows it, within the hero's speed. */
@@ -2096,6 +2100,14 @@ export function formFromAim(hero: string, aim: number): HeroId | undefined {
 
 /** Burned by the Blaze Alien's flamethrower: moves this much slower. */
 export const BURN_SLOW = 0.55;
+
+/** How far a placed skill (FxAt upTo) reaches, or 0 when it has none. */
+export function placeRangeOf(skill?: SkillDef): number {
+  for (const st of skill?.steps ?? []) {
+    if ((st.do === "drop" || st.do === "field") && typeof st.at === "object") return st.at.upTo;
+  }
+  return 0;
+}
 
 export function heroSpeed(p: { hero: string; big: number; active2?: number; buff?: number; slow?: number; slowPct?: number; root?: number; mode?: number }): number {
   if ((p.root ?? 0) > 0) return 0; // SHADOW WHIP: legs tied

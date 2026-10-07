@@ -296,6 +296,8 @@ export function drawFxZone(floor: G, sky: G, z: any, now: number): boolean {
         sky.fillStyle(light, 0.9).fillRect(z.x - r * 0.45, y + r * 0.1, r * 0.9, 4);
         sky.lineStyle(2, 0x000000, 0.5).strokeRoundedRect(z.x - r * 0.45, y - r * 0.5, r * 0.9, r * 0.8, 6);
         break;
+      case "icefall":
+        break; // WINTER ICICLES: the user's falling icicle (GameScene.playIcefall)
       case "blade":
         sky.fillStyle(light, 0.95).fillTriangle(z.x - 6, y - 70, z.x + 6, y - 70, z.x, y);
         sky.fillStyle(c, 1).fillRect(z.x - 14, y - 76, 28, 6).fillRect(z.x - 3, y - 96, 6, 22);
@@ -334,6 +336,12 @@ export function drawFxZone(floor: G, sky: G, z: any, now: number): boolean {
     const r = z.radius;
     const fade = Math.max(0, Math.min(1, age / 0.3, z.life / 0.5));
     const spin = now / 900;
+    if (look === "lotus") {
+      // FROZEN LOTUS: the user's lotus picture blooms here (GameScene); a cold patch on the ground under it.
+      floor.fillStyle(c, 0.16 * fade).fillCircle(z.x, z.y, r);
+      floor.lineStyle(1, light, 0.5 * fade).strokeCircle(z.x, z.y, r);
+      return true;
+    }
     if (look === "fog") {
       // OBSCURING CLOUDS: thick rolling fog (who stands inside is hidden by the scene).
       sky.fillStyle(c, 0.35 * fade).fillCircle(z.x, z.y, r);
@@ -559,6 +567,7 @@ export function fxGuide(
   area: (cx: number, cy: number, r: number) => void,
   cone: (range: number, arc: number) => void,
   rays?: (n: number, spread: number, range: number) => void,
+  place?: number,
 ) {
   for (const st of skill.steps ?? []) {
     switch (st.do) {
@@ -582,6 +591,12 @@ export function fxGuide(
       case "field":
         if (st.at === "self") return area(x, y, st.radius);
         if (st.at === "target") return area(x, y, 320);
+        if (typeof st.at === "object") {
+          // A placed skill: its whole circle, and the spot picked inside it.
+          area(x, y, st.at.upTo);
+          const d = st.at.upTo * (place ?? 1);
+          return area(x + Math.cos(aim) * d, y + Math.sin(aim) * d, st.radius + (st.at.scatter ?? 0));
+        }
         return area(x + Math.cos(aim) * st.at, y + Math.sin(aim) * st.at, st.radius);
       case "lock":
         return area(x, y, st.range);

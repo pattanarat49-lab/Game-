@@ -1426,6 +1426,18 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
   /** Where a drop or field goes. */
   private fxSpot(id: string, p: P, at: FxAt, aim: number): { x: number; y: number } {
     if (at === "self") return { x: p.x, y: p.y };
+    if (typeof at === "object") {
+      // A spot the player picked inside the circle (bots: the nearest foe in range).
+      const brain = this.brains.get(id);
+      let dist = at.upTo * (brain?.input.reach ?? 1);
+      if (brain?.bot) {
+        const t = this.findTarget(id, p, at.upTo + 60, true);
+        dist = t ? Math.min(at.upTo, Math.hypot(t.x - p.x, t.y - p.y)) : at.upTo * 0.7;
+      }
+      const sa = Math.random() * Math.PI * 2;
+      const sr = at.scatter ? Math.sqrt(Math.random()) * at.scatter : 0;
+      return this.move(p.x, p.y, Math.cos(aim) * dist + Math.cos(sa) * sr, Math.sin(aim) * dist + Math.sin(sa) * sr, 4);
+    }
     if (at === "target") {
       const t = this.findTarget(id, p, 320, true);
       if (t) return { x: t.x, y: t.y };
@@ -1934,6 +1946,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       skill: !!input.skill,
       skill2: !!input.skill2,
       charge2: Math.min(CHARGE_FULL, Math.max(0, Number(input.charge2) || 0)),
+      reach: Math.min(1, Math.max(0, Number.isFinite(input.reach) ? Number(input.reach) : 1)),
     };
     brain.lag = Math.min(MAX_LAG_COMP, Math.max(0, Number(input.lag) || 0) / 1000);
     const p = this.state.players.get(id);

@@ -46,6 +46,8 @@ export class TouchControls {
   readonly skill2Button?: Button;
   /** Last aim angle, kept after the aim stick is released. */
   aimAngle = 0;
+  /** How far the skill knob (or aim stick) is pushed, 0-1: placed skills land that far out in their circle. */
+  aimReach = 1;
   /** After a dragged skill is released, its direction holds until the cast has gone out. */
   private aimLockUntil = 0;
   /** Releasing the move stick dashes the way it was pushed: the dash input stays on until then. */
@@ -179,6 +181,7 @@ export class TouchControls {
       const c = this.cancelSpot;
       b.overCancel = Math.hypot(p.x - c.x, p.y - c.y) < c.r + 8;
       if (len > SKILL_AIM_DEADZONE && !b.overCancel) this.aimAngle = Math.atan2(dy, dx);
+      if (!b.overCancel) this.aimReach = Math.min(1, len / SKILL_DRAG);
     }
     for (const stick of [this.move, this.aim]) {
       if (stick.pointerId !== p.id) continue;
@@ -223,6 +226,7 @@ export class TouchControls {
       } else {
         b.castUntil = performance.now() + CAST_PULSE_MS; // release = cast
         // A dragged skill goes where it was aimed, not where you happen to be walking.
+        if (Math.hypot(b.dragX, b.dragY) <= SKILL_AIM_DEADZONE) this.aimReach = 0.6; // a quick tap: a little way ahead
         if (Math.hypot(b.dragX, b.dragY) > SKILL_AIM_DEADZONE) {
           this.aimAngle = Math.atan2(b.dragY, b.dragX);
           this.aimLockUntil = b.castUntil + 350; // keep facing the skill while it plays out

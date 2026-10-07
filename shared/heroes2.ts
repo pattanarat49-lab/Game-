@@ -33,7 +33,7 @@ function reach(steps: FxStep[]): number {
         return st.range * 0.85;
       case "drop":
       case "field":
-        return st.at === "self" ? st.radius : st.at === "target" ? 300 : st.at + st.radius * 0.5;
+        return st.at === "self" ? st.radius : st.at === "target" ? 300 : typeof st.at === "object" ? st.at.upTo : st.at + st.radius * 0.5;
       case "lock":
         return st.range;
       case "blink":
@@ -937,11 +937,11 @@ const ROSTER = {
       { do: "buff", dur: 5, regen: 0.03, atk: 0.75, color: "60c0ff" },
     ]]),
   doma: hero("mage", "Ice Fan Demon", "Smiling demon", 100, shoot(bladeShot("c0e8ff", 3), 22), "Ice fan cuts.",
-    ["WINTER ICICLES", 8, "four icicles fall around the nearest foe, slowing.", [
-      { do: "drop", times: 4, gap: 0.2, at: "target", delay: 0.4, radius: 30, look: "blade", color: "c0e8ff", dmg: 25, slow: 1 },
+    ["WINTER ICICLES", 8, "four icicles fall from the sky around the spot he aims at (anywhere in his circle), slowing.", [
+      { do: "drop", times: 4, gap: 0.2, at: { upTo: 220, scatter: 30 }, delay: 0.4, radius: 30, look: "icefall", color: "c0e8ff", dmg: 25, slow: 1 },
     ]],
-    ["FROZEN LOTUS", 12, "an ice lotus blooms on the aimed spot for 3s, freezing feet.", [
-      { do: "field", at: 120, radius: 50, life: 3, tick: 0.5, look: "ice", color: "c0e8ff", dmg: 10, root: 0.5 },
+    ["FROZEN LOTUS", 12, "an ice lotus blooms for 3s on the spot he picks in his circle (near or far), freezing feet.", [
+      { do: "field", at: { upTo: 200 }, radius: 50, life: 3, tick: 0.5, look: "lotus", color: "c0e8ff", dmg: 10, root: 0.5 },
     ]]),
   mahito: hero("assassin", "Soul Shaper", "Cursed spirit", 100, punch(28), "Shape-shifting punches.",
     ["IDLE TRANSFIGURATION", 8, "touches the nearest foe's soul and twists it (slowed 3s).", [

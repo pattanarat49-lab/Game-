@@ -48,6 +48,7 @@ import {
   chargePower,
   chargeTimeOf,
   isChargeSkill,
+  placeRangeOf,
   chargeReach,
   alienForms,
   formAngle,
@@ -302,6 +303,8 @@ export class GameScene extends Phaser.Scene {
   /** MAX SMASH: when the charge started (ms, 0 = not charging), and how long it has been held (s). */
   private chargeStart = 0;
   private charge2 = 0;
+  /** Placed skills: how far out (0-1 of the skill's circle) the player is aiming. */
+  private reach = 1;
   private charging2 = false;
   private skillCancelled = { 1: false, 2: false }; // last knockback we applied to our own hero
   private kbVel = { x: 0, y: 0 };
@@ -552,6 +555,7 @@ export class GameScene extends Phaser.Scene {
 
     if (touch) {
       this.aim = touch.aimAngle;
+      this.reach = touch.aimReach;
       const dir = touch.directions;
       return {
         left: alive && dir.left,
@@ -564,6 +568,7 @@ export class GameScene extends Phaser.Scene {
         skill: alive && touch.skilling,
         skill2: alive && touch.skilling2,
         charge2: Math.round(this.charge2 * 10) / 10,
+        reach: Math.round(this.reach * 100) / 100,
       };
     }
 
@@ -571,6 +576,13 @@ export class GameScene extends Phaser.Scene {
     const pointer = this.input.activePointer;
     pointer.updateWorldPoint(this.cameras.main);
     this.aim = Math.atan2(pointer.worldY - this.predicted.y, pointer.worldX - this.predicted.x);
+    {
+      // Placed skills land where the cursor is (as far as their circle reaches).
+      const hero = me ? heroOf(me.hero) : undefined;
+      const slot = this.aimingSkill();
+      const range = placeRangeOf(slot === 2 ? hero?.skill2 : slot === 1 ? hero?.skill : undefined) || placeRangeOf(hero?.skill) || placeRangeOf(hero?.skill2);
+      if (range) this.reach = Math.min(1, Math.hypot(pointer.worldX - this.predicted.x, pointer.worldY - this.predicted.y) / range);
+    }
     return {
       left: alive && (k.A.isDown || k.LEFT.isDown),
       right: alive && (k.D.isDown || k.RIGHT.isDown),
@@ -582,6 +594,7 @@ export class GameScene extends Phaser.Scene {
       skill: alive && this.castOnRelease(1, k.Q.isDown || k.ONE.isDown || pointer.rightButtonDown() || (!this.hasSkill2(me) && k.E.isDown)),
       skill2: alive && this.hasSkill2(me) && this.castOnRelease(2, k.E.isDown || k.TWO.isDown),
       charge2: Math.round(this.charge2 * 10) / 10,
+      reach: Math.round(this.reach * 100) / 100,
     };
   }
 
@@ -2253,6 +2266,28 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
+  /** WINTER ICICLES: a star of frost gathers in the sky, the user's icicle drops onto the spot and bursts into ice spikes. */
+  private playIcefall(x: number, y: number, r: number, delay: number) {
+    const star = this.add.image(x, y - 150, "icestar").setScale((r * 1.6) / 135).setAlpha(0).setDepth(955).setBlendMode(Phaser.BlendModes.ADD);
+    this.tweens.add({ targets: star, alpha: 0.9, duration: delay * 400, yoyo: true, onComplete: () => star.destroy() });
+    const icicle = this.add.image(x, y - 200, "icicle").setOrigin(0.5, 1).setScale((r * 2.4) / 172).setDepth(955).setBlendMode(Phaser.BlendModes.ADD);
+    this.tweens.add({
+      targets: icicle,
+      y,
+      duration: delay * 1000,
+      ease: "Quad.easeIn",
+      onComplete: () => {
+        icicle.destroy();
+        const spikes = this.add.image(x, y + 4, "icespikes").setOrigin(0.5, 0.85).setScale((r * 0.8) / 165).setDepth(y + 3).setBlendMode(Phaser.BlendModes.ADD);
+        this.tweens.add({ targets: spikes, scale: (r * 2.8) / 165, duration: 110, ease: "Back.easeOut" });
+        this.tweens.add({ targets: spikes, alpha: 0, delay: 260, duration: 260, onComplete: () => spikes.destroy() });
+        const floorIce = this.add.image(x, y, "icefloor").setScale((r * 2.6) / 220).setAlpha(0.8).setDepth(-2).setBlendMode(Phaser.BlendModes.ADD);
+        this.tweens.add({ targets: floorIce, alpha: 0, delay: 300, duration: 700, onComplete: () => floorIce.destroy() });
+        this.cameras.main.shake(70, 0.002);
+      },
+    });
+  }
+
   /** DAGGER RUSH, from `x,y` along `aim` for `len`. In the frames the dash starts at (40, 58) and its streak runs 206px. */
   private playDaggerDash(x: number, y: number, aim: number, len: number) {
     this.playFrames("daggerdash", 12, 70, x, y, aim, 40 / 246, 58 / 100, len / 206, Math.cos(aim) < 0);
@@ -2506,6 +2541,7 @@ export class GameScene extends Phaser.Scene {
             this.guideRay(g, x, y, this.aim, range, 0xffe14a, 1);
           },
           rays,
+          this.reach,
         );
         break;
       case "wave":
@@ -3212,6 +3248,21 @@ export class GameScene extends Phaser.Scene {
         this.zoltraks.add(id);
         const [, , , angS, lenS] = z.kind.split(":");
         this.playZoltrak(z.x, z.y, Number(angS), Number(lenS));
+      }
+      if (z.kind.startsWith("fxd:icefall:") && !this.zoltraks.has(id)) {
+        this.zoltraks.add(id);
+        this.playIcefall(z.x, z.y, z.radius, Math.max(0.1, z.life));
+      }
+      if (z.kind.startsWith("fxf:lotus:")) {
+        // FROZEN LOTUS: the user's ice lotus opens (bud, then full bloom) and glows until it melts.
+        let img = this.zoneImages.get(id);
+        if (!img) {
+          img = this.add.image(z.x, z.y, "lotus_0").setOrigin(0.5, 0.75).setDepth(z.y + 2).setBlendMode(Phaser.BlendModes.ADD);
+          this.zoneImages.set(id, img);
+        }
+        const open = Math.min(1, age / 0.35);
+        img.setTexture(age < 0.2 ? "lotus_0" : "lotus_1");
+        img.setScale(((z.radius * 2.6) / 216) * (0.35 + 0.65 * open)).setAlpha(fade * (0.85 + 0.15 * Math.sin(now / 160)));
       }
       if (z.kind.startsWith("fxf:flowerbed:")) {
         // FLOWER FIELD: the user's flower bed picture blooms open on the ground.
