@@ -3109,6 +3109,16 @@ export class GameScene extends Phaser.Scene {
         const [, , , angS, lenS] = z.kind.split(":");
         this.playZoltrak(z.x, z.y, Number(angS), Number(lenS));
       }
+      if (z.kind.startsWith("fxf:flowerbed:")) {
+        // FLOWER FIELD: the user's flower bed picture blooms open on the ground.
+        let img = this.zoneImages.get(id);
+        if (!img) {
+          img = this.add.image(z.x, z.y, "flowerfield").setOrigin(0.5, 0.52).setDepth(-2);
+          this.zoneImages.set(id, img);
+        }
+        const full = Math.max(1, Math.round(((z.radius * 2.1) / img.width) * 2) / 2);
+        img.setPosition(z.x, z.y).setScale(full * (0.7 + 0.3 * Math.min(1, age / 0.25))).setAlpha(fade);
+      }
       if (drawFxZone(floor, sky, z, now)) return;
       if (this.drawNewZone(state, floor, sky, z, now, fade)) return;
       if (z.kind === "domain") {

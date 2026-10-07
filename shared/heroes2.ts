@@ -759,7 +759,7 @@ const ROSTER = {
       { do: "lane", len: 280, width: 14, look: "zoltrak", color: "b8a0ff", dmg: 87.5, ignoreArmor: true },
     ]],
     ["FLOWER FIELD", 13, "a field of mana flowers around her for 4s: hurts foes and heals friends.", [
-      { do: "field", at: "self", radius: 100, life: 4, tick: 0.5, look: "petals", color: "b0d0ff", dmg: 8, heal: 0.04 },
+      { do: "field", at: "self", radius: 100, life: 4, tick: 0.5, look: "flowerbed", color: "ffd0dc", dmg: 8, heal: 0.075 },
     ]]),
   fern: hero("carry", "Apprentice Mage", "Fastest caster", 90, shoot(orb("c080ff"), 18, 0.35, 240, 380), "Rapid magic bolts.",
     ["MACHINE ZOLTRAAK", 8, "ten killing-magic bolts in a stream.", [

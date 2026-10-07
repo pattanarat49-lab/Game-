@@ -241,6 +241,19 @@ export function makeWalkFrames(textures: Phaser.Textures.TextureManager, hero: s
   const headEnd = Math.round(h * 0.47); // chibi heroes: the head is about half the picture
   const H = h + PAD_TOP + PAD_BOTTOM;
   walkOrigin.set(hero, (PAD_TOP + heroArtLayout(hero).originY * h) / H);
+  if (textures.exists(`${hero}_walk_0`)) {
+    // Hand-made walk frames (art/props/<id>_walk_<n>.png, the picture's size plus the same padding): used as they are.
+    for (let f = 0; f < WALK_FRAMES; f++) {
+      const c = document.createElement("canvas");
+      c.width = w;
+      c.height = H;
+      c.getContext("2d")!.drawImage(textures.get(`${hero}_walk_${f}`).getSourceImage() as HTMLImageElement, 0, 0);
+      const name = `hero_${hero}_walk_${f}`;
+      if (textures.exists(name)) textures.remove(name);
+      textures.addCanvas(name, c);
+    }
+    return;
+  }
   const still = { left: 0, right: 0, body: 0, head: 0 };
   WALK_POSES.forEach((step, f) => {
     const pose = HOP_ONLY.has(hero) ? still : step;

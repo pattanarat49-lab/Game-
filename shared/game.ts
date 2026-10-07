@@ -284,7 +284,7 @@ export type FxStep = { wait?: number; times?: number; gap?: number; color: strin
   | ({ do: "cone"; range: number; arc: number; reflect?: boolean } & FxHit)
   | ({ do: "shots"; n: number; spread: number; speed: number; range: number; pierce?: number; shape?: "orb" | "blade" | "star" | "spike" | "roach"; size?: number; home?: boolean; hitSize?: number; bounce?: number; split?: { n: number; range: number; speed: number; shape: "orb" | "blade" | "star" | "spike" | "roach"; size: number; color: string } & FxHit } & FxHit)
   | ({ do: "drop"; at: FxAt; delay: number; radius: number; spots?: number; look?: "meteor" | "pillar" | "bolt" | "fist" | "blade" | "skull" } & FxHit)
-  | ({ do: "field"; at: FxAt; follow?: boolean; radius: number; life: number; tick: number; heal?: number; cage?: boolean; fog?: boolean; look?: "storm" | "mist" | "flames" | "sand" | "petals" | "dark" | "ice" | "light" | "water" | "web" | "fog" } & FxHit)
+  | ({ do: "field"; at: FxAt; follow?: boolean; radius: number; life: number; tick: number; heal?: number; cage?: boolean; fog?: boolean; look?: "storm" | "mist" | "flames" | "sand" | "petals" | "dark" | "ice" | "light" | "water" | "web" | "fog" | "flowerbed" } & FxHit)
   | ({ do: "push"; len: number; width: number; speed: number; wallStun: number; carrySelf?: boolean } & FxHit)
   | { do: "rewind"; secs: number }
   | ({ do: "lock"; range: number; drag?: boolean; look?: "chain" | "bolt" | "grab" | "eye" } & FxHit)

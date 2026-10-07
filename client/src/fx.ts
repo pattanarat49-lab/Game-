@@ -338,6 +338,17 @@ export function drawFxZone(floor: G, sky: G, z: any, now: number): boolean {
       }
       return true;
     }
+    if (look === "flowerbed") {
+      // FLOWER FIELD: the flower bed picture is placed by the scene; here pink and white petals drift down over it.
+      for (let i = 0; i < 18; i++) {
+        const t = (now / 2600 + rnd(i)) % 1;
+        const x = z.x + (rnd(i + 3) - 0.5) * r * 2.1 + Math.sin(t * 6 + i) * 7;
+        const y = z.y - r * 1.05 + t * r * 1.7;
+        const a = Math.min(1, t * 5, (1 - t) * 5) * fade;
+        sky.fillStyle(i % 3 ? 0xffc8d8 : 0xfff4f0, 0.9 * a).fillRect(Math.round(x), Math.round(y), i % 2 ? 3 : 2, 2);
+      }
+      return true;
+    }
     floor.fillStyle(c, (look === "dark" ? 0.4 : 0.18) * fade).fillCircle(z.x, z.y, r);
     if (parts[3] === "cage") {
       // BIRDCAGE: bars of string all the way round.
