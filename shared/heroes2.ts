@@ -1031,8 +1031,8 @@ const ROSTER = {
 /** Tuning results (DAMAGE_BALANCE, win %, stars) per hero, filled in from the bot duels. */
 const TUNED: Record<string, [bal: number, win: number, stars: number]> = {
   penblade: [1, 55.6, 5],
-  souji: [1.83, 47.4, 3],
-  ripper: [1.91, 50.0, 4],
+  souji: [2.38, 47.4, 3], // 1.83 x1.3 (user buff)
+  ripper: [2.48, 50.0, 4], // 1.91 x1.3 (user buff)
   poseidon: [2.28, 49.5, 3],
   ace: [2.87, 52.9, 4],
   ainz: [3.27, 52.9, 4],

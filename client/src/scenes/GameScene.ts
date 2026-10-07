@@ -971,6 +971,7 @@ export class GameScene extends Phaser.Scene {
         body.setTexture(texture);
         body.setOrigin(0.5, walking ? walkOriginY(shown) : layout ? layout.originY : 0.85);
       }
+      let feetMarks: { x: number; y: number; sw: number; alpha: number; px: number; dust: boolean; side: number } | undefined;
       if (walking) {
         // A low hop with every step. Each step is two poses: the foot lands (contact), then the other knee
         // passes. The hero lands at the start of the contact pose, squashes a little, springs off the
@@ -983,15 +984,9 @@ export class GameScene extends Phaser.Scene {
         body.y -= air * 2 * px;
         body.setScale(body.scaleX * (1 + 0.06 * land - 0.02 * air), body.scaleY * (1 - 0.08 * land + 0.04 * air));
         body.setRotation(0);
-        if (body.alpha > 0.5) {
-          const sw = body.width * Math.abs(body.scaleX) * 0.32 * (1 - 0.15 * air);
-          this.walkShadows?.fillStyle(0x000000, 0.22 - 0.06 * air).fillEllipse(body.x, feetY - px, sw * 2, sw * 0.55);
-        }
-        // A puff of dust where the foot lands.
-        if (walkFrame !== view.walkFrame && walkContact(walkFrame) && body.alpha > 0.5) {
-          const side = (walkFrame === 0 ? -1 : 1) * (body.flipX ? -1 : 1);
-          this.walkDust(body.x + side * 4 * px, feetY - px, px);
-        }
+        // Drawn further down, once we know the hero is not hidden (vanished, in fog, in grass...).
+        const sw = body.width * Math.abs(body.scaleX) * 0.32 * (1 - 0.15 * air);
+        feetMarks = { x: body.x, y: feetY - px, sw, alpha: 0.22 - 0.06 * air, px, dust: walkFrame !== view.walkFrame && walkContact(walkFrame), side: (walkFrame === 0 ? -1 : 1) * (body.flipX ? -1 : 1) };
         view.walkFrame = walkFrame;
       } else if (art && !anim) {
         // Walking: a little step bounce and sway while the hero moves.
@@ -1052,6 +1047,12 @@ export class GameScene extends Phaser.Scene {
         view.weapon?.setVisible(false);
       }
       const hiddenNow = unseen || bushed || (gone && !isMe);
+      // The ground shadow and dust under a walking hero: none while he is hidden or see-through.
+      if (feetMarks && !hiddenNow && body.alpha > 0.5) {
+        const f = feetMarks;
+        this.walkShadows?.fillStyle(0x000000, f.alpha).fillEllipse(f.x, f.y, f.sw * 2, f.sw * 0.55);
+        if (f.dust) this.walkDust(f.x + f.side * 4 * f.px, f.y, f.px);
+      }
       if (state.stage === "classic") {
         const team = disguised && !isMe ? disguised.team : p.owner ? state.players.get(p.owner)?.team : p.team;
         const color = team === 1 ? "#ff8a94" : team === 2 ? "#8ac4ff" : "#ffffff";

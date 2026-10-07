@@ -1710,6 +1710,8 @@ for (const [id, e] of Object.entries(NEW_HEROES).sort((a, b) => a[1].win - b[1].
 const REMOVED_HEROES: HeroId[] = ["swordgod", "yaotsu", "badigadi",
   // removed 2026-10-06 (user list)
   "nobara", "marco", "cell", "hinata", "geto", "leorio", "roger", "akaza", "shinra", "anya", "byakuya", "momo", "denji", "reigen", "jiraiya", "stark", "aokiji", "itachi", "hancock", "armin", "kurapika", "alphonse", "hijikata", "kirito", "sakura", "toji", "yuno", "rukia", "robin", "kagura", "gohan", "okarun", "trunks", "albedo", "makima", "franky", "ryuk", "sabo", "kakashi", "mikasa", "ace", "aki", "vegeta", "taekwondo", "oni",
+  // removed 2026-10-07 (user)
+  "penblade",
 ];
 export const HERO_IDS = [
   ...PVP_RANKING,
