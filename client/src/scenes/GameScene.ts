@@ -2112,8 +2112,8 @@ export class GameScene extends Phaser.Scene {
     this.guideMap = state.stage === "classic" ? classicMap(state.map ?? 0) : undefined;
     this.drawFormWheel(skill?.kind === "omnitrix" ? me.hero : undefined, x, y);
     if (hero.skill2?.kind === "kunai" && me.mode > 0 && this.drawKunaiPick(g, state, x, y + 5)) return;
-    if (skill?.kind === "mimic") {
-      this.drawMimicPick(this.mimicGlow, state, skill.radius);
+    if (skill?.kind === "mimic" || skill?.kind === "eater") {
+      this.drawMimicPick(this.mimicGlow, state, skill.radius, skill.kind === "eater");
       return;
     }
     if (skill) {
@@ -2140,8 +2140,8 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  /** ILLUSION held: a faint red light falls from the sky onto the hero the aim picks (the one he will look like). */
-  private drawMimicPick(g: Phaser.GameObjects.Graphics, state: any, range: number) {
+  /** ILLUSION / EATER held: a faint red light falls from the sky onto the hero the aim picks (EATER: allies only). */
+  private drawMimicPick(g: Phaser.GameObjects.Graphics, state: any, range: number, alliesOnly = false) {
     const myId = this.room!.sessionId;
     const px = this.predicted.x;
     const py = this.predicted.y;
@@ -2149,6 +2149,7 @@ export class GameScene extends Phaser.Scene {
     let pick: { x: number; y: number } | undefined;
     state.players.forEach((q: any, qid: string) => {
       if (qid === myId || q.dead || q.owner || q.vanish > 0 || q.domain > 0) return;
+      if (alliesOnly && this.rivalOfMe(state, qid)) return;
       const view = this.players.get(qid);
       if (view && !view.body.visible) return;
       if (Math.hypot(q.x - px, q.y - py) > range) return;
