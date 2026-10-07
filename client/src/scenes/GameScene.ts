@@ -2150,6 +2150,8 @@ export class GameScene extends Phaser.Scene {
       if (isChargeSkill(skill) && this.charging2) this.drawChargeGauge(g, x, y);
       return;
     }
+    const touch = (this.scene.get("Hud") as HudScene | undefined)?.touch;
+    if (touch && !touch.advanced) return; // DEFAULT attack mode aims by itself: no basic-attack guide
     if (hero.attack === "lightning") {
       const tx = x + Math.cos(this.aim) * hero.range;
       const ty = y + 5 + Math.sin(this.aim) * hero.range;
