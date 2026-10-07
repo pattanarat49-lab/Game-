@@ -7,6 +7,7 @@ import Phaser from "phaser";
  * When only the left stick is used, your hero faces (and aims) where you walk.
  * Letting go of the move stick while it is pushed dashes that way (there is no dash button).
  * Buttons in the bottom-right corner: the hero's skill, and a second skill if the hero has one.
+ * Under them sits the attack stick (a pixel sword in the middle): hold it to attack, drag it to aim.
  * Skill buttons work like small sticks: hold, drag to aim, and release to use the skill.
  * While a skill is held a CANCEL spot appears above it: let go there and the skill is not used.
  */
@@ -15,7 +16,25 @@ const STICK_RADIUS = 60;
 const DEADZONE = 0.2;
 const SKILL_DRAG = 46; // how far a skill button's knob can be dragged
 const SKILL_AIM_DEADZONE = 10; // a tap (or tiny drag) keeps the current aim
-const CAST_PULSE_MS = 160; // how long the skill "button" stays pressed after release, so the server sees it
+const CAST_PULSE_MS = 160;
+const ATTACK_R = 46; // the attack stick's circle
+const ATTACK_DRAG = 40; // how far its knob can be dragged
+/** The pixel sword drawn in the attack stick (blade, guard, grip). */
+const SWORD = [
+  "..........WW",
+  ".........WLW",
+  "........WLW.",
+  ".......WLW..",
+  "......WLW...",
+  ".....WLW....",
+  "..G.WLW.....",
+  "..GGLW......",
+  "...GG.......",
+  "..BBGG......",
+  ".BB..G......",
+  "BB..........",
+];
+const SWORD_COLORS: Record<string, number> = { W: 0xffffff, L: 0x9fc4e8, G: 0xffd23f, B: 0x8a4b2a }; // how long the skill "button" stays pressed after release, so the server sees it
 
 interface Stick {
   pointerId: number | null;
@@ -44,6 +63,8 @@ export class TouchControls {
   readonly aim: Stick = { pointerId: null, baseX: 0, baseY: 0, dx: 0, dy: 0 };
   readonly skillButton: Button;
   readonly skill2Button?: Button;
+  /** The basic-attack stick under the skill buttons. */
+  readonly attackButton: Button;
   /** Last aim angle, kept after the aim stick is released. */
   aimAngle = 0;
   /** How far the skill knob (or aim stick) is pushed, 0-1: placed skills land that far out in their circle. */
@@ -68,9 +89,10 @@ export class TouchControls {
     scene.input.addPointer(3); // up to 4 fingers at once
     const { width, height } = scene.scale;
     const button = (x: number, y: number, r: number, label: string): Button => ({ x, y, r, label, pointerId: null, dragX: 0, dragY: 0, castUntil: 0, overCancel: false });
-    this.skillButton = button(width - 70, height - 150, 42, skillName);
-    if (skill2Name) this.skill2Button = button(width - 165, height - 175, 38, skill2Name);
-    this.cancelSpot = { x: width - 70, y: Math.max(70, height - 310), r: 34 };
+    this.skillButton = button(width - 62, height - 182, 40, skillName);
+    if (skill2Name) this.skill2Button = button(width - 158, height - 166, 36, skill2Name);
+    this.attackButton = button(width - 104, height - 66, ATTACK_R, "");
+    this.cancelSpot = { x: width - 62, y: Math.max(60, height - 330), r: 34 };
     this.gfx = scene.add.graphics().setDepth(100);
     this.cancelLabel = scene.add
       .text(this.cancelSpot.x, this.cancelSpot.y, "CANCEL", { fontFamily: '"Press Start 2P", monospace', fontSize: "8px", color: "#ffffff" })
@@ -120,11 +142,17 @@ export class TouchControls {
     return 0;
   }
 
+  /** Every button a finger can grab: the skills and the attack stick. */
+  private get allButtons(): Button[] {
+    return [...this.buttons, this.attackButton];
+  }
+
   private get buttons(): Button[] {
     return this.skill2Button ? [this.skillButton, this.skill2Button] : [this.skillButton];
   }
 
   get shooting() {
+    if (this.attackButton.pointerId !== null) return true; // holding the attack stick attacks
     return this.aim.pointerId !== null && Math.hypot(this.aim.dx, this.aim.dy) > DEADZONE;
   }
 
@@ -144,7 +172,7 @@ export class TouchControls {
   }
 
   private hitButton(p: Phaser.Input.Pointer): Button | undefined {
-    return this.buttons.find((b) => Math.hypot(p.x - b.x, p.y - b.y) < b.r + 10);
+    return this.allButtons.find((b) => Math.hypot(p.x - b.x, p.y - b.y) < b.r + 10);
   }
 
   private onDown(p: Phaser.Input.Pointer) {
@@ -166,6 +194,21 @@ export class TouchControls {
   }
 
   private onMove(p: Phaser.Input.Pointer) {
+    const a = this.attackButton;
+    if (a.pointerId === p.id) {
+      // Dragging the attack stick aims the attacks; a plain hold attacks the way you face.
+      let dx = p.x - a.x;
+      let dy = p.y - a.y;
+      const len = Math.hypot(dx, dy);
+      if (len > ATTACK_DRAG) {
+        dx = (dx / len) * ATTACK_DRAG;
+        dy = (dy / len) * ATTACK_DRAG;
+      }
+      a.dragX = dx;
+      a.dragY = dy;
+      const locked = !!this.aimingSkill || performance.now() < this.aimLockUntil;
+      if (len > SKILL_AIM_DEADZONE && !locked) this.aimAngle = Math.atan2(dy, dx);
+    }
     for (const b of [this.skillButton, this.skill2Button]) {
       if (!b || b.pointerId !== p.id) continue;
       // Dragging a skill button aims the skill.
@@ -199,7 +242,8 @@ export class TouchControls {
       stick.dy = dy / STICK_RADIUS;
       const pushed = Math.hypot(stick.dx, stick.dy) > DEADZONE;
       const locked = !!this.aimingSkill || performance.now() < this.aimLockUntil;
-      if (pushed && (stick === this.aim || this.aim.pointerId === null) && !locked) {
+      const attackAiming = this.attackButton.pointerId !== null && Math.hypot(this.attackButton.dragX, this.attackButton.dragY) > SKILL_AIM_DEADZONE;
+      if (pushed && (stick === this.aim || (this.aim.pointerId === null && !attackAiming)) && !locked) {
         // The aim stick wins; otherwise face where you walk.
         this.aimAngle = Math.atan2(stick.dy, stick.dx);
       }
@@ -207,6 +251,12 @@ export class TouchControls {
   }
 
   private onUp(p: Phaser.Input.Pointer) {
+    const a = this.attackButton;
+    if (a.pointerId === p.id) {
+      a.pointerId = null;
+      a.dragX = 0;
+      a.dragY = 0;
+    }
     for (const stick of [this.move, this.aim]) {
       if (stick.pointerId === p.id) {
         if (stick === this.move && Math.hypot(stick.dx, stick.dy) > DEADZONE) {
@@ -278,6 +328,32 @@ export class TouchControls {
         g.arc(b.x, b.y, b.r - 2, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * Math.max(0, ready));
         g.strokePath();
       }
+    }
+    this.drawAttack(g);
+  }
+
+  /** The attack stick: a dark circle with a pixel sword on the knob, which follows the finger. */
+  private drawAttack(g: Phaser.GameObjects.Graphics) {
+    const a = this.attackButton;
+    const pressed = a.pointerId !== null;
+    g.fillStyle(0x1c1418, pressed ? 0.7 : 0.45).fillCircle(a.x, a.y, a.r);
+    g.lineStyle(3, pressed ? 0xffd23f : 0xffffff, pressed ? 0.9 : 0.5).strokeCircle(a.x, a.y, a.r);
+    const kx = a.x + a.dragX;
+    const ky = a.y + a.dragY;
+    g.fillStyle(pressed ? 0xd83a3a : 0x6a2a2a, pressed ? 0.95 : 0.85).fillCircle(kx, ky, 26);
+    g.lineStyle(2, 0x000000, 0.6).strokeCircle(kx, ky, 26);
+    const px = 3; // one sword pixel = 3 screen pixels
+    const ox = Math.round(kx - (SWORD[0].length * px) / 2);
+    const oy = Math.round(ky - (SWORD.length * px) / 2);
+    // A dark drop shadow first, then the sword, so it reads on any background.
+    for (const [shift, shadow] of [[1, true], [0, false]] as const) {
+      SWORD.forEach((row, y) => {
+        for (let x = 0; x < row.length; x++) {
+          const c = SWORD_COLORS[row[x]];
+          if (c === undefined) continue;
+          g.fillStyle(shadow ? 0x000000 : c, shadow ? 0.6 : 1).fillRect(ox + x * px + shift, oy + y * px + shift, px, px);
+        }
+      });
     }
   }
 }

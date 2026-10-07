@@ -65,7 +65,7 @@ export class TutorialView {
       {
         title: "ATTACK",
         text: touch
-          ? "Drag the <b>right stick</b> toward a straw dummy to aim and attack. Hit it 3 times."
+          ? "Hold the <b>sword stick</b> (bottom right) to attack, and drag it toward a straw dummy to aim. Hit it 3 times."
           : "Aim with the <b>mouse</b> and <b>click</b> (or hold) to attack a straw dummy. Hit it 3 times.",
         done: () => this.hits >= 3,
       },
