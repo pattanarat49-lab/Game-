@@ -80,7 +80,7 @@ import { DraftScreen } from "../draft";
 import { accountData } from "../account";
 import { TutorialView } from "../tutorial";
 import { isTouchDevice } from "../touch";
-import { ABYSS, DUNGEON, OPEN_WORLD } from "../../../shared/world";
+import { ABYSS, DUNGEON, GLITCH, HEAVEN, OPEN_WORLD } from "../../../shared/world";
 import { BLOCK } from "../../../shared/maps";
 import { DRAGON_FRAMES, attackArtLayout, attackFrame, facingOf, frontOnly, hasHeroArt, heroArtLayout, SWING_TIME, WALK_FRAMES, WALK_FRAME_TIME, walksWithFeet, walkContact, walkOriginY } from "../heroArt";
 
@@ -283,6 +283,7 @@ const ENEMY_SCALE: Record<EnemyKind, number> = {
   swordgod: 1.3,
   knight: 1.25,
   cthulhu: 0.9,
+  godknight: 0.9,
   stonecrawler: 1,
   stonewisp: 1,
   dirtblock: 1.3,
@@ -378,8 +379,8 @@ export class GameScene extends Phaser.Scene {
 
   async create() {
     const stage = stageOf(this.registry.get("stage"));
-    const open = stage === "world" || stage === "dungeon" || stage === "abyss";
-    const song: SongId = stage === "classic" || stage === "royale" || stage === "world" || stage === "dungeon" || stage === "tutorial" ? stage : stage === "abyss" ? "dungeon" : "ring";
+    const open = stage === "world" || stage === "dungeon" || stage === "abyss" || stage === "heaven" || stage === "glitch";
+    const song: SongId = stage === "classic" || stage === "royale" || stage === "world" || stage === "dungeon" || stage === "tutorial" ? stage : stage === "abyss" || stage === "heaven" || stage === "glitch" ? "dungeon" : "ring";
     playMusic(song);
     if (stage === "classic") this.classicGround = this.add.image(0, 0, this.classicTexture(0)).setOrigin(0).setDepth(-10);
     else if (stage === "royale") {
@@ -437,11 +438,11 @@ export class GameScene extends Phaser.Scene {
       cam.setBounds(-60, -60, ROYALE_MAP.cols * BLOCK + 120, ROYALE_MAP.rows * BLOCK + 120);
       cam.setBackgroundColor("#1a5a9a");
     } else if (open) {
-      const m = stage === "world" ? OPEN_WORLD : stage === "abyss" ? ABYSS : DUNGEON;
+      const m = stage === "world" ? OPEN_WORLD : stage === "abyss" ? ABYSS : stage === "heaven" ? HEAVEN : stage === "glitch" ? GLITCH : DUNGEON;
       cam.setBounds(0, 0, m.cols * BLOCK, m.rows * BLOCK);
-      this.cameras.main.setBackgroundColor(stage === "world" ? "#2a6232" : stage === "abyss" ? "#04070d" : "#09070c");
+      this.cameras.main.setBackgroundColor(stage === "world" ? "#2a6232" : stage === "abyss" ? "#04070d" : stage === "heaven" ? "#cfe3f4" : stage === "glitch" ? "#050203" : "#09070c");
     } else cam.setBounds(0, 0, WORLD_W, WORLD_H);
-    cam.setZoom(stage === "classic" || stage === "royale" ? CLASSIC_ZOOM : stage === "world" ? WORLD_ZOOM : stage === "abyss" ? 1.05 : 2); // Cthulhu is huge: see more of his hall
+    cam.setZoom(stage === "classic" || stage === "royale" ? CLASSIC_ZOOM : stage === "world" ? WORLD_ZOOM : stage === "abyss" || stage === "heaven" || stage === "glitch" ? 1.05 : 2); // Cthulhu is huge: see more of his hall
     // Lock the camera to our hero; smoothing on top of rounded pixels makes sprites shimmer.
     cam.startFollow(this.cameraTarget, true, 1, 1);
     cam.setRoundPixels(true);
@@ -487,7 +488,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   /** The Open World or the dungeon: map, portals, chat, profiles; a portal or a duel moves us to another room. */
-  private openWorld(stage: "world" | "dungeon" | "abyss", online: boolean) {
+  private openWorld(stage: "world" | "dungeon" | "abyss" | "heaven" | "glitch", online: boolean) {
     this.world = new WorldView(
       this,
       stage,
@@ -524,6 +525,10 @@ export class GameScene extends Phaser.Scene {
     if (state.stage === "abyss" && !this.dungeonCleared && String(state.notice ?? "").startsWith("BOSS DEFEATED")) {
       this.dungeonCleared = true;
       recordResult({ mode: "Sunken Temple", won: true, hero, at: Date.now() });
+    }
+    if (state.stage === "heaven" && !this.dungeonCleared && String(state.notice ?? "").startsWith("BOSS DEFEATED")) {
+      this.dungeonCleared = true;
+      recordResult({ mode: "Celestial Sanctum", won: true, hero, at: Date.now() });
     }
     this.lastPhase = phase;
   }
@@ -3084,7 +3089,7 @@ export class GameScene extends Phaser.Scene {
       seen.add(id);
       let view = this.enemies.get(id);
       if (!view) {
-        const sprite = this.add.image(e.x, e.y, e.kind).setOrigin(0.5, e.kind === "knight" ? 0.9 : e.kind === "cthulhu" ? 0.93 : 0.75).setScale(ENEMY_SCALE[e.kind as EnemyKind]);
+        const sprite = this.add.image(e.x, e.y, e.kind).setOrigin(0.5, e.kind === "knight" ? 0.9 : e.kind === "cthulhu" ? 0.93 : e.kind === "godknight" ? 0.96 : 0.75).setScale(ENEMY_SCALE[e.kind as EnemyKind]);
         sprite.setAlpha(0);
         this.tweens.add({ targets: sprite, alpha: 1, duration: 300 });
         view = { sprite, bar: this.add.graphics(), x: e.x, y: e.y, vx: 0, vy: 0 };
@@ -3119,6 +3124,7 @@ export class GameScene extends Phaser.Scene {
       s.setDepth(s.y);
       if (e.kind === "knight" && !asHuman) this.animKnight(view, e, s, dt);
       if (e.kind === "cthulhu" && !asHuman) this.animCthulhu(view, e, s, dt);
+      if (e.kind === "godknight" && !asHuman) s.setFlipX(false).setScale(s.scaleX, s.scaleY * (1 + 0.012 * Math.sin(this.time.now / 600))); // a slow breath
       const was = this.enemyHp.get(id);
       if (was !== undefined && e.hp < was - 0.5) this.popDamage(s.x, s.y - s.displayHeight * 0.7, was - e.hp, "#ffe27a");
       if (this.enemyHp.size > 400) this.enemyHp.clear();

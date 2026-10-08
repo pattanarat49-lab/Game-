@@ -97,7 +97,7 @@ import {
   CLASSIC_TEAM_SIZE,
   aimPickScore,
 } from "./game";
-import { ABYSS, DUNGEON, OPEN_WORLD, PORTAL_COUNTDOWN, PORTAL_RADIUS } from "./world";
+import { ABYSS, DUNGEON, GLITCH, HEAVEN, OPEN_WORLD, PORTAL_COUNTDOWN, PORTAL_RADIUS } from "./world";
 import { ROYALE_MAP, ROYALE_PLAYERS, ROYALE_SIGHT, ROYALE_BURN, ROYALE_HEAL, ROYALE_HEAL_RADIUS, royaleRadius } from "./royale";
 import { BLOCK, CLASSIC_MAPS, ClassicMap, MAP_X, MAP_Y, Team, bushPatches, classicMap, distanceField, seesInto, mapLineClear, stepAlong } from "./maps";
 
@@ -651,7 +651,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
   ) {
     state.stage = stage;
     this.startIntermission(0);
-    if (stage === "world" || stage === "dungeon" || stage === "abyss") {
+    if (stage === "world" || stage === "dungeon" || stage === "abyss" || stage === "heaven" || stage === "glitch") {
       state.phase = "fight";
       state.lavaRadius = 5000;
       if (stage === "dungeon") this.fillDungeon();
@@ -659,6 +659,11 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
         this.spawnEnemyAt("cthulhu", ABYSS.boss.x, ABYSS.boss.y);
         state.notice = "Cthulhu sleeps on his dais...";
       }
+      if (stage === "heaven") {
+        this.spawnEnemyAt("godknight", HEAVEN.boss.x, HEAVEN.boss.y);
+        state.notice = "The God Knight stands watch...";
+      }
+      if (stage === "glitch") state.notice = "The Glitch has not shown itself... yet.";
     }
     if (stage === "tutorial") {
       state.phase = "fight";
@@ -785,11 +790,11 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
     const s = this.state;
     let boss = false;
     s.enemies.forEach((e) => {
-      if (e.kind === "cthulhu") boss = true;
+      if (e.kind === "cthulhu" || e.kind === "godknight") boss = true;
     });
     if (boss || this.dungeonCleared) return;
     this.dungeonCleared = true;
-    s.notice = "BOSS DEFEATED! Cthulhu sinks back into the deep";
+    s.notice = s.stage === "heaven" ? "BOSS DEFEATED! The God Knight falls" : "BOSS DEFEATED! Cthulhu sinks back into the deep";
   }
 
   /** Hero-against-hero stages are fought inside the boxing ring's ropes. */
@@ -2242,7 +2247,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
     else if (s.stage === "world") this.updateWorld(dt);
     else if (s.stage === "tutorial") this.updateTutorial(dt);
     else if (s.stage === "dungeon") this.updateDungeon();
-    else if (s.stage === "abyss") this.updateAbyss();
+    else if (s.stage === "abyss" || s.stage === "heaven") this.updateAbyss();
     else if (this.ring) this.updatePvp(dt);
     else if (s.phase === "intermission") {
       s.phaseTimer -= dt;
@@ -5276,8 +5281,8 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       p.warp = (p.warp + 1) % 256;
       return;
     }
-    if (s.stage === "world" || s.stage === "dungeon" || s.stage === "abyss") {
-      const spot = s.stage === "world" ? OPEN_WORLD.spawn : s.stage === "abyss" ? ABYSS.spawn : DUNGEON.spawn;
+    if (s.stage === "world" || s.stage === "dungeon" || s.stage === "abyss" || s.stage === "heaven" || s.stage === "glitch") {
+      const spot = s.stage === "world" ? OPEN_WORLD.spawn : s.stage === "abyss" ? ABYSS.spawn : s.stage === "heaven" ? HEAVEN.spawn : s.stage === "glitch" ? GLITCH.spawn : DUNGEON.spawn;
       const a = Math.random() * Math.PI * 2;
       const r = Math.random() * 40;
       const at = this.move(spot.x, spot.y, Math.cos(a) * r, Math.sin(a) * r, PLAYER_RADIUS);
@@ -5543,6 +5548,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       if (e.kind === "swordgod" && !human && this.updateSwordGod(e, brain, dx, dy, dist, dt)) return;
       if (e.kind === "knight" && !human && this.updateKnight(e, brain, p, dx, dy, dist, dt)) return;
       if (e.kind === "cthulhu" && !human && this.updateCthulhu(e, brain, dx, dy, dist, dt)) return;
+      if (e.kind === "godknight") return; // stands still for now (his moves come later)
 
       // Ranged enemies keep their distance; everyone else charges.
       let dirX = dx / dist;

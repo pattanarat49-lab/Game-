@@ -130,6 +130,23 @@ export class HudScene extends Phaser.Scene {
       });
       banner = me?.dead ? `YOU FELL\nBack at the entrance in ${Math.ceil(me.respawnIn)}` : "";
       this.special.setText(String(state.notice ?? "").startsWith("BOSS DEFEATED") ? "BOSS DEFEATED!\nThe portal home is open by the stairs" : "").setColor("#9ad8ff");
+    } else if (state.stage === "glitch") {
+      this.waveText.setText("THE RIFT");
+      banner = me?.dead ? `YOU FELL\nBack on the bridge in ${Math.ceil(me.respawnIn)}` : "";
+      this.special.setText(String(state.notice ?? "")).setColor("#ff6a6a");
+    } else if (state.stage === "heaven") {
+      // The Celestial Sanctum: the God Knight's health bar once the fight is on.
+      this.waveText.setText("CELESTIAL SANCTUM  GOD KNIGHT");
+      state.enemies.forEach((e: any) => {
+        if (e.kind !== "godknight" || e.hp >= e.maxHp) return;
+        const w = Math.min(500, this.scale.width - 480);
+        const x = (this.scale.width - w) / 2;
+        this.bars.fillStyle(0x000000, 0.7).fillRect(x - 4, 36, w + 8, 14);
+        this.bars.fillStyle(0x3a2a0a, 1).fillRect(x, 40, w, 6);
+        this.bars.fillStyle(0xffd040, 1).fillRect(x, 40, w * Math.max(0, e.hp / e.maxHp), 6);
+      });
+      banner = me?.dead ? `YOU FELL\nBack on the stairs in ${Math.ceil(me.respawnIn)}` : "";
+      this.special.setText(String(state.notice ?? "")).setColor("#ffe27a");
     } else if (state.stage === "abyss") {
       // The Sunken Temple: Cthulhu alone, with a big health bar once he wakes.
       this.waveText.setText("SUNKEN TEMPLE  CTHULHU");

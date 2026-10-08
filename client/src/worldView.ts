@@ -3,7 +3,7 @@
 
 import Phaser from "phaser";
 import { BLOCK } from "../../shared/maps";
-import { ABYSS, ABYSS_ART, D_POOL, DUNGEON, L_DEEP, L_WATER, OPEN_WORLD, PORTAL_RADIUS } from "../../shared/world";
+import { ABYSS, ABYSS_ART, D_POOL, DUNGEON, GLITCH, HEAVEN, L_DEEP, L_WATER, OPEN_WORLD, PORTAL_RADIUS } from "../../shared/world";
 import { CHUNK, dungeonChunk, propCanvas, worldChunk } from "./worldArt";
 import { WorldUi } from "./worldUi";
 import { playSanctuaryIntro } from "./cutscene";
@@ -23,28 +23,30 @@ export class WorldView {
 
   constructor(
     private scene: Phaser.Scene,
-    private stage: "world" | "dungeon" | "abyss",
+    private stage: "world" | "dungeon" | "abyss" | "heaven" | "glitch",
     private room: any,
     private bodyOf: (id: string) => { x: number; y: number } | undefined,
     switchRoom: (stage: string, code: string) => void,
     online: boolean,
   ) {
-    const map = stage === "world" ? OPEN_WORLD : stage === "abyss" ? ABYSS : DUNGEON;
+    const map = stage === "world" ? OPEN_WORLD : stage === "abyss" ? ABYSS : stage === "heaven" ? HEAVEN : stage === "glitch" ? GLITCH : DUNGEON;
+    const picture = stage === "abyss" || stage === "heaven" || stage === "glitch"; // boss rooms drawn as one picture by the user
     if (stage === "dungeon") playSanctuaryIntro();
     const w = map.cols * BLOCK;
     const h = map.rows * BLOCK;
-    if (stage === "abyss") {
-      // Cthulhu's hall is the user's own picture of it (loaded on first visit).
-      const show = () => scene.add.image(0, 0, "abyss_room").setOrigin(0).setScale(ABYSS_ART.scale).setDepth(-10);
-      if (scene.textures.exists("abyss_room")) show();
+    if (picture) {
+      // Cthulhu's and the God Knight's halls are the user's own pictures of them (loaded on first visit).
+      const key = `${stage}_room`;
+      const show = () => scene.add.image(0, 0, key).setOrigin(0).setScale(ABYSS_ART.scale).setDepth(-10);
+      if (scene.textures.exists(key)) show();
       else {
-        scene.load.image("abyss_room", "abyss-room.jpg");
+        scene.load.image(key, `${stage}-room.jpg`);
         scene.load.once(Phaser.Loader.Events.COMPLETE, show);
         scene.load.start();
       }
     }
     // The ground, in squares.
-    for (let cy = 0; stage !== "abyss" && cy * CHUNK < h; cy++)
+    for (let cy = 0; !picture && cy * CHUNK < h; cy++)
       for (let cx = 0; cx * CHUNK < w; cx++) {
         const key = `${stage}_chunk_${cx}_${cy}`;
         if (!scene.textures.exists(key)) scene.textures.addCanvas(key, stage === "world" ? worldChunk(cx, cy) : dungeonChunk(cx, cy, DUNGEON));
@@ -207,11 +209,13 @@ export class WorldView {
     } else {
       // Torches on the room corners, flickering.
       // (The Sunken Temple's braziers burn a ghostly green.)
-      const abyss = this.stage === "abyss";
-      for (const t of (abyss ? ABYSS : DUNGEON).torches) {
+      const abyss = this.stage === "abyss" || this.stage === "heaven" || this.stage === "glitch";
+      const heaven = this.stage === "heaven";
+      const rift = this.stage === "glitch";
+      for (const t of (rift ? GLITCH : heaven ? HEAVEN : abyss ? ABYSS : DUNGEON).torches) {
         const f = 0.7 + 0.3 * Math.sin(now / 90 + t.x * 0.13 + t.y * 0.07);
-        floor.fillStyle(abyss ? 0x40d8ff : 0xffa040, (abyss ? 0.14 : 0.08) * f).fillCircle(t.x, t.y, 46);
-        floor.fillStyle(abyss ? 0x90f0ff : 0xffc060, (abyss ? 0.1 : 0.12) * f).fillCircle(t.x, t.y, 24);
+        floor.fillStyle(rift ? 0xff2a3a : heaven ? 0xffe070 : abyss ? 0x40d8ff : 0xffa040, (abyss ? 0.14 : 0.08) * f).fillCircle(t.x, t.y, 46);
+        floor.fillStyle(rift ? 0xff8a8a : heaven ? 0xfff0b0 : abyss ? 0x90f0ff : 0xffc060, (abyss ? 0.1 : 0.12) * f).fillCircle(t.x, t.y, 24);
         if (abyss) continue; // the picture has its own lanterns: just their glow
         g.fillStyle(0x5a3a1a, 1).fillRect(t.x - 2, t.y - 4, 4, 8);
         g.fillStyle(0xff8a2a, 1).fillRect(t.x - 2, t.y - 9 - f * 2, 4, 5);

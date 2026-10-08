@@ -1,6 +1,6 @@
 import { NEW_HEROES, NewHeroId, newHeroDefs } from "./heroes2";
 import { ClassicMap, classicMap, mapBlocksShot, moveOnMap } from "./maps";
-import { ABYSS, DUNGEON, OPEN_WORLD } from "./world";
+import { ABYSS, DUNGEON, GLITCH, HEAVEN, OPEN_WORLD } from "./world";
 import { ROYALE_MAP } from "./royale";
 // Game rules shared by the client (prediction, rendering) and the server (authority).
 
@@ -1877,7 +1877,8 @@ export type EnemyKind =
   | "cinderling" | "brute" | "caster" | "warden" | "godzilla" | "monkey" | "bananamonkey" | "kingkong" | "swordsman" | "swordmaster" | "swordgod"
   | "dirtblock" | "tntblock" | "craftblock" | "rockwall" | "dummy"
   | "knight" | "stonecrawler" | "stonewisp"
-  | "cthulhu";
+  | "cthulhu"
+  | "godknight";
 
 export interface EnemyDef {
   hp: number;
@@ -1923,6 +1924,8 @@ export const ENEMIES: Record<EnemyKind, EnemyDef> = {
   stonewisp: { hp: 60, speed: 45, radius: 6, touchDamage: 6, score: 20, shootEvery: 2, shotDamage: 14, shot: "boulder", keepAway: 120 },
   // The Sunken Temple (2026-10-08): Cthulhu, alone, no minions.
   cthulhu: { hp: 16000, speed: 26, radius: 24, touchDamage: 400, score: 5000, boss: true },
+  // The God Knight (2026-10-08): only stands in his sanctum for now; his moves come later.
+  godknight: { hp: 20000, speed: 0, radius: 22, touchDamage: 0, score: 5000, boss: true },
   godzilla: { hp: 7000, speed: 24, radius: 22, touchDamage: 105, score: 2000, shootEvery: 3, shotDamage: ENEMY_SHOT_DAMAGE_BASE * 3, boss: true },
 };
 
@@ -2168,6 +2171,8 @@ export function areaOf(stage: string, map = 0): Area {
   if (stage === "world") return OPEN_WORLD;
   if (stage === "dungeon") return DUNGEON;
   if (stage === "abyss") return ABYSS;
+  if (stage === "heaven") return HEAVEN;
+  if (stage === "glitch") return GLITCH;
   if (stage === "royale") return ROYALE_MAP;
   return stage === "classic" ? classicMap(map) : ringStage(stage);
 }
@@ -2254,7 +2259,7 @@ export function inLava(x: number, y: number, lavaRadius: number): boolean {
 }
 
 // Stages
-export type StageId = "lava" | "jungle" | "dojo" | "boss" | "pvp" | "duel" | "pve" | "classic" | "royale" | "world" | "dungeon" | "tutorial" | "abyss";
+export type StageId = "lava" | "jungle" | "dojo" | "boss" | "pvp" | "duel" | "pve" | "classic" | "royale" | "world" | "dungeon" | "tutorial" | "abyss" | "heaven" | "glitch";
 
 export interface StageDef {
   name: string;
@@ -2272,6 +2277,8 @@ export const STAGES: Record<StageId, StageDef> = {
   world: { name: "Open World", blurb: "Meet everyone in a big meadow village: chat, look up players, ask for duels, and take the portal to the dungeon together." },
   tutorial: { name: "Tutorial", blurb: "Learn to move, attack, use skills and dash on training dummies." },
   abyss: { name: "Sunken Temple", blurb: "An ancient flooded temple where Cthulhu sleeps. No minions, only him. Solo or online." },
+  glitch: { name: "The Rift", blurb: "A broken platform over the void, where The Glitch was born. Solo or online." },
+  heaven: { name: "Celestial Sanctum", blurb: "A shining hall above the clouds where the God Knight keeps watch. Solo or online." },
   dungeon: { name: "Dungeon", blurb: "Rooms full of monsters and a boss at the end. Beat it and the way back opens." },
   royale: { name: "Battle Royale", blurb: "8 heroes on a big round island with tall grass and cover. One life each, the last one standing wins. The storm ring closes in when the fight drags on. Bots fill empty slots. Solo or online." },
   classic: { name: "Classic 3v3", blurb: "Red vs Blue, 3 heroes a side, on 6 maps with walls, tall grass and water. Bots fill empty slots. 3 lives each; the last team standing wins. Solo or online." },
@@ -2280,7 +2287,7 @@ export const STAGES: Record<StageId, StageDef> = {
 /** Stages taken out of the game (user request 2026-10-05: the Boss Room); their code is kept. */
 const REMOVED_STAGES: StageId[] = ["boss", "lava", "jungle", "dojo"];
 /** The Open World and its dungeon have their own button, not a stage card. */
-const OWN_BUTTON: StageId[] = ["world", "dungeon", "tutorial", "abyss"];
+const OWN_BUTTON: StageId[] = ["world", "dungeon", "tutorial", "abyss", "heaven", "glitch"];
 export const STAGE_IDS = (Object.keys(STAGES) as StageId[]).filter((id) => !REMOVED_STAGES.includes(id) && !OWN_BUTTON.includes(id));
 
 /** Wave stages: which enemies come in each wave. */

@@ -350,29 +350,18 @@ export const D_POOL = 5; // the Sunken Temple's flooded pits (water you can't wa
 /** The user's picture of Cthulhu's hall (client/public/abyss-room.jpg) is 1536x1024; one block is 24 of its pixels. */
 export const ABYSS_ART = { w: 1536, h: 1024, scale: BLOCK / 24 };
 
-function buildAbyss(): DungeonMap {
-  const C = 64;
-  const R = 43;
+type Rect = [number, number, number, number];
+type Circle = [number, number, number];
+
+/**
+ * A boss room drawn by the user as one 1536x1024 picture: `open` rectangles (picture pixels) are floor,
+ * `solid` circles are pillars, statues and braziers standing on it. Spawn, boss and torches are picture pixels too.
+ */
+function pictureRoom(name: string, open: Rect[], solid: Circle[], spawn: [number, number], boss: [number, number], torches: [number, number][], size: [number, number] = [1536, 1024]): DungeonMap {
+  const C = Math.ceil(size[0] / 24);
+  const R = Math.ceil(size[1] / 24);
   const tiles = new Uint8Array(C * R).fill(T_WALL);
   const look = new Uint8Array(C * R).fill(D_WALL);
-  // Where a hero can walk, in the picture's pixels: the flooded hall, the bridges and side rooms, the two stairways.
-  const open: [number, number, number, number][] = [
-    [255, 100, 1285, 900], // the hall
-    [640, 880, 900, 955], // ...and its south end, between the ruins
-    [90, 400, 420, 590], // west room and its bridge
-    [1120, 400, 1445, 590], // east room and its bridge
-    [705, 20, 835, 260], // north stairs
-    [705, 740, 835, 1000], // south stairs (the way in)
-  ];
-  // What stands in the way: pillars, the tentacles rising from the water and the lanterns round the dais.
-  const solid: [number, number, number][] = [
-    [350, 345, 22], [420, 190, 25], [968, 168, 22], [1110, 175, 25], [1188, 340, 22], [370, 675, 22], [1160, 670, 22],
-    [432, 830, 30], [1100, 820, 30], [572, 860, 22], [962, 860, 22],
-    [295, 195, 45], [1225, 205, 45], [305, 755, 50], [1245, 740, 50],
-    [620, 335, 28], [905, 335, 28], [625, 630, 28], [905, 630, 28],
-    [455, 340, 20], [1075, 335, 20], [465, 672, 20], [1062, 672, 20],
-    [660, 190, 26], [870, 190, 26], [660, 770, 26], [870, 770, 26], // the lantern posts beside the stairs
-  ];
   for (let r = 0; r < R; r++)
     for (let c = 0; c < C; c++) {
       const x = c * 24 + 12;
@@ -384,36 +373,110 @@ function buildAbyss(): DungeonMap {
     }
   const k = ABYSS_ART.scale;
   const at = (x: number, y: number) => ({ x: x * k, y: y * k });
-  const spawn = at(770, 960);
-  // The picture's lanterns, for their flickering glow.
-  const torches = [
-    [665, 55], [860, 55], [660, 180], [870, 180], [620, 325], [905, 325], [625, 625], [905, 625],
-    [455, 335], [1075, 335], [465, 670], [1060, 670], [660, 765], [870, 765], [660, 930], [870, 930],
-    [80, 395], [230, 400], [75, 570], [230, 560], [1455, 395], [1305, 400], [1455, 570], [1305, 560],
-  ].map(([x, y]) => at(x, y));
+  const where = at(...spawn);
   return {
-    name: "SUNKEN TEMPLE",
+    name,
     theme: { ...THEME, floor: "#22302c", floor2: "#1e2a27", wall: "#0c1412", wallTop: "#3e5a48" },
     tiles,
     look,
     rooms: [{ c0: 3, r0: 4, c1: 60, r1: 40, monsters: [], role: "boss" }],
     guards: [],
-    spawns: { 1: [spawn], 2: [spawn] },
+    spawns: { 1: [where], 2: [where] },
     cols: C,
     rows: R,
     ox: 0,
     oy: 0,
-    spawn,
-    exit: at(770, 900),
-    boss: at(765, 480),
-    torches,
-    rune: { ...at(765, 480), r: 0 },
+    spawn: where,
+    exit: at(spawn[0], spawn[1] - 60),
+    boss: at(...boss),
+    torches: torches.map(([x, y]) => at(x, y)),
+    rune: { ...at(...boss), r: 0 },
   };
+}
+
+function buildAbyss(): DungeonMap {
+  return pictureRoom(
+    "SUNKEN TEMPLE",
+    // The flooded hall, the bridges and side rooms, the two stairways.
+    [
+      [255, 100, 1285, 900], // the hall
+      [640, 880, 900, 955], // ...and its south end, between the ruins
+      [90, 400, 420, 590], // west room and its bridge
+      [1120, 400, 1445, 590], // east room and its bridge
+      [705, 20, 835, 260], // north stairs
+      [705, 740, 835, 1000], // south stairs (the way in)
+    ],
+    // Pillars, the tentacles rising from the water and the lanterns round the dais.
+    [
+      [350, 345, 22], [420, 190, 25], [968, 168, 22], [1110, 175, 25], [1188, 340, 22], [370, 675, 22], [1160, 670, 22],
+      [432, 830, 30], [1100, 820, 30], [572, 860, 22], [962, 860, 22],
+      [295, 195, 45], [1225, 205, 45], [305, 755, 50], [1245, 740, 50],
+      [620, 335, 28], [905, 335, 28], [625, 630, 28], [905, 630, 28],
+      [455, 340, 20], [1075, 335, 20], [465, 672, 20], [1062, 672, 20],
+      [660, 190, 26], [870, 190, 26], [660, 770, 26], [870, 770, 26], // the lantern posts beside the stairs
+    ],
+    [770, 960],
+    [765, 480],
+    [
+      [665, 55], [860, 55], [660, 180], [870, 180], [620, 325], [905, 325], [625, 625], [905, 625],
+      [455, 335], [1075, 335], [465, 670], [1060, 670], [660, 765], [870, 765], [660, 930], [870, 930],
+      [80, 395], [230, 400], [75, 570], [230, 560], [1455, 395], [1305, 400], [1455, 570], [1305, 560],
+    ],
+  );
+}
+
+/** The Celestial Sanctum (2026-10-08): the God Knight's hall in the clouds, from the user's picture (heaven-room.jpg). */
+function buildHeaven(): DungeonMap {
+  return pictureRoom(
+    "CELESTIAL SANCTUM",
+    [
+      [255, 150, 1285, 780], // the great floor
+      [380, 780, 1160, 880], // ...down to the steps
+      [700, 100, 835, 160], // up toward the throne
+      [705, 860, 830, 1000], // the steps in
+      [130, 250, 255, 400], [110, 420, 255, 560], [180, 640, 255, 770], // west wing
+      [1285, 250, 1410, 400], [1285, 420, 1430, 560], [1285, 640, 1360, 770], // east wing
+    ],
+    [
+      [330, 200, 45], [1195, 200, 45], [300, 770, 45], [1230, 770, 45], // the angel statues
+      [660, 170, 35], [870, 170, 35], [660, 860, 35], [870, 860, 35], // braziers by the stairs
+      [605, 330, 35], [930, 330, 35], [605, 670, 35], [930, 670, 35], // the four pedestals round the star
+      [430, 525, 30], [1105, 525, 30], [460, 840, 30], [1075, 840, 30], // pillars
+      [270, 420, 22], [270, 560, 22], [1265, 420, 22], [1265, 560, 22],
+    ],
+    [768, 960],
+    [768, 505],
+    [
+      [660, 150], [870, 150], [605, 305], [930, 305], [605, 645], [930, 645], [430, 450], [1105, 450],
+      [460, 790], [1075, 790], [660, 840], [870, 840], [270, 410], [270, 545], [1265, 410], [1265, 545],
+    ],
+  );
 }
 
 export const OPEN_WORLD: OpenMap = buildWorld();
 export const DUNGEON: DungeonMap = buildDungeon();
 export const ABYSS: DungeonMap = buildAbyss();
+export const HEAVEN: DungeonMap = buildHeaven();
+/** The Glitch's rift (2026-10-08): a round black platform over the void, from the user's picture (glitch-room.jpg, 1312x1199). */
+export const GLITCH: DungeonMap = pictureRoom(
+  "THE RIFT",
+  [
+    [325, 245, 990, 905], // the round platform (trimmed to a circle below)
+    [605, 140, 705, 260], // north stairs
+    [600, 790, 710, 1185], // the long bridge in from the south
+    [0, 500, 335, 640], // west bridge
+    [985, 500, 1312, 640], // east bridge
+  ],
+  [
+    [656, 575, 60], // the black hole in the middle
+    // The platform is round: block its square corners.
+    [325, 245, 150], [990, 245, 150], [325, 905, 150], [990, 905, 150],
+  ],
+  [656, 1120],
+  [656, 575],
+  [[370, 200], [940, 200], [370, 845], [940, 845], [656, 575]],
+  [1312, 1199],
+);
 
 /** How close to the portal a hero must stand to get on the list for the dungeon. */
 export const PORTAL_RADIUS = 46;

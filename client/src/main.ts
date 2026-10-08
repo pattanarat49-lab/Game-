@@ -55,6 +55,8 @@ const home = new Home(menu, {
     }, 300);
   },
   openWorld: () => void startGame("world", soloOnly, ""),
+  heaven: () => void startGame("heaven", soloOnly, ""),
+  glitch: () => void startGame("glitch", soloOnly, ""),
   abyss: () => {
     if (cthulhuUnlocked()) void startGame("abyss", soloOnly, "");
     else home.note("The door is sealed... Defeat the Ancient Knight in the Open World dungeon to find the stone tablet that opens it.");
