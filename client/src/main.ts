@@ -11,6 +11,7 @@ import { showSlot, showStarterPicker } from "./unlocks";
 import { Home } from "./home";
 import { playMusic, uiClick } from "./audio";
 import { showCthulhuStory, showIntro } from "./intro";
+import { cthulhuUnlocked } from "./progress";
 // A soft click on every menu button.
 document.addEventListener("click", (e) => {
   if ((e.target as HTMLElement | null)?.closest?.("button")) uiClick();
@@ -54,7 +55,10 @@ const home = new Home(menu, {
     }, 300);
   },
   openWorld: () => void startGame("world", soloOnly, ""),
-  abyss: () => void startGame("abyss", soloOnly, ""),
+  abyss: () => {
+    if (cthulhuUnlocked()) void startGame("abyss", soloOnly, "");
+    else home.note("The door is sealed... Defeat the Ancient Knight in the Open World dungeon to find the stone tablet that opens it.");
+  },
   play: (stage, solo, code) => void startGame(stage, solo, code),
   rank: () => (currentAccount() ? { r1: accountData().rank?.r1 ?? 0, r3: accountData().rank?.r3 ?? 0 } : undefined),
   logout: soloOnly ? undefined : () => logOut(),

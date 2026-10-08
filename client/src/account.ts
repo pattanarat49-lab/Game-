@@ -7,6 +7,7 @@ export interface AccountData {
   stats?: unknown;
   prefs?: { hero?: string; stage?: string; bot?: string; fav?: string };
   tutorial?: boolean; // the tutorial was played (or skipped)
+  knight?: boolean; // the Ancient Knight was beaten: Cthulhu's Sunken Temple is open
   owned?: string[]; // heroes unlocked (the server's to change)
   spins?: number; // slot spins waiting (the server's to change)
   profile?: unknown; // hero mastery and titles (profile.ts)

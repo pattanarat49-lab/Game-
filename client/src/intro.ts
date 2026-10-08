@@ -3,12 +3,38 @@
  * rising slowly into the stars like an old space-opera crawl. SKIP (or the end of the crawl) closes it.
  */
 
-const STORY = [
-  "Long, long ago, every dimension lived side by side in peace...",
-  "...until THE GLITCH was born.",
-  "It tore through the walls between worlds and threw every dimension into chaos.",
-  "Now the heroes of each dimension are forced to fight one another, to protect the world they call home.",
-];
+export interface Chapter {
+  lead: string;
+  chapter: string;
+  name: string;
+  lines: string[];
+}
+
+/** Chapter I: shown every time the game opens. */
+export const OPENING: Chapter = {
+  lead: "Long, long ago, in dimensions far, far apart....",
+  chapter: "CHAPTER I",
+  name: "THE GLITCH",
+  lines: [
+    "Long, long ago, every dimension lived side by side in peace...",
+    "...until THE GLITCH was born.",
+    "It tore through the walls between worlds and threw every dimension into chaos.",
+    "Now the heroes of each dimension are forced to fight one another, to protect the world they call home.",
+  ],
+};
+
+/** Chapter II: after the Ancient Knight falls in the Open World's dungeon (it opens the way to Cthulhu). */
+export const CHAPTER_TWO: Chapter = {
+  lead: "Deep beneath the Ancient Knight's sanctuary....",
+  chapter: "CHAPTER II",
+  name: "THE STONE TABLET",
+  lines: [
+    "With the Ancient Knight fallen, the adventurers have discovered an ancient stone tablet.",
+    "It is one more step on the road to saving every dimension.",
+    "The tablet opens a gate to CTHULHU, one of the servants of THE GLITCH.",
+    "Look to the stained glass... the Sunken Temple awaits.",
+  ],
+};
 
 const CSS = `
 #opening { position: fixed; inset: 0; z-index: 100000; background: #000; overflow: hidden; font-family: "Press Start 2P", monospace;
@@ -39,7 +65,7 @@ const CSS = `
 `;
 
 /** Shows the crawl; resolves once it has finished or the player skips it. */
-export function showIntro(): Promise<void> {
+export function showIntro(story: Chapter = OPENING): Promise<void> {
   return new Promise((resolve) => {
     if (!document.getElementById("opening-css")) {
       const style = document.createElement("style");
@@ -49,16 +75,14 @@ export function showIntro(): Promise<void> {
     }
     const root = document.createElement("div");
     root.id = "opening";
-    const [first, ...rest] = STORY;
     root.innerHTML = `
       <canvas></canvas>
-      <div class="intro-lead">Long, long ago, in dimensions far, far apart....</div>
+      <div class="intro-lead">${story.lead}</div>
       <div class="intro-title">RIFTBORN<small>BATTLE OF THE MULTIVERSE</small></div>
       <div class="intro-stage"><div class="crawl">
-        <h2>EPISODE I</h2>
-        <h3>THE GLITCH</h3>
-        <p>${first}</p>
-        ${rest.map((line) => `<p>${line}</p>`).join("")}
+        <h2>${story.chapter}</h2>
+        <h3>${story.name}</h3>
+        ${story.lines.map((line) => `<p>${line}</p>`).join("")}
       </div></div>
       <button type="button" class="skip">SKIP &#9654;&#9654;</button>`;
     document.body.append(root);

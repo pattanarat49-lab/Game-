@@ -43,6 +43,10 @@ const CSS = `
 .hm-hit:active { transform: scale(0.97); }
 /* Cthulhu's head in the stained glass is a secret door into the Sunken Temple. */
 #hm-cthulhu { left: 515px; top: 293px; width: 140px; height: 144px; border-radius: 50%; }
+#hm-note { position: absolute; left: 50%; top: 470px; transform: translateX(-50%); max-width: 760px; padding: 18px 26px; text-align: center;
+  font-size: 20px; line-height: 1.6; color: #b8ffd8; background: rgba(4, 16, 12, .9); border: 3px solid #3ad88a; border-radius: 8px;
+  box-shadow: 0 0 30px rgba(60, 255, 150, .35); pointer-events: none; opacity: 0; transition: opacity .3s; z-index: 5; }
+#hm-note.on { opacity: 1; }
 #hm-cthulhu:hover { box-shadow: 0 0 0 4px rgba(120, 255, 160, 0.6), 0 0 40px rgba(80, 255, 140, 0.7); }
 /* 2026-10-08 (user request): nothing stands in the middle of the stained-glass hall any more. */
 #hm-ped, #hm-hero, #hm-heroname, #hm-title, #hm-mastery { display: none !important; }
@@ -215,7 +219,8 @@ export class Home {
       <button type="button" class="hm-main hm-fr" id="hm-world" style="left:390px;top:612px;width:290px;height:104px"><span class="tx">OPEN WORLD</span></button>
       <button type="button" class="hm-main hm-fr" id="hm-start" aria-label="Start game" style="left:692px;top:586px;width:472px;height:142px"><span class="tx">\u2726 START GAME \u2726</span></button>
       <button type="button" class="hm-main hm-fr" id="hm-char" style="left:1172px;top:612px;width:292px;height:104px"><span class="tx">CHARACTER</span></button>
-      <div id="home-error"></div>`;
+      <div id="home-error"></div>
+      <div id="hm-note"></div>`;
     root.append(stage);
     // SETTING sits in the top-right corner of the screen (outside the scaled picture, so it is always reachable).
     const setting = document.createElement("button");
@@ -336,6 +341,17 @@ export class Home {
   }
 
   /** SETTING: the attack mode switch (DEFAULT aims for you, ADVANCE is the sword joystick). */
+  /** A short message over the hall (e.g. why Cthulhu's door is still shut). */
+  note(text: string) {
+    const el = this.stage.querySelector<HTMLElement>("#hm-note");
+    if (!el) return;
+    el.textContent = text;
+    el.classList.add("on");
+    clearTimeout(this.noteTimer);
+    this.noteTimer = window.setTimeout(() => el.classList.remove("on"), 3500);
+  }
+  private noteTimer = 0;
+
   showSettings() {
     const { el } = this.screen("SETTING");
     const box = document.createElement("div");

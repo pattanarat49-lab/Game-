@@ -71,6 +71,8 @@ import { ROYALE_HEAL_RADIUS, ROYALE_MAP } from "../../../shared/royale";
 import { MAP_H, MAP_Y, classicMap, inBush, mapBlocksShot, seesInto } from "../../../shared/maps";
 import { RiftSim, TITAN_ATTACK_COOLDOWN } from "../../../shared/sim";
 import { WorldView } from "../worldView";
+import { CHAPTER_TWO, showIntro } from "../intro";
+import { beatKnight } from "../progress";
 import { recordResult, statsJson } from "../stats";
 import { ScoreRow, closeScoreboard, showRankLine, showScoreboard } from "../scoreboard";
 import { heroMastery, recordMatch, wornTitle } from "../profile";
@@ -516,6 +518,8 @@ export class GameScene extends Phaser.Scene {
     if (state.stage === "dungeon" && !this.dungeonCleared && String(state.notice ?? "").startsWith("BOSS DEFEATED")) {
       this.dungeonCleared = true;
       recordResult({ mode: "Dungeon", won: true, hero, at: Date.now() });
+      // The first win opens Cthulhu's Sunken Temple, and Chapter II tells of the stone tablet.
+      if (beatKnight()) this.time.delayedCall(2500, () => void showIntro(CHAPTER_TWO));
     }
     if (state.stage === "abyss" && !this.dungeonCleared && String(state.notice ?? "").startsWith("BOSS DEFEATED")) {
       this.dungeonCleared = true;
