@@ -39,6 +39,8 @@ const CSS = `
 .hm-hit { position: absolute; border-radius: 14px; cursor: pointer; background: transparent; border: 0; padding: 0; transition: box-shadow .15s, transform .1s; }
 .hm-hit:hover { box-shadow: 0 0 0 4px rgba(255, 230, 120, 0.7), 0 0 30px rgba(255, 220, 100, 0.6); }
 .hm-hit:active { transform: scale(0.97); }
+/* 2026-10-08 (user request): nothing stands in the middle of the stained-glass hall any more. */
+#hm-ped, #hm-hero, #hm-heroname, #hm-title, #hm-mastery { display: none !important; }
 /* The three main buttons (2026-10-08): drawn here now that the stained-glass picture has none of its own. */
 .hm-main { position: absolute; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; cursor: pointer; padding: 0;
   font-family: "Press Start 2P", monospace; color: #ffe9a8; text-shadow: 0 3px 0 #000, 0 0 10px rgba(255, 190, 80, 0.7);
