@@ -805,6 +805,17 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
     return moveCircle(x, y, dx, dy, r, this.area);
   }
 
+  /** The farthest open spot up to len along aim, ignoring anything in between (a dash through walls). */
+  private passThrough(x: number, y: number, aim: number, len: number): { x: number; y: number } {
+    for (let d = len; d > 0; d -= 4) {
+      const tx = x + Math.cos(aim) * d;
+      const ty = y + Math.sin(aim) * d;
+      const at = this.move(tx, ty, 0, 0, PLAYER_RADIUS);
+      if (Math.hypot(at.x - tx, at.y - ty) < 0.5) return at;
+    }
+    return this.move(x, y, Math.cos(aim) * len, Math.sin(aim) * len, PLAYER_RADIUS);
+  }
+
   private blocked(x: number, y: number) {
     return hitsRock(x, y, this.area);
   }
@@ -3624,7 +3635,8 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       }
       case "thunderdash": {
         // THUNDER DASH: a lightning dash cutting the lane. Every hit opens another dash for a moment.
-        const end = this.move(p.x, p.y, Math.cos(p.aim) * skill.radius, Math.sin(p.aim) * skill.radius, PLAYER_RADIUS);
+        // It goes straight through walls and rocks (user request 2026-10-08), landing on the farthest open spot.
+        const end = this.passThrough(p.x, p.y, p.aim, skill.radius);
         const len = Math.hypot(end.x - p.x, end.y - p.y);
         const hits = this.lineHit(id, p.x, p.y, p.aim, len, skill.width ?? 26, skill.damage);
         p.x = end.x;
