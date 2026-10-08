@@ -96,7 +96,7 @@ import {
   aimPickScore,
 } from "./game";
 import { DUNGEON, OPEN_WORLD, PORTAL_COUNTDOWN, PORTAL_RADIUS } from "./world";
-import { ROYALE_MAP, ROYALE_PLAYERS, ROYALE_SIGHT, ROYALE_BURN, royaleRadius } from "./royale";
+import { ROYALE_MAP, ROYALE_PLAYERS, ROYALE_SIGHT, ROYALE_BURN, ROYALE_HEAL, ROYALE_HEAL_RADIUS, royaleRadius } from "./royale";
 import { BLOCK, CLASSIC_MAPS, ClassicMap, MAP_X, MAP_Y, Team, bushPatches, classicMap, distanceField, seesInto, mapLineClear, stepAlong } from "./maps";
 
 export const TICK_MS = 1000 / 30;
@@ -2758,7 +2758,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       }
 
       // Emberfall twist: the lava burns.
-      if (inLava(p.x, p.y, s.lavaRadius)) this.damagePlayer(id, LAVA_DPS * dt, true);
+      if (!this.royale && inLava(p.x, p.y, s.lavaRadius)) this.damagePlayer(id, LAVA_DPS * dt, true); // Battle Royale's ring is the storm (updateRoyale)
     });
   }
 
@@ -4745,7 +4745,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
     const moved = this.move(c.x, c.y, mx * speed * dt, my * speed * dt, PLAYER_RADIUS);
     c.x = moved.x;
     c.y = moved.y;
-    if (inLava(c.x, c.y, this.state.lavaRadius)) this.damagePlayer(id, LAVA_DPS * dt, true);
+    if (!this.royale && inLava(c.x, c.y, this.state.lavaRadius)) this.damagePlayer(id, LAVA_DPS * dt, true);
   }
 
   // --------------------------------------------------------------- zones
@@ -5172,6 +5172,10 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
         if (!p.dead && Math.hypot(p.x - x, p.y - y) > s.lavaRadius) burn.push([id, p]);
       });
       for (const [id, p] of burn) this.damagePlayer(id, p.maxHp * ROYALE_BURN, true, undefined, true, true);
+      // Heal pads on the four sides of the island.
+      s.players.forEach((p) => {
+        if (!p.dead && p.hp < p.maxHp && ROYALE_MAP.heals.some((h) => Math.hypot(p.x - h.x, p.y - h.y) <= ROYALE_HEAL_RADIUS)) p.hp = Math.min(p.maxHp, p.hp + p.maxHp * ROYALE_HEAL);
+      });
     }
     this.royaleCheck();
   }

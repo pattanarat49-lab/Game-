@@ -191,5 +191,22 @@ export function drawRoyaleGround(m: ClassicMap): HTMLCanvasElement {
       if (at(c - 1, r) !== T_WATER) ctx.fillRect(x + 2, y, 2, BLOCK);
       if (at(c + 1, r) !== T_WATER) ctx.fillRect(x + BLOCK - 4, y, 2, BLOCK);
     }
+  // Heal pads: a round stone slab with a green cross.
+  for (const h of (m as ClassicMap & { heals?: { x: number; y: number }[] }).heals ?? []) {
+    ctx.fillStyle = "#8a8e86";
+    ctx.beginPath();
+    ctx.arc(h.x, h.y, 26, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = "#c8ccc0";
+    ctx.beginPath();
+    ctx.arc(h.x, h.y - 2, 24, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = "#1e9a3e";
+    ctx.fillRect(h.x - 5, h.y - 17, 10, 30);
+    ctx.fillRect(h.x - 15, h.y - 7, 30, 10);
+    ctx.fillStyle = "#4cff7a";
+    ctx.fillRect(h.x - 3, h.y - 15, 6, 26);
+    ctx.fillRect(h.x - 13, h.y - 5, 26, 6);
+  }
   return canvas;
 }

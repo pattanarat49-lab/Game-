@@ -19,8 +19,13 @@ export const ROYALE_BURN = 0.04;
 /** Bots only notice rivals this close (the island is big). */
 export const ROYALE_SIGHT = 340;
 
+/** Heal pads (user request 2026-10-08): one on each of the island's four sides. Standing on one heals this share of max HP every half second. */
+export const ROYALE_HEAL = 0.025;
+export const ROYALE_HEAL_RADIUS = 30;
+
 export interface RoyaleMap extends ClassicMap {
   center: { x: number; y: number };
+  heals: { x: number; y: number }[];
   /** The ring's radius before it starts closing (covers the whole island). */
   radius: number;
 }
@@ -55,7 +60,8 @@ function build(): RoyaleMap {
     const a = (i / ROYALE_PLAYERS) * Math.PI * 2 - Math.PI / 2;
     spots.push({ c: Math.round(mid + Math.cos(a) * 26), r: Math.round(mid + Math.sin(a) * 26) });
   }
-  const clear = [...spots.map((s) => ({ ...s, rad: 2.5 })), { c: Math.round(mid), r: Math.round(mid), rad: 3.5 }];
+  const pads = [0, 1, 2, 3].map((i) => ({ c: Math.round(mid + Math.cos((i * Math.PI) / 2) * 15), r: Math.round(mid + Math.sin((i * Math.PI) / 2) * 15) }));
+  const clear = [...spots.map((s) => ({ ...s, rad: 2.5 })), ...pads.map((s) => ({ ...s, rad: 2.6 })), { c: Math.round(mid), r: Math.round(mid), rad: 3.5 }];
   const free = (c: number, r: number) => clear.every((s) => Math.hypot(c - s.c, r - s.r) > s.rad);
   const blob = (c0: number, r0: number, rad: number, t: number) => {
     for (let r = Math.floor(r0 - rad - 1); r <= r0 + rad + 1; r++)
@@ -127,6 +133,7 @@ function build(): RoyaleMap {
     ox: 0,
     oy: 0,
     center,
+    heals: pads.map((s) => px(s.c, s.r)),
     radius: (ISLAND + 2) * BLOCK,
   };
   for (const s of spots) {

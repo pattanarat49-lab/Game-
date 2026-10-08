@@ -64,7 +64,7 @@ import { LocalRoom } from "../localRoom";
 import { drawFxAura, drawFxZone, fxBuffStep, fxGuide, fxShotTexture } from "../fx";
 import { Lobby } from "../lobby";
 import { drawClassicGround, drawRoyaleGround } from "../classicMap";
-import { ROYALE_MAP } from "../../../shared/royale";
+import { ROYALE_HEAL_RADIUS, ROYALE_MAP } from "../../../shared/royale";
 import { MAP_H, MAP_Y, classicMap, inBush, mapBlocksShot, seesInto } from "../../../shared/maps";
 import { RiftSim, TITAN_ATTACK_COOLDOWN } from "../../../shared/sim";
 import { WorldView } from "../worldView";
@@ -363,8 +363,20 @@ export class GameScene extends Phaser.Scene {
     const open = stage === "world" || stage === "dungeon";
     if (stage === "classic") this.classicGround = this.add.image(0, 0, this.classicTexture(0)).setOrigin(0).setDepth(-10);
     else if (stage === "royale") {
-      if (!this.textures.exists("ground_royale")) this.textures.addCanvas("ground_royale", drawRoyaleGround(ROYALE_MAP));
-      this.add.image(0, 0, "ground_royale").setOrigin(0).setDepth(-10);
+      // The island is drawn once, then cut into tiles: one huge texture made every frame slow to draw.
+      const CH = 22 * BLOCK;
+      const whole = this.textures.exists("ground_royale_0_0") ? undefined : drawRoyaleGround(ROYALE_MAP);
+      for (let cy = 0; cy * CH < ROYALE_MAP.rows * BLOCK; cy++)
+        for (let cx = 0; cx * CH < ROYALE_MAP.cols * BLOCK; cx++) {
+          const key = `ground_royale_${cx}_${cy}`;
+          if (whole && !this.textures.exists(key)) {
+            const c = document.createElement("canvas");
+            c.width = c.height = CH;
+            c.getContext("2d")!.drawImage(whole, -cx * CH, -cy * CH);
+            this.textures.addCanvas(key, c);
+          }
+          this.add.image(cx * CH, cy * CH, key).setOrigin(0).setDepth(-10);
+        }
       this.stormRing = this.add.graphics().setDepth(945);
     } else if (!open) this.add.image(0, 0, `ground_${stage}`).setOrigin(0).setDepth(-10);
     if (stage === "dojo" || stage === "tutorial") {
@@ -880,21 +892,42 @@ export class GameScene extends Phaser.Scene {
   private specIndex = 0;
   /** Battle Royale: the storm outside the ring. */
   private stormRing?: Phaser.GameObjects.Graphics;
+  private stormEdge?: Phaser.GameObjects.Graphics;
+  private stormDrawn = -1;
+  private healPads?: Phaser.GameObjects.Graphics;
 
   /** Battle Royale: everything outside the safe circle is storm (dark purple), with a glowing edge. */
   private drawStorm(state: any) {
     const g = this.stormRing;
     if (!g) return;
-    g.clear();
-    const r = state.lavaRadius ?? 5000;
-    if (state.phase !== "fight" || r >= 3000) return;
     const { x, y } = ROYALE_MAP.center;
-    const far = 2200;
-    g.lineStyle(far, 0x5a1a8a, 0.3).strokeCircle(x, y, r + far / 2);
+    // Heal pads: a soft green pulse on each one.
+    const pads = (this.healPads ??= this.add.graphics().setDepth(-2));
+    pads.clear();
+    const beat = 0.5 + 0.5 * Math.sin(this.time.now / 260);
+    for (const h of ROYALE_MAP.heals) {
+      pads.fillStyle(0x4cff7a, 0.12 + 0.12 * beat).fillCircle(h.x, h.y, ROYALE_HEAL_RADIUS);
+      pads.lineStyle(2, 0x8affa8, 0.5 + 0.4 * beat).strokeCircle(h.x, h.y, ROYALE_HEAL_RADIUS);
+    }
+    const edge = (this.stormEdge ??= this.add.graphics().setDepth(946));
+    edge.clear();
+    const r = state.phase === "fight" ? state.lavaRadius ?? 5000 : 5000;
+    const on = r < ROYALE_MAP.radius - 1;
+    // The storm itself is one huge ring: redrawn only when it has moved, it is costly to draw every frame.
+    if (!on || Math.abs(r - this.stormDrawn) >= 0.75) {
+      g.clear();
+      this.stormDrawn = on ? r : -1;
+      if (on) {
+        const far = 2200;
+        g.lineStyle(far, 0x5a1a8a, 0.3).strokeCircle(x, y, r + far / 2);
+      }
+    }
+    if (!on) return;
     const pulse = 0.6 + 0.4 * Math.sin(this.time.now / 160);
-    g.lineStyle(4, 0xd060ff, pulse).strokeCircle(x, y, r);
-    g.lineStyle(1, 0xffffff, 0.6 * pulse).strokeCircle(x, y, r - 3);
+    edge.lineStyle(4, 0xd060ff, pulse).strokeCircle(x, y, r);
+    edge.lineStyle(1, 0xffffff, 0.6 * pulse).strokeCircle(x, y, r - 3);
   }
+
   private specBar?: HTMLDivElement;
 
   /** Classic 3v3 with no lives left: whom we watch (a living teammate), with a bar to switch between them. */
