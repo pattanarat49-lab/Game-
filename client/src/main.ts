@@ -10,6 +10,7 @@ import { accountLoaded, heroLocked, ownedHeroes, pickStarters, spinSlot, spinsLe
 import { showSlot, showStarterPicker } from "./unlocks";
 import { Home } from "./home";
 import { playMusic, uiClick } from "./audio";
+import { showIntro } from "./intro";
 // A soft click on every menu button.
 document.addEventListener("click", (e) => {
   if ((e.target as HTMLElement | null)?.closest?.("button")) uiClick();
@@ -306,10 +307,13 @@ function startTutorial() {
 if (soloOnly) {
   // The solo build has no server to keep accounts on (nor the login screen's video).
   accountModal.remove();
-  // First visit: the tutorial (every hero is open in the solo build).
-  if (!localStorageGet("uv-tutorial")) startTutorial();
-  else playMusic("home");
+  // The opening story every time, then on a first visit the tutorial (every hero is open in the solo build).
+  playMusic("home");
+  void showIntro().then(() => {
+    if (!localStorageGet("uv-tutorial")) startTutorial();
+  });
 } else {
+  void showIntro(); // the opening story, over the login or home screen
   setupLoginScene();
   setSignupMode(false);
   drawAccount();
