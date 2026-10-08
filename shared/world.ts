@@ -340,8 +340,68 @@ function buildDungeon(): DungeonMap {
   };
 }
 
+export const D_POOL = 5; // the Sunken Temple's flooded pits (water you can't walk through)
+
+/**
+ * The Sunken Temple (2026-10-08): Cthulhu's ancient flooded hall, reached from his window on the home
+ * screen. A round hall of old green stone with a mossy walk round its edge, four flooded pits, broken
+ * pillars to hide behind from his beam, his dais at the top and the steps in at the bottom. No minions.
+ */
+function buildAbyss(): DungeonMap {
+  const C = 40;
+  const R = 42;
+  const tiles = new Uint8Array(C * R).fill(T_WALL);
+  const look = new Uint8Array(C * R).fill(D_WALL);
+  const set = (c: number, r: number, l: number, t = T_FLOOR) => {
+    if (c < 0 || r < 0 || c >= C || r >= R) return;
+    tiles[r * C + c] = t;
+    look[r * C + c] = l;
+  };
+  const mc = 19.5;
+  const mr = 20.5;
+  const rad = 17;
+  for (let r = 0; r < R; r++)
+    for (let c = 0; c < C; c++) {
+      const d = Math.hypot(c - mc, (r - mr) * 1.05);
+      if (d <= rad) set(c, r, d > rad - 2 ? D_WALK : D_FLOOR);
+    }
+  for (let r = 1; r < 5; r++) for (let c = 17; c <= 22; c++) set(c, r, D_WALK); // his dais
+  for (let r = 37; r < R; r++) for (let c = 18; c <= 21; c++) set(c, r, D_STAIRS); // the way in
+  // Four flooded pits on the diagonals.
+  for (const [pc, pr] of [[11, 12], [28, 12], [11, 29], [28, 29]])
+    for (let r = pr - 2; r <= pr + 2; r++)
+      for (let c = pc - 3; c <= pc + 3; c++) if (Math.hypot((c - pc) / 3.2, (r - pr) / 2.3) <= 1) set(c, r, D_POOL, T_WATER);
+  // Broken pillars: cover from the beam.
+  for (const [pc, pr] of [[14, 20], [25, 20], [19, 14], [19, 27], [8, 20], [31, 20]]) set(pc, pr, D_WALL, T_WALL);
+  const b = BLOCK;
+  const midX = 20 * b;
+  const torches = [
+    [4, 14], [4, 27], [35, 14], [35, 27], [12, 5], [27, 5], [12, 36], [27, 36],
+  ].map(([c, r]) => ({ x: c * b, y: r * b }));
+  const spawn = { x: midX, y: 38.5 * b };
+  return {
+    name: "SUNKEN TEMPLE",
+    theme: { ...THEME, floor: "#22302c", floor2: "#1e2a27", wall: "#0c1412", wallTop: "#3e5a48" },
+    tiles,
+    look,
+    rooms: [{ c0: 3, r0: 4, c1: 36, r1: 37, monsters: [], role: "boss" }],
+    guards: [],
+    spawns: { 1: [spawn], 2: [spawn] },
+    cols: C,
+    rows: R,
+    ox: 0,
+    oy: 0,
+    spawn,
+    exit: { x: midX, y: 34.5 * b },
+    boss: { x: midX, y: 9 * b },
+    torches,
+    rune: { x: midX, y: 21 * b, r: 96 },
+  };
+}
+
 export const OPEN_WORLD: OpenMap = buildWorld();
 export const DUNGEON: DungeonMap = buildDungeon();
+export const ABYSS: DungeonMap = buildAbyss();
 
 /** How close to the portal a hero must stand to get on the list for the dungeon. */
 export const PORTAL_RADIUS = 46;

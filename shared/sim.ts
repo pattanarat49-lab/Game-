@@ -63,6 +63,8 @@ import {
   KNOCKBACK_DECAY,
   SWORD_GOD,
   ANCIENT_KNIGHT,
+  CTHULHU,
+  beamReach,
   KNOCKBACK_DISTANCE,
   WORLD_H,
   WORLD_W,
@@ -95,7 +97,7 @@ import {
   CLASSIC_TEAM_SIZE,
   aimPickScore,
 } from "./game";
-import { DUNGEON, OPEN_WORLD, PORTAL_COUNTDOWN, PORTAL_RADIUS } from "./world";
+import { ABYSS, DUNGEON, OPEN_WORLD, PORTAL_COUNTDOWN, PORTAL_RADIUS } from "./world";
 import { ROYALE_MAP, ROYALE_PLAYERS, ROYALE_SIGHT, ROYALE_BURN, ROYALE_HEAL, ROYALE_HEAL_RADIUS, royaleRadius } from "./royale";
 import { BLOCK, CLASSIC_MAPS, ClassicMap, MAP_X, MAP_Y, Team, bushPatches, classicMap, distanceField, seesInto, mapLineClear, stepAlong } from "./maps";
 
@@ -532,6 +534,14 @@ interface EnemyBrain {
   path?: Int16Array;
   pathTo?: number;
   pathTimer?: number;
+  /** Cthulhu: his tidal wave, the sigils and poison clouds he has left, whether he has gone mad. */
+  cth?: {
+    wave?: { x: number; y: number; aim: number; dist: number; zone: string };
+    sigils: { x: number; y: number; t: number }[];
+    clouds: { x: number; y: number; t: number; tick: number }[];
+    mad: boolean;
+    last: number;
+  };
 }
 
 /** Someone has to change rooms: the Open World's portal, the dungeon's way out, or an accepted duel. */
@@ -641,10 +651,14 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
   ) {
     state.stage = stage;
     this.startIntermission(0);
-    if (stage === "world" || stage === "dungeon") {
+    if (stage === "world" || stage === "dungeon" || stage === "abyss") {
       state.phase = "fight";
       state.lavaRadius = 5000;
       if (stage === "dungeon") this.fillDungeon();
+      if (stage === "abyss") {
+        this.spawnEnemyAt("cthulhu", ABYSS.boss.x, ABYSS.boss.y);
+        state.notice = "Cthulhu sleeps on his dais...";
+      }
     }
     if (stage === "tutorial") {
       state.phase = "fight";
@@ -765,6 +779,18 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
   }
   private dungeonCleared = false;
   private leaving = new Set<string>();
+
+  /** The Sunken Temple: once Cthulhu falls, he sinks back into the deep (BACK takes you home). */
+  private updateAbyss() {
+    const s = this.state;
+    let boss = false;
+    s.enemies.forEach((e) => {
+      if (e.kind === "cthulhu") boss = true;
+    });
+    if (boss || this.dungeonCleared) return;
+    this.dungeonCleared = true;
+    s.notice = "BOSS DEFEATED! Cthulhu sinks back into the deep";
+  }
 
   /** Hero-against-hero stages are fought inside the boxing ring's ropes. */
   private get ring() {
@@ -2216,6 +2242,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
     else if (s.stage === "world") this.updateWorld(dt);
     else if (s.stage === "tutorial") this.updateTutorial(dt);
     else if (s.stage === "dungeon") this.updateDungeon();
+    else if (s.stage === "abyss") this.updateAbyss();
     else if (this.ring) this.updatePvp(dt);
     else if (s.phase === "intermission") {
       s.phaseTimer -= dt;
@@ -5249,8 +5276,8 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       p.warp = (p.warp + 1) % 256;
       return;
     }
-    if (s.stage === "world" || s.stage === "dungeon") {
-      const spot = s.stage === "world" ? OPEN_WORLD.spawn : DUNGEON.spawn;
+    if (s.stage === "world" || s.stage === "dungeon" || s.stage === "abyss") {
+      const spot = s.stage === "world" ? OPEN_WORLD.spawn : s.stage === "abyss" ? ABYSS.spawn : DUNGEON.spawn;
       const a = Math.random() * Math.PI * 2;
       const r = Math.random() * 40;
       const at = this.move(spot.x, spot.y, Math.cos(a) * r, Math.sin(a) * r, PLAYER_RADIUS);
@@ -5358,6 +5385,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
     if (!e) return;
     const killer = this.state.players.get(this.rootOf(owner));
     if (e.kind === "knight" && e.move === 3 && e.beamState === 2) return; // in the air: nothing reaches him
+    if (e.kind === "cthulhu" && e.move === 4 && e.beamState === 2) return; // Cthulhu in the air too
     if (e.kind === "knight" && e.move === 5 && e.beamState === 2 && killer && !pierce) {
       // Shield up: blows from the front glance off.
       let diff = Math.atan2(killer.y - e.y, killer.x - e.x) - e.beamAngle;
@@ -5514,6 +5542,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       if (e.kind === "kingkong" && !human && this.updateCharge(e, brain, dx, dy, dt)) return;
       if (e.kind === "swordgod" && !human && this.updateSwordGod(e, brain, dx, dy, dist, dt)) return;
       if (e.kind === "knight" && !human && this.updateKnight(e, brain, p, dx, dy, dist, dt)) return;
+      if (e.kind === "cthulhu" && !human && this.updateCthulhu(e, brain, dx, dy, dist, dt)) return;
 
       // Ranged enemies keep their distance; everyone else charges.
       let dirX = dx / dist;
@@ -5708,6 +5737,194 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       brain.beamTimer = K.rest;
     }
     return true;
+  }
+
+  /**
+   * Cthulhu (2026-10-08). Sleeps until a hero comes near, then walks after you between moves and picks one
+   * that suits the distance: tentacle lash, beam of madness, tidal wave, leap, elder sigils or poison miasma.
+   * Once, at low health, he roars and goes mad (faster moves from then on). No minions.
+   * Returns true while he is busy (asleep or in a move).
+   */
+  private updateCthulhu(e: E, brain: EnemyBrain, dx: number, dy: number, dist: number, dt: number): boolean {
+    const K = CTHULHU;
+    const def = ENEMIES.cthulhu;
+    const c = (brain.cth ??= { sigils: [], clouds: [], mad: false, last: 0 });
+    this.cthulhuHazards(c, dt);
+    if (brain.awake === false) {
+      if (dist > 380 && e.hp >= e.maxHp) return true;
+      brain.awake = true;
+      brain.beamTimer = 0.8;
+      this.state.notice = "CTHULHU HAS AWOKEN";
+    }
+    brain.beamTimer -= dt;
+    if (e.beamState === 0) {
+      if (this.state.notice === "CTHULHU HAS AWOKEN" && brain.beamTimer < -2) this.state.notice = "";
+      if (brain.beamTimer > 0) return false;
+      const r = Math.random();
+      let move: number;
+      if (!c.mad && e.hp < e.maxHp * K.madness.below) move = 7;
+      else if (dist < 150) move = r < 0.42 ? 1 : r < 0.6 ? 6 : r < 0.78 ? 5 : 3;
+      else move = r < 0.3 ? 2 : r < 0.5 ? 3 : r < 0.7 && dist < K.leap.range ? 4 : r < 0.88 ? 5 : 6;
+      if (move === c.last && move !== 7) move = move === 2 ? 3 : 2; // never the same move twice in a row
+      c.last = move;
+      e.move = move;
+      e.beamState = 1;
+      e.beamAngle = Math.atan2(dy, dx);
+      brain.beamTimer = [0, K.lash.windup, K.beam.windup, K.wave.windup, K.leap.windup, K.sigil.windup, K.gas.windup, K.madness.windup][move];
+      if (move === 4) {
+        const reach = Math.min(dist, K.leap.range);
+        const spot = this.move(e.x, e.y, (dx / dist) * reach, (dy / dist) * reach, def.radius);
+        brain.leapTo = { x: spot.x, y: spot.y };
+        this.addZone("cthmark", spot.x, spot.y, K.leap.radius, K.leap.windup + K.leap.air, { owner: "", every: Infinity, damage: 0 });
+      }
+      if (move === 5) {
+        // Sigils light up under every hero (and a few more near them).
+        const spots: { x: number; y: number }[] = [];
+        this.state.players.forEach((p) => {
+          if (!p.owner && !p.dead) spots.push({ x: p.x, y: p.y });
+        });
+        while (spots.length && spots.length < K.sigil.count) {
+          const base = spots[Math.floor(Math.random() * spots.length)];
+          const a = Math.random() * Math.PI * 2;
+          spots.push({ x: base.x + Math.cos(a) * K.sigil.spread, y: base.y + Math.sin(a) * K.sigil.spread });
+        }
+        for (const sp of spots) {
+          c.sigils.push({ x: sp.x, y: sp.y, t: K.sigil.windup + K.sigil.fuse });
+          this.addZone("cthsigil", sp.x, sp.y, K.sigil.radius, K.sigil.windup + K.sigil.fuse, { owner: "", every: Infinity, damage: 0 });
+        }
+      }
+      return true;
+    }
+    if (e.beamState === 1) {
+      if (e.move === 1 || e.move === 2 || e.move === 3) e.beamAngle = Math.atan2(dy, dx); // turns to follow you while winding up
+      if (e.move === 2 && brain.beamTimer < 0.3) e.beamAngle = e.beamAngle; // the last moment it locks
+      if (brain.beamTimer > 0) return true;
+      e.beamState = 2;
+      brain.hit = new Set();
+      brain.beamTimer = [0, K.lash.active, K.beam.active, K.wave.active, K.leap.air, 0.4, K.gas.active, K.madness.active][e.move];
+      if (e.move === 1) {
+        this.knightLane(e, brain, K.lash.length, K.lash.width, K.lash.damage);
+        brain.hit.forEach((pid) => {
+          const v = this.state.players.get(pid);
+          if (v) this.knockPlayer(pid, v.x - e.x, v.y - e.y, K.lash.knock);
+        });
+      }
+      if (e.move === 3) {
+        const zone = this.addZone(`cthwave:${e.beamAngle.toFixed(2)}`, e.x, e.y, K.wave.width / 2, K.wave.active, { owner: "", every: Infinity, damage: 0 });
+        c.wave = { x: e.x, y: e.y, aim: e.beamAngle, dist: 20, zone };
+      }
+      if (e.move === 6) {
+        for (let i = 0; i < K.gas.clouds; i++) {
+          const a = e.beamAngle + (i - (K.gas.clouds - 1) / 2) * 0.55;
+          const d = 60 + Math.random() * K.gas.spread;
+          const at = this.move(e.x, e.y, Math.cos(a) * d, Math.sin(a) * d, 4);
+          c.clouds.push({ x: at.x, y: at.y, t: K.gas.life, tick: 0 });
+          this.addZone("cthgas", at.x, at.y, K.gas.radius, K.gas.life, { owner: "", every: Infinity, damage: 0 });
+        }
+      }
+      if (e.move === 7) {
+        c.mad = true;
+        this.swordGodCut(e, brain, K.madness.radius, Math.PI * 2, K.madness.damage);
+        brain.hit.forEach((pid) => {
+          const v = this.state.players.get(pid);
+          if (v) this.knockPlayer(pid, v.x - e.x, v.y - e.y, 2.5);
+        });
+        this.state.notice = "CTHULHU HAS GONE MAD";
+      }
+      return true;
+    }
+    // Striking.
+    if (e.move === 2) {
+      // The beam burns everyone in its line, stopped by walls and pillars.
+      const len = beamReach(e.x, e.y, e.beamAngle, K.beam.length, this.area);
+      this.cthulhuLane(e, brain, e.y, len, K.beam.width, K.beam.damage);
+    }
+    if (e.move === 4 && brain.leapTo) {
+      const left = Math.max(brain.beamTimer, dt);
+      const k = Math.min(1, dt / left);
+      e.x += (brain.leapTo.x - e.x) * k;
+      e.y += (brain.leapTo.y - e.y) * k;
+    }
+    if (brain.beamTimer <= 0) {
+      if (e.move === 4) {
+        brain.hit = new Set();
+        this.swordGodCut(e, brain, K.leap.radius, Math.PI * 2, K.leap.damage);
+        brain.hit.forEach((pid) => {
+          const v = this.state.players.get(pid);
+          if (v && !v.dead) v.stun = Math.max(v.stun, K.leap.stun);
+        });
+        brain.leapTo = undefined;
+      }
+      e.beamState = 0;
+      e.move = 0;
+      brain.beamTimer = K.rest * (c.mad ? 0.6 : 1);
+      if (this.state.notice === "CTHULHU HAS GONE MAD") this.state.notice = "";
+    }
+    return true;
+  }
+
+  /** Cthulhu's beam: everyone in the lane from him out to `len`. */
+  private cthulhuLane(e: E, brain: EnemyBrain, fromY: number, len: number, width: number, damage: number) {
+    const cos = Math.cos(e.beamAngle);
+    const sin = Math.sin(e.beamAngle);
+    this.state.players.forEach((p, pid) => {
+      if (p.dead || brain.hit?.has(pid)) return;
+      const along = (p.x - e.x) * cos + (p.y - fromY) * sin;
+      const side = Math.abs(-(p.x - e.x) * sin + (p.y - fromY) * cos);
+      if (along < 0 || along > len || side > width / 2 + PLAYER_RADIUS) return;
+      brain.hit?.add(pid);
+      this.damagePlayer(pid, damage, true, ENEMY);
+    });
+  }
+
+  /** What Cthulhu leaves behind: the rolling wave, the sigils about to burst and the poison clouds. */
+  private cthulhuHazards(c: NonNullable<EnemyBrain["cth"]>, dt: number) {
+    const K = CTHULHU;
+    const hitAll = (test: (p: P) => boolean, damage: number, knock?: { x: number; y: number; k: number }) => {
+      this.state.players.forEach((p, pid) => {
+        if (p.dead || p.owner || !test(p)) return;
+        this.damagePlayer(pid, damage, true, ENEMY);
+        if (knock) this.knockPlayer(pid, knock.x, knock.y, knock.k);
+      });
+    };
+    if (c.wave) {
+      const w = c.wave;
+      const before = w.dist;
+      w.dist += K.wave.speed * dt;
+      const cos = Math.cos(w.aim);
+      const sin = Math.sin(w.aim);
+      const zx = w.x + cos * w.dist;
+      const zy = w.y + sin * w.dist;
+      const z = this.state.zones.get(w.zone);
+      if (z) [z.x, z.y] = [zx, zy];
+      // Everyone the wave's front passes over this frame.
+      hitAll((p) => {
+        const along = (p.x - w.x) * cos + (p.y - w.y) * sin;
+        const side = Math.abs(-(p.x - w.x) * sin + (p.y - w.y) * cos);
+        return along > before - 14 && along <= w.dist + 14 && side < K.wave.width / 2;
+      }, K.wave.damage, { x: cos, y: sin, k: K.wave.knock });
+      if (!z || hitsRock(zx, zy, this.area) && w.dist > 200) {
+        if (z) this.removeZone(w.zone);
+        c.wave = undefined;
+      }
+    }
+    for (const sg of c.sigils) {
+      sg.t -= dt;
+      if (sg.t <= 0) {
+        hitAll((p) => Math.hypot(p.x - sg.x, p.y - sg.y) < K.sigil.radius + PLAYER_RADIUS, K.sigil.damage);
+        this.addZone("cthburst", sg.x, sg.y, K.sigil.radius, 0.5, { owner: "", every: Infinity, damage: 0 });
+      }
+    }
+    c.sigils = c.sigils.filter((sg) => sg.t > 0);
+    for (const cl of c.clouds) {
+      cl.t -= dt;
+      cl.tick -= dt;
+      if (cl.tick <= 0) {
+        cl.tick = K.gas.tick;
+        hitAll((p) => Math.hypot(p.x - cl.x, p.y - cl.y) < K.gas.radius, K.gas.damage);
+      }
+    }
+    c.clouds = c.clouds.filter((cl) => cl.t > 0);
   }
 
   /** The Ancient Knight's overhead cleave: everyone in the lane in front of him. */

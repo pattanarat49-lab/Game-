@@ -5,6 +5,8 @@
 import { BLOCK } from "../../shared/maps";
 import {
   D_DOOR,
+  D_POOL,
+  DungeonMap,
   D_STAIRS,
   D_WALK,
   D_WALL,
@@ -39,6 +41,16 @@ function shade(hex: string, f: number): string {
   const g = Math.max(0, Math.min(255, Math.round(((n >> 8) & 255) * f)));
   const b = Math.max(0, Math.min(255, Math.round((n & 255) * f)));
   return `rgb(${r},${g},${b})`;
+}
+const baseShade = shade;
+
+/** The Sunken Temple's stone: the dungeon's colours pulled toward an old sea-green. */
+function sunken(hex: string): string {
+  const n = parseInt(hex.slice(1), 16);
+  const r = Math.round(((n >> 16) & 255) * 0.62);
+  const g = Math.min(255, Math.round(((n >> 8) & 255) * 0.95 + 8));
+  const b = Math.round((n & 255) * 0.8);
+  return `#${((r << 16) | (g << 8) | b).toString(16).padStart(6, "0")}`;
 }
 
 export const CHUNK = BLOCK * 25; // ground pictures are cut into squares this big
@@ -235,12 +247,14 @@ export function worldChunk(cx: number, cy: number): HTMLCanvasElement {
  * flagstones, a worn stone walk round the edge with moss in the cracks, mossy walls, a carved circle
  * of runes in the middle and the steps down to the way in.
  */
-export function dungeonChunk(cx: number, cy: number): HTMLCanvasElement {
+export function dungeonChunk(cx: number, cy: number, map: DungeonMap = DUNGEON): HTMLCanvasElement {
   const canvas = document.createElement("canvas");
   canvas.width = CHUNK;
   canvas.height = CHUNK;
   const ctx = canvas.getContext("2d")!;
-  const m = DUNGEON;
+  const m = map;
+  const abyss = m !== DUNGEON; // the Sunken Temple: the same stonework, older, greener and flooded
+  const shade = (hex: string, f: number) => baseShade(abyss ? sunken(hex) : hex, f);
   const n = CHUNK / BLOCK;
   const at = (c: number, r: number) => (c < 0 || r < 0 || c >= m.cols || r >= m.rows ? D_WALL : m.look[r * m.cols + c]);
   const b = BLOCK;
@@ -295,6 +309,15 @@ export function dungeonChunk(cx: number, cy: number): HTMLCanvasElement {
         continue;
       }
       const f = 0.9 + hash(col, row) * 0.2;
+      if (l === D_POOL) {
+        // A flooded pit: deep green-black water, lighter at its edges.
+        const edge = [[-1, 0], [1, 0], [0, -1], [0, 1]].some(([dc, dr]) => at(col + dc, row + dr) !== D_POOL);
+        ctx.fillStyle = edge ? "#1e5a4a" : "#0e2e28";
+        ctx.fillRect(x, y, b, b);
+        ctx.fillStyle = edge ? "#2e7a64" : "#14403a";
+        if (hash(col, row, 9) < 0.5) ctx.fillRect(x + 3 + Math.floor(hash(col, row, 10) * 10), y + 5 + Math.floor(hash(col, row, 11) * 10), 6, 1);
+        continue;
+      }
       if (l === D_STAIRS) {
         // Steps going down to the way in.
         for (let yy = 0; yy < b; yy += 7) {
@@ -341,13 +364,13 @@ export function dungeonChunk(cx: number, cy: number): HTMLCanvasElement {
         ctx.fillRect(x, y, b, 2);
       }
     }
-  paintRune(ctx, cx * CHUNK, cy * CHUNK);
+  paintRune(ctx, cx * CHUNK, cy * CHUNK, m, abyss);
   return canvas;
 }
 
 /** The circle of runes carved in the middle of the sanctuary floor, pixel by pixel. */
-function paintRune(ctx: CanvasRenderingContext2D, ox: number, oy: number) {
-  const { x: rx, y: ry, r: R } = DUNGEON.rune;
+function paintRune(ctx: CanvasRenderingContext2D, ox: number, oy: number, map: DungeonMap = DUNGEON, glow = false) {
+  const { x: rx, y: ry, r: R } = map.rune;
   if (rx + R < ox || rx - R > ox + CHUNK || ry + R < oy || ry - R > oy + CHUNK) return;
   const x0 = Math.floor(rx - R - 2);
   const y0 = Math.floor(ry - R - 2);
@@ -374,7 +397,7 @@ function paintRune(ctx: CanvasRenderingContext2D, ox: number, oy: number) {
       const here = groove[j * size + i];
       const above = j > 0 && groove[(j - 1) * size + i];
       if (!here && !above) continue;
-      ctx.fillStyle = here ? "#1a1b1e" : "#5a5d52";
+      ctx.fillStyle = glow ? (here ? "#2aff9a" : "#0e3a2a") : here ? "#1a1b1e" : "#5a5d52";
       ctx.fillRect(x, y, 1, 1);
     }
 }

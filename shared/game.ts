@@ -1,6 +1,6 @@
 import { NEW_HEROES, NewHeroId, newHeroDefs } from "./heroes2";
 import { ClassicMap, classicMap, mapBlocksShot, moveOnMap } from "./maps";
-import { DUNGEON, OPEN_WORLD } from "./world";
+import { ABYSS, DUNGEON, OPEN_WORLD } from "./world";
 import { ROYALE_MAP } from "./royale";
 // Game rules shared by the client (prediction, rendering) and the server (authority).
 
@@ -1876,7 +1876,8 @@ export const INTERMISSION_TIME = 6;
 export type EnemyKind =
   | "cinderling" | "brute" | "caster" | "warden" | "godzilla" | "monkey" | "bananamonkey" | "kingkong" | "swordsman" | "swordmaster" | "swordgod"
   | "dirtblock" | "tntblock" | "craftblock" | "rockwall" | "dummy"
-  | "knight" | "stonecrawler" | "stonewisp";
+  | "knight" | "stonecrawler" | "stonewisp"
+  | "cthulhu";
 
 export interface EnemyDef {
   hp: number;
@@ -1920,6 +1921,8 @@ export const ENEMIES: Record<EnemyKind, EnemyDef> = {
   knight: { hp: 4000, speed: 34, radius: 16, touchDamage: 25, score: 3000, boss: true },
   stonecrawler: { hp: 90, speed: 80, radius: 9, touchDamage: 14, score: 20 },
   stonewisp: { hp: 60, speed: 45, radius: 6, touchDamage: 6, score: 20, shootEvery: 2, shotDamage: 14, shot: "boulder", keepAway: 120 },
+  // The Sunken Temple (2026-10-08): Cthulhu, alone, no minions.
+  cthulhu: { hp: 16000, speed: 26, radius: 24, touchDamage: 400, score: 5000, boss: true },
   godzilla: { hp: 7000, speed: 24, radius: 22, touchDamage: 105, score: 2000, shootEvery: 3, shotDamage: ENEMY_SHOT_DAMAGE_BASE * 3, boss: true },
 };
 
@@ -1969,6 +1972,23 @@ export const ANCIENT_KNIGHT = {
   guard: { windup: 0.25, active: 2.4, arc: 2.6, cut: 0.2 }, // shield up: hits from the front do 20%
 };
 export const ANCIENT_KNIGHT_MOVES = ["", "cleave", "sweep", "leap", "summon", "guard"] as const;
+
+/**
+ * Cthulhu's moves (2026-10-08), one for each row of the user's attack sheet. They hit about 10x as hard as
+ * the Ancient Knight's (user request). Each winds up (beamState 1,
+ * a warning shows), then strikes (beamState 2). Seconds, pixels and damage per hit.
+ */
+export const CTHULHU = {
+  rest: 1.1, // walking after you between moves (x0.6 once MADNESS has begun)
+  lash: { windup: 0.6, active: 0.4, length: 170, width: 54, damage: 650, knock: 2 }, // tentacles whip straight ahead
+  beam: { windup: 1.0, active: 0.55, length: 640, width: 30, damage: 900 }, // a beam of madness from his hand
+  wave: { windup: 0.8, active: 1.9, speed: 330, width: 230, damage: 550, knock: 2.4 }, // a tidal wave rolls out at you
+  leap: { windup: 0.5, air: 0.9, range: 360, radius: 125, damage: 750, stun: 1 }, // flies up and crashes down on you
+  sigil: { windup: 0.7, fuse: 1.3, count: 4, radius: 62, damage: 600, spread: 70 }, // elder sigils burn under your feet
+  gas: { windup: 0.7, active: 0.5, clouds: 5, radius: 58, life: 6, tick: 0.5, damage: 90, spread: 150 }, // poison miasma
+  madness: { windup: 1.4, active: 0.6, radius: 190, damage: 700, below: 0.45 }, // once, at low health: a roar that sends him mad
+};
+export const CTHULHU_MOVES = ["", "lash", "beam", "wave", "leap", "sigil", "gas", "madness"] as const;
 
 export const SWORD_GOD_MOVES = ["", "dash", "whirl", "waves", "flurry"] as const;
 
@@ -2147,6 +2167,7 @@ export type Area = boolean | ClassicMap;
 export function areaOf(stage: string, map = 0): Area {
   if (stage === "world") return OPEN_WORLD;
   if (stage === "dungeon") return DUNGEON;
+  if (stage === "abyss") return ABYSS;
   if (stage === "royale") return ROYALE_MAP;
   return stage === "classic" ? classicMap(map) : ringStage(stage);
 }
@@ -2213,6 +2234,14 @@ export function moveCircle(x: number, y: number, dx: number, dy: number, r: numb
   return { x: nx, y: ny };
 }
 
+/** How far a beam from (x, y) reaches along `aim` (up to `len`) before a wall or rock stops it. */
+export function beamReach(x: number, y: number, aim: number, len: number, area: Area): number {
+  const cos = Math.cos(aim);
+  const sin = Math.sin(aim);
+  for (let d = 20; d < len; d += 8) if (hitsRock(x + cos * d, y + sin * d, area)) return d;
+  return len;
+}
+
 /** True if a shot at (x, y) hits a rock (or, in the boxing ring, the ropes). */
 export function hitsRock(x: number, y: number, ring: Area = false): boolean {
   if (typeof ring === "object") return mapBlocksShot(ring, x, y);
@@ -2225,7 +2254,7 @@ export function inLava(x: number, y: number, lavaRadius: number): boolean {
 }
 
 // Stages
-export type StageId = "lava" | "jungle" | "dojo" | "boss" | "pvp" | "duel" | "pve" | "classic" | "royale" | "world" | "dungeon" | "tutorial";
+export type StageId = "lava" | "jungle" | "dojo" | "boss" | "pvp" | "duel" | "pve" | "classic" | "royale" | "world" | "dungeon" | "tutorial" | "abyss";
 
 export interface StageDef {
   name: string;
@@ -2242,6 +2271,7 @@ export const STAGES: Record<StageId, StageDef> = {
   pve: { name: "Training", blurb: "1 to 4 players team up against one bot. Pick its hero and difficulty. First to 3 KOs. Solo or online." },
   world: { name: "Open World", blurb: "Meet everyone in a big meadow village: chat, look up players, ask for duels, and take the portal to the dungeon together." },
   tutorial: { name: "Tutorial", blurb: "Learn to move, attack, use skills and dash on training dummies." },
+  abyss: { name: "Sunken Temple", blurb: "An ancient flooded temple where Cthulhu sleeps. No minions, only him. Solo or online." },
   dungeon: { name: "Dungeon", blurb: "Rooms full of monsters and a boss at the end. Beat it and the way back opens." },
   royale: { name: "Battle Royale", blurb: "8 heroes on a big round island with tall grass and cover. One life each, the last one standing wins. The storm ring closes in when the fight drags on. Bots fill empty slots. Solo or online." },
   classic: { name: "Classic 3v3", blurb: "Red vs Blue, 3 heroes a side, on 6 maps with walls, tall grass and water. Bots fill empty slots. 3 lives each; the last team standing wins. Solo or online." },
@@ -2250,7 +2280,7 @@ export const STAGES: Record<StageId, StageDef> = {
 /** Stages taken out of the game (user request 2026-10-05: the Boss Room); their code is kept. */
 const REMOVED_STAGES: StageId[] = ["boss", "lava", "jungle", "dojo"];
 /** The Open World and its dungeon have their own button, not a stage card. */
-const OWN_BUTTON: StageId[] = ["world", "dungeon", "tutorial"];
+const OWN_BUTTON: StageId[] = ["world", "dungeon", "tutorial", "abyss"];
 export const STAGE_IDS = (Object.keys(STAGES) as StageId[]).filter((id) => !REMOVED_STAGES.includes(id) && !OWN_BUTTON.includes(id));
 
 /** Wave stages: which enemies come in each wave. */

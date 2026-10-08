@@ -20,6 +20,8 @@ export interface HomeActions {
   spins(): number;
   openSlot(): void;
   openWorld(): void;
+  /** Cthulhu's head in the stained glass: into the Sunken Temple. */
+  abyss(): void;
   play(stage: StageId, solo: boolean, code: string): void;
   logout?(): void;
   rename?(): void;
@@ -39,6 +41,9 @@ const CSS = `
 .hm-hit { position: absolute; border-radius: 14px; cursor: pointer; background: transparent; border: 0; padding: 0; transition: box-shadow .15s, transform .1s; }
 .hm-hit:hover { box-shadow: 0 0 0 4px rgba(255, 230, 120, 0.7), 0 0 30px rgba(255, 220, 100, 0.6); }
 .hm-hit:active { transform: scale(0.97); }
+/* Cthulhu's head in the stained glass is a secret door into the Sunken Temple. */
+#hm-cthulhu { left: 515px; top: 293px; width: 140px; height: 144px; border-radius: 50%; }
+#hm-cthulhu:hover { box-shadow: 0 0 0 4px rgba(120, 255, 160, 0.6), 0 0 40px rgba(80, 255, 140, 0.7); }
 /* 2026-10-08 (user request): nothing stands in the middle of the stained-glass hall any more. */
 #hm-ped, #hm-hero, #hm-heroname, #hm-title, #hm-mastery { display: none !important; }
 /* The three main buttons (2026-10-08): drawn here now that the stained-glass picture has none of its own. */
@@ -191,6 +196,7 @@ export class Home {
     stage.id = "home-stage";
     stage.innerHTML = `
       <img class="bg" src="home-bg.jpg" alt="" />
+      <button type="button" class="hm-hit" id="hm-cthulhu" aria-label="Sunken Temple"></button>
       <div id="hm-ped"></div>
       <div id="hm-hero"></div>
       <div id="hm-title"></div>
@@ -232,6 +238,7 @@ export class Home {
     this.error = stage.querySelector("#home-error")!;
 
     stage.querySelector("#hm-world")!.addEventListener("click", () => act.openWorld());
+    stage.querySelector("#hm-cthulhu")!.addEventListener("click", () => act.abyss());
     stage.querySelector("#hm-start")!.addEventListener("click", () => this.showModes());
     stage.querySelector("#hm-char")!.addEventListener("click", () => this.showCharacters());
     this.spinBtn.addEventListener("click", () => act.openSlot());

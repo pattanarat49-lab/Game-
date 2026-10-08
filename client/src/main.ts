@@ -53,6 +53,7 @@ const home = new Home(menu, {
     }, 300);
   },
   openWorld: () => void startGame("world", soloOnly, ""),
+  abyss: () => void startGame("abyss", soloOnly, ""),
   play: (stage, solo, code) => void startGame(stage, solo, code),
   rank: () => (currentAccount() ? { r1: accountData().rank?.r1 ?? 0, r3: accountData().rank?.r3 ?? 0 } : undefined),
   logout: soloOnly ? undefined : () => logOut(),

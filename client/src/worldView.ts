@@ -3,7 +3,7 @@
 
 import Phaser from "phaser";
 import { BLOCK } from "../../shared/maps";
-import { DUNGEON, L_DEEP, L_WATER, OPEN_WORLD, PORTAL_RADIUS } from "../../shared/world";
+import { ABYSS, D_POOL, DUNGEON, L_DEEP, L_WATER, OPEN_WORLD, PORTAL_RADIUS } from "../../shared/world";
 import { CHUNK, dungeonChunk, propCanvas, worldChunk } from "./worldArt";
 import { WorldUi } from "./worldUi";
 import { playSanctuaryIntro } from "./cutscene";
@@ -23,13 +23,13 @@ export class WorldView {
 
   constructor(
     private scene: Phaser.Scene,
-    private stage: "world" | "dungeon",
+    private stage: "world" | "dungeon" | "abyss",
     private room: any,
     private bodyOf: (id: string) => { x: number; y: number } | undefined,
     switchRoom: (stage: string, code: string) => void,
     online: boolean,
   ) {
-    const map = stage === "world" ? OPEN_WORLD : DUNGEON;
+    const map = stage === "world" ? OPEN_WORLD : stage === "abyss" ? ABYSS : DUNGEON;
     if (stage === "dungeon") playSanctuaryIntro();
     const w = map.cols * BLOCK;
     const h = map.rows * BLOCK;
@@ -37,7 +37,7 @@ export class WorldView {
     for (let cy = 0; cy * CHUNK < h; cy++)
       for (let cx = 0; cx * CHUNK < w; cx++) {
         const key = `${stage}_chunk_${cx}_${cy}`;
-        if (!scene.textures.exists(key)) scene.textures.addCanvas(key, stage === "world" ? worldChunk(cx, cy) : dungeonChunk(cx, cy));
+        if (!scene.textures.exists(key)) scene.textures.addCanvas(key, stage === "world" ? worldChunk(cx, cy) : dungeonChunk(cx, cy, stage === "abyss" ? ABYSS : DUNGEON));
         scene.add.image(cx * CHUNK, cy * CHUNK, key).setOrigin(0).setDepth(-10);
       }
     if (stage === "world") {
@@ -196,13 +196,26 @@ export class WorldView {
       }
     } else {
       // Torches on the room corners, flickering.
-      for (const t of DUNGEON.torches) {
+      // (The Sunken Temple's braziers burn a ghostly green.)
+      const abyss = this.stage === "abyss";
+      for (const t of (abyss ? ABYSS : DUNGEON).torches) {
         const f = 0.7 + 0.3 * Math.sin(now / 90 + t.x * 0.13 + t.y * 0.07);
-        floor.fillStyle(0xffa040, 0.08 * f).fillCircle(t.x, t.y, 46);
-        floor.fillStyle(0xffc060, 0.12 * f).fillCircle(t.x, t.y, 24);
-        g.fillStyle(0x5a3a1a, 1).fillRect(t.x - 2, t.y - 4, 4, 8);
-        g.fillStyle(0xff8a2a, 1).fillRect(t.x - 2, t.y - 9 - f * 2, 4, 5);
-        g.fillStyle(0xffe08a, 1).fillRect(t.x - 1, t.y - 8 - f * 2, 2, 3);
+        floor.fillStyle(abyss ? 0x40ff9a : 0xffa040, 0.08 * f).fillCircle(t.x, t.y, 46);
+        floor.fillStyle(abyss ? 0x80ffc0 : 0xffc060, 0.12 * f).fillCircle(t.x, t.y, 24);
+        g.fillStyle(abyss ? 0x2a3a34 : 0x5a3a1a, 1).fillRect(t.x - 2, t.y - 4, 4, 8);
+        g.fillStyle(abyss ? 0x3aff8a : 0xff8a2a, 1).fillRect(t.x - 2, t.y - 9 - f * 2, 4, 5);
+        g.fillStyle(abyss ? 0xc8ffe0 : 0xffe08a, 1).fillRect(t.x - 1, t.y - 8 - f * 2, 2, 3);
+      }
+      if (abyss) {
+        // Ripples on the flooded pits.
+        const tick = Math.floor(now / 350);
+        for (let r = 0; r < ABYSS.rows; r++)
+          for (let c = 0; c < ABYSS.cols; c++) {
+            if (ABYSS.look[r * ABYSS.cols + c] !== D_POOL) continue;
+            const h = ((c * 73856093) ^ (r * 19349663) ^ (tick * 83492791)) >>> 0;
+            if (h % 5 !== 0) continue;
+            floor.fillStyle(0x9affd8, 0.6).fillRect(c * BLOCK + (h % 15) + 2, r * BLOCK + ((h >> 4) % 15) + 2, 4, 1);
+          }
       }
       // The way home, once the boss is down.
       state.zones?.forEach((z: any) => {

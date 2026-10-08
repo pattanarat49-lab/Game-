@@ -32,6 +32,8 @@ import {
   ROCKS,
   SWORD_GOD,
   ANCIENT_KNIGHT,
+  CTHULHU,
+  beamReach,
   stageOf,
   ringStage,
   areaOf,
@@ -76,7 +78,7 @@ import { DraftScreen } from "../draft";
 import { accountData } from "../account";
 import { TutorialView } from "../tutorial";
 import { isTouchDevice } from "../touch";
-import { DUNGEON, OPEN_WORLD } from "../../../shared/world";
+import { ABYSS, DUNGEON, OPEN_WORLD } from "../../../shared/world";
 import { BLOCK } from "../../../shared/maps";
 import { DRAGON_FRAMES, attackArtLayout, attackFrame, facingOf, frontOnly, hasHeroArt, heroArtLayout, SWING_TIME, WALK_FRAMES, WALK_FRAME_TIME, walksWithFeet, walkContact, walkOriginY } from "../heroArt";
 
@@ -198,7 +200,18 @@ interface EnemyView {
   ghost?: Phaser.GameObjects.Image;
   /** Ancient Knight: the move and phase showing, and for how long. */
   knight?: { key: string; t: number; landed: number };
+  /** Cthulhu: the move and phase showing, and for how long. */
+  cth?: { key: string; t: number; landed: number };
 }
+
+/** Where Cthulhu's body sits in each pose picture (x share, feet y share): the tentacles reach out to the right. */
+const CTH_ORIGIN: Record<string, [number, number]> = {
+  lash_1: [0.43, 0.94],
+  lash_2: [0.31, 0.94],
+  beam_1: [0.45, 0.94],
+  beam_2: [0.41, 0.94],
+  wave_1: [0.43, 0.94],
+};
 
 /** A position, stamped with the time it was true (on our clock). */
 interface Sample {
@@ -267,6 +280,7 @@ const ENEMY_SCALE: Record<EnemyKind, number> = {
   swordmaster: 1,
   swordgod: 1.3,
   knight: 1.25,
+  cthulhu: 0.9,
   stonecrawler: 1,
   stonewisp: 1,
   dirtblock: 1.3,
@@ -362,8 +376,8 @@ export class GameScene extends Phaser.Scene {
 
   async create() {
     const stage = stageOf(this.registry.get("stage"));
-    const open = stage === "world" || stage === "dungeon";
-    const song: SongId = stage === "classic" || stage === "royale" || stage === "world" || stage === "dungeon" || stage === "tutorial" ? stage : "ring";
+    const open = stage === "world" || stage === "dungeon" || stage === "abyss";
+    const song: SongId = stage === "classic" || stage === "royale" || stage === "world" || stage === "dungeon" || stage === "tutorial" ? stage : stage === "abyss" ? "dungeon" : "ring";
     playMusic(song);
     if (stage === "classic") this.classicGround = this.add.image(0, 0, this.classicTexture(0)).setOrigin(0).setDepth(-10);
     else if (stage === "royale") {
@@ -421,11 +435,11 @@ export class GameScene extends Phaser.Scene {
       cam.setBounds(-60, -60, ROYALE_MAP.cols * BLOCK + 120, ROYALE_MAP.rows * BLOCK + 120);
       cam.setBackgroundColor("#1a5a9a");
     } else if (open) {
-      const m = stage === "world" ? OPEN_WORLD : DUNGEON;
+      const m = stage === "world" ? OPEN_WORLD : stage === "abyss" ? ABYSS : DUNGEON;
       cam.setBounds(0, 0, m.cols * BLOCK, m.rows * BLOCK);
-      this.cameras.main.setBackgroundColor(stage === "world" ? "#2a6232" : "#09070c");
+      this.cameras.main.setBackgroundColor(stage === "world" ? "#2a6232" : stage === "abyss" ? "#050a08" : "#09070c");
     } else cam.setBounds(0, 0, WORLD_W, WORLD_H);
-    cam.setZoom(stage === "classic" || stage === "royale" ? CLASSIC_ZOOM : stage === "world" ? WORLD_ZOOM : 2);
+    cam.setZoom(stage === "classic" || stage === "royale" ? CLASSIC_ZOOM : stage === "world" ? WORLD_ZOOM : stage === "abyss" ? 1.35 : 2); // Cthulhu is huge: see more of his hall
     // Lock the camera to our hero; smoothing on top of rounded pixels makes sprites shimmer.
     cam.startFollow(this.cameraTarget, true, 1, 1);
     cam.setRoundPixels(true);
@@ -471,7 +485,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   /** The Open World or the dungeon: map, portals, chat, profiles; a portal or a duel moves us to another room. */
-  private openWorld(stage: "world" | "dungeon", online: boolean) {
+  private openWorld(stage: "world" | "dungeon" | "abyss", online: boolean) {
     this.world = new WorldView(
       this,
       stage,
@@ -502,6 +516,10 @@ export class GameScene extends Phaser.Scene {
     if (state.stage === "dungeon" && !this.dungeonCleared && String(state.notice ?? "").startsWith("BOSS DEFEATED")) {
       this.dungeonCleared = true;
       recordResult({ mode: "Dungeon", won: true, hero, at: Date.now() });
+    }
+    if (state.stage === "abyss" && !this.dungeonCleared && String(state.notice ?? "").startsWith("BOSS DEFEATED")) {
+      this.dungeonCleared = true;
+      recordResult({ mode: "Sunken Temple", won: true, hero, at: Date.now() });
     }
     this.lastPhase = phase;
   }
@@ -3062,7 +3080,7 @@ export class GameScene extends Phaser.Scene {
       seen.add(id);
       let view = this.enemies.get(id);
       if (!view) {
-        const sprite = this.add.image(e.x, e.y, e.kind).setOrigin(0.5, e.kind === "knight" ? 0.9 : 0.75).setScale(ENEMY_SCALE[e.kind as EnemyKind]);
+        const sprite = this.add.image(e.x, e.y, e.kind).setOrigin(0.5, e.kind === "knight" ? 0.9 : e.kind === "cthulhu" ? 0.93 : 0.75).setScale(ENEMY_SCALE[e.kind as EnemyKind]);
         sprite.setAlpha(0);
         this.tweens.add({ targets: sprite, alpha: 1, duration: 300 });
         view = { sprite, bar: this.add.graphics(), x: e.x, y: e.y, vx: 0, vy: 0 };
@@ -3071,7 +3089,7 @@ export class GameScene extends Phaser.Scene {
       const s = view.sprite;
       const asHuman = state.reality > 0;
       const etex = asHuman ? "human" : e.kind;
-      const knightPose = e.kind === "knight" && !asHuman && s.texture.key.startsWith("knight_"); // animKnight picks his frame
+      const knightPose = (e.kind === "knight" || e.kind === "cthulhu") && !asHuman && s.texture.key.startsWith(`${e.kind}_`); // animKnight picks his frame
       if (s.texture.key !== etex && !knightPose) {
         s.setTexture(etex).setScale(asHuman ? 1.2 : ENEMY_SCALE[e.kind as EnemyKind]);
         this.sparks.explode(8, s.x, s.y - 4);
@@ -3096,19 +3114,21 @@ export class GameScene extends Phaser.Scene {
       } else view.ghost?.setVisible(false);
       s.setDepth(s.y);
       if (e.kind === "knight" && !asHuman) this.animKnight(view, e, s, dt);
+      if (e.kind === "cthulhu" && !asHuman) this.animCthulhu(view, e, s, dt);
       const was = this.enemyHp.get(id);
       if (was !== undefined && e.hp < was - 0.5) this.popDamage(s.x, s.y - s.displayHeight * 0.7, was - e.hp, "#ffe27a");
       if (this.enemyHp.size > 400) this.enemyHp.clear();
       this.enemyHp.set(id, e.hp);
       if (e.hitFlash > 0) s.setTintFill(0xffffff);
       else if (state.timeStop > 0) s.setTint(0x8a93b8);
-      else if (e.beamState === 1 && Math.floor(this.time.now / 80) % 2 === 0) s.setTint(e.kind === "knight" ? 0xd8ff9a : 0x9fd8ff);
+      else if (e.beamState === 1 && Math.floor(this.time.now / 80) % 2 === 0) s.setTint(e.kind === "knight" ? 0xd8ff9a : e.kind === "cthulhu" ? 0xb8ffd8 : 0x9fd8ff);
       else s.clearTint();
       if (e.beamState > 0) {
         s.setFlipX(Math.cos(e.beamAngle) < 0);
         if (e.kind === "kingkong") this.drawCharge(s.x, s.y, e.beamAngle, e.beamState);
         else if (e.kind === "swordgod") this.drawSwordGod(s.x, s.y, e.beamAngle, e.beamState, e.move);
         else if (e.kind === "knight") this.drawKnight(view.x, view.y, e.beamAngle, e.beamState, e.move);
+        else if (e.kind === "cthulhu") this.drawCthulhu(view.x, view.y, e.beamAngle, e.beamState, e.move, view.cth?.t ?? 0);
         else this.drawBeam(s.x, s.y - 14, e.beamAngle, e.beamState);
       }
       view.x = e.x;
@@ -3127,6 +3147,14 @@ export class GameScene extends Phaser.Scene {
 
     for (const [id, view] of this.enemies) {
       if (seen.has(id)) continue;
+      if (view.cth) {
+        // Cthulhu sinks back into the deep.
+        this.cthulhuDeath(view.sprite);
+        view.bar.destroy();
+        this.enemies.delete(id);
+        this.tracks.delete(`e${id}`);
+        continue;
+      }
       if (view.knight) {
         // The Ancient Knight crumbles back into the ground.
         this.knightDeath(view.sprite);
@@ -3285,6 +3313,137 @@ export class GameScene extends Phaser.Scene {
         if (frame === 4) this.tweens.add({ targets: s, alpha: 0, delay: 900, duration: 900, onComplete: () => s.destroy() });
       },
     });
+  }
+
+  /**
+   * Cthulhu, drawn from the user's sheets (art/props/cthulhu_<pose>_<n>.png, facing right): a breathing idle,
+   * and a pose for each move's wind-up and strike, with the sheet's effects where they land.
+   */
+  private animCthulhu(view: EnemyView, e: any, s: Phaser.GameObjects.Image, dt: number) {
+    const K = CTHULHU;
+    const key = `${e.move}:${e.beamState}`;
+    const c = (view.cth ??= { key, t: 0, landed: 99 });
+    if (c.key !== key) {
+      const [was, wasState] = c.key.split(":").map(Number);
+      const cos = Math.cos(e.beamAngle);
+      const sin = Math.sin(e.beamAngle);
+      if (key === "1:2") {
+        // The tentacles crack down: spikes burst where they land.
+        this.knightFx("cthulhu_fx_spikes", view.x + cos * K.lash.length * 0.75, view.y + sin * K.lash.length * 0.75, 0.95, 0.45, 500, true);
+        this.cameras.main.shake(160, 0.008);
+      } else if (key === "2:2") this.cameras.main.shake(K.beam.active * 1000, 0.006);
+      else if (key === "7:2") {
+        this.knightFx("cthulhu_fx_mad", view.x, view.y + 8, 0.93, 1.1, 900, true);
+        this.cameras.main.flash(250, 60, 255, 140);
+        this.cameras.main.shake(500, 0.02);
+      } else if (key === "6:2") this.cameras.main.shake(150, 0.005);
+      if (was === 4 && wasState === 2) {
+        // Landing from the leap: the ground erupts in spikes and rock.
+        this.knightFx("cthulhu_fx_spikes", view.x, view.y + 8, 0.95, 1, 700, true);
+        this.cameras.main.shake(320, 0.018);
+        c.landed = 0;
+      }
+      c.key = key;
+      c.t = 0;
+    }
+    c.t += dt;
+    c.landed += dt;
+    let tex: string;
+    let lift = 0;
+    const step = (frames: number, each: number) => Math.min(frames - 1, Math.floor(c.t / each));
+    switch (e.move) {
+      case 1:
+        tex = e.beamState === 1 ? "cthulhu_lash_0" : `cthulhu_lash_${1 + step(2, 0.12)}`;
+        break;
+      case 2:
+        tex = e.beamState === 1 ? (c.t < K.beam.windup * 0.5 ? "cthulhu_beam_0" : "cthulhu_beam_1") : "cthulhu_beam_2";
+        break;
+      case 3:
+        tex = e.beamState === 1 ? "cthulhu_wave_0" : "cthulhu_wave_1";
+        break;
+      case 4:
+        if (e.beamState === 1) tex = "cthulhu_leap_0";
+        else {
+          tex = "cthulhu_leap_1";
+          lift = Math.sin(Math.PI * Math.min(1, c.t / K.leap.air)) * 90;
+        }
+        break;
+      case 5:
+        tex = e.beamState === 1 ? "cthulhu_sigil_0" : "cthulhu_sigil_1";
+        break;
+      case 6:
+        tex = "cthulhu_gas_0";
+        break;
+      case 7:
+        tex = e.beamState === 1 ? `cthulhu_mad_${step(3, K.madness.windup / 3)}` : "cthulhu_mad_3";
+        break;
+      default:
+        tex = c.landed < 0.4 ? "cthulhu_leap_2" : "cthulhu_idle";
+    }
+    if (s.texture.key !== tex) {
+      s.setTexture(tex);
+      const o = CTH_ORIGIN[tex.slice(8)] ?? [0.5, 0.94];
+      s.setOrigin(o[0], o[1]);
+    }
+    // Slow breathing while he waits.
+    if (e.move === 0) s.setScale(s.scaleX, s.scaleY * (1 + 0.015 * Math.sin(this.time.now / 500)));
+    if (lift > 0) {
+      this.beams.fillStyle(0x000000, 0.4).fillEllipse(s.x, s.y + 4, 70 * (1 - lift / 180), 20 * (1 - lift / 180));
+      s.y -= lift;
+      s.setDepth(s.y + lift + 1);
+    }
+  }
+
+  /** Cthulhu's warnings while he winds up, and his beam while it burns. */
+  private drawCthulhu(x: number, y: number, angle: number, state: number, move: number, t: number) {
+    const K = CTHULHU;
+    const g = this.beams;
+    const pulse = 0.22 + 0.15 * Math.sin(this.time.now / 70);
+    const cos = Math.cos(angle);
+    const sin = Math.sin(angle);
+    const lane = (len: number, width: number, fill: number, alpha: number, edge: number, fromY = y) => {
+      const w = width / 2;
+      const pts = [
+        { x: x - sin * w, y: fromY + cos * w },
+        { x: x + cos * len - sin * w, y: fromY + sin * len + cos * w },
+        { x: x + cos * len + sin * w, y: fromY + sin * len - cos * w },
+        { x: x + sin * w, y: fromY - cos * w },
+      ];
+      g.fillStyle(fill, alpha).fillPoints(pts, true);
+      if (edge >= 0) g.lineStyle(2, edge, 0.85).strokePoints(pts, true);
+    };
+    if (state === 1) {
+      if (move === 1) lane(K.lash.length, K.lash.width, 0xff3a2a, pulse, 0xffd060);
+      else if (move === 2) lane(beamReach(x, y, angle, K.beam.length, areaOf("abyss")), K.beam.width, 0x7aff9a, pulse * (0.5 + t), 0x3aff7a);
+      else if (move === 3) lane(420, K.wave.width, 0x3ad0ff, pulse, 0x9af0ff);
+      else if (move === 7) {
+        g.fillStyle(0xff3a2a, pulse).fillCircle(x, y, K.madness.radius);
+        g.lineStyle(3, 0x7aff9a, 0.9).strokeCircle(x, y, K.madness.radius * (1 - t / K.madness.windup) + 10);
+      } else if (move === 6) g.lineStyle(2, 0x9adf5a, pulse * 2).strokeCircle(x, y - 40, 30 + 8 * Math.sin(this.time.now / 90));
+      return;
+    }
+    if (move === 2) {
+      // The eldritch beam, out of the orb in his hand, stopped by the first wall or pillar.
+      const len = beamReach(x, y, angle, K.beam.length, areaOf("abyss"));
+      const up = 58;
+      const flick = 0.85 + 0.15 * Math.sin(this.time.now / 30);
+      lane(len, K.beam.width * 1.6 * flick, 0x1aff6a, 0.25, -1, y - up);
+      lane(len, K.beam.width * flick, 0x6aff9a, 0.55, -1, y - up);
+      lane(len, K.beam.width * 0.4, 0xeaffea, 0.95, -1, y - up);
+      g.fillStyle(0xeaffea, 0.9).fillCircle(x + cos * len, y - up + sin * len, 14 * flick);
+      g.fillStyle(0x6aff9a, 0.35).fillEllipse(x + cos * len, y + sin * len, 40, 14); // where it scorches the floor
+    }
+  }
+
+  /** Cthulhu falls: he sinks into the floor, glowing green, and is gone. */
+  private cthulhuDeath(s: Phaser.GameObjects.Image) {
+    s.clearTint().setTexture("cthulhu_mad_3");
+    const o = CTH_ORIGIN.mad_3 ?? [0.5, 0.94];
+    s.setOrigin(o[0], o[1]);
+    this.cameras.main.shake(900, 0.015);
+    this.cameras.main.flash(400, 60, 255, 140);
+    this.knightFx("cthulhu_fx_mad", s.x, s.y + 8, 0.93, 1.1, 1400, true);
+    this.tweens.add({ targets: s, y: s.y + 60, scaleY: s.scaleY * 0.3, alpha: 0, delay: 500, duration: 1800, ease: "Quad.easeIn", onComplete: () => s.destroy() });
   }
 
   /** King Kong's charge: a flashing warning lane, then dust trailing behind him. */
@@ -3580,6 +3739,38 @@ export class GameScene extends Phaser.Scene {
       if (z.kind.startsWith("fxd:icefall:") && !this.zoltraks.has(id)) {
         this.zoltraks.add(id);
         this.playIcefall(z.x, z.y, z.radius, Math.max(0.1, z.life));
+      }
+      if (z.kind === "cthsigil" || z.kind === "cthgas" || z.kind.startsWith("cthwave:")) {
+        // Cthulhu's hazards, drawn with the user's effect pictures.
+        let img = this.zoneImages.get(id);
+        const tex = z.kind === "cthsigil" ? "cthulhu_fx_sigil" : z.kind === "cthgas" ? "cthulhu_fx_gas" : "cthulhu_fx_wave";
+        if (!img) {
+          img = this.add.image(z.x, z.y, tex).setOrigin(0.5, 0.85);
+          if (tex !== "cthulhu_fx_gas") img.setBlendMode(Phaser.BlendModes.ADD);
+          this.zoneImages.set(id, img);
+        }
+        if (tex === "cthulhu_fx_sigil") {
+          // The circle glows brighter until it bursts.
+          const left = z.life / z.maxLife;
+          floor.lineStyle(2, 0xff5a3a, 0.9).strokeCircle(z.x, z.y, z.radius * left);
+          img.setScale((z.radius * 1.9) / 250).setAlpha(0.45 + 0.55 * (1 - left)).setDepth(z.y);
+        } else if (tex === "cthulhu_fx_gas") {
+          img.setScale((z.radius * 2.4) / 280).setAlpha(0.75 * fade * (0.85 + 0.15 * Math.sin(now / 200 + z.x))).setDepth(z.y + 30);
+        } else {
+          const a = Number(z.kind.split(":")[1]) || 0;
+          img.setPosition(z.x, z.y + 10).setScale((z.radius * 2) / 360).setFlipX(Math.cos(a) < 0).setAlpha(Math.min(1, fade * 2)).setDepth(z.y + 12);
+        }
+      }
+      if (z.kind === "cthburst" && !this.zoltraks.has(id)) {
+        this.zoltraks.add(id);
+        this.knightFx("cthulhu_fx_spikes", z.x, z.y + 6, 0.95, (z.radius * 2.4) / 233, 500, true);
+      }
+      if (z.kind === "cthmark") {
+        // Where Cthulhu comes crashing down.
+        const left = z.life / z.maxLife;
+        floor.fillStyle(0x1aff6a, 0.12 + 0.1 * Math.sin(now / 70)).fillCircle(z.x, z.y, z.radius);
+        floor.lineStyle(2, 0x7aff9a, 0.9).strokeCircle(z.x, z.y, z.radius);
+        floor.lineStyle(2, 0xff5a3a, 0.9).strokeCircle(z.x, z.y, z.radius * left);
       }
       if (z.kind.startsWith("fxf:lotus:")) {
         // FROZEN LOTUS: the user's ice lotus opens (bud, then full bloom) and glows until it melts.
