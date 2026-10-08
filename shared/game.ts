@@ -20,7 +20,7 @@ export const MAX_PLAYERS = 4;
 /** Heroes are drawn this much bigger than their sprites (user request 2026-10-03); the hitbox grew with them. */
 export const HERO_SCALE = 1.5;
 export const PLAYER_RADIUS = 9;
-/** BIG LIGHT: an enlarged target is this much bigger (and easier to hit) and moves at BIG_SLOW of its speed. */
+/** GROW LAMP: an enlarged target is this much bigger (and easier to hit) and moves at BIG_SLOW of its speed. */
 export const BIG_SCALE = 1.8;
 export const BIG_SLOW = 0.5;
 // Soul Knight pace: everyone walks a bit slower and every shot flies slower (same reach), so shots can be
@@ -221,17 +221,17 @@ export type SkillKind =
   | "roar" // DEMON ROAR: stuns and throws back everything nearby
   | "cyclone" // KANABO CYCLONE: three full spins of the club
   | "taunt" // ROOT SNARE (Moss Golem): every foe in the ring runs at him and attacks him
-  | "deathnote" // NAME WRITTEN: he walks very slowly while a bar fills, then the nearest foe in range falls
+  | "deathnote" // FATAL INK: he walks very slowly while a bar fills, then the nearest foe in range falls
   | "swapany" // SWAP (Surgeon Pirate): trade places with the hero picked by the aim, anywhere on the map
   | "possess" // DEATH'S DOOR (Reaper): vanish into a foe and walk it around
   | "kunai" // MARKED KUNAI: three kunai stick where they land; warp to the one picked by the aim, up to 3 times
   | "eater" // EATER (Slime Lord): swallow an ally; it takes no damage until it comes back out
-  | "domainx" // DOMAIN EXPANSION (Cursed King): he and one foe leave the map for a duel in his domain
+  | "domainx" // CURSED ARENA (Cursed King): he and one foe leave the map for a duel in his domain
   | "copyskill" // SWALLOW (Darkness Pirate): take a foe's skill and use it once
-  | "fakeclone" // FAKE CLONE: five harmless clones run around him; they copy his SPIRAL SPHERE
+  | "fakeclone" // FAKE CLONE: five harmless clones run around him; they copy his WHIRL ORB
   | "piano" // PIANO (Skeleton Bard): a piano that fires notes all around for a while
   | "bloodtrap" // BLOOD TRAP: drop blood on the way, then pull it all back through foes
-  | "bloodhammer" // BLOOD HAMMER: a blood hammer for a while: harder, longer swings
+  | "bloodhammer" // CRIMSON MALLET: a blood hammer for a while: harder, longer swings
   | "combo" // a skill built from FX steps (dash, lane, ring, shots, drop, field, lock, buff, heal, shield, blink)
   | "charge"; // hold to charge (walking slower), let go to smash: the longer the charge, the harder and longer it hits
 
@@ -274,7 +274,7 @@ export interface FxHit {
   slowPct?: number;
   /** Seconds the foe cannot use skills (ANTI-MAGIC CUT). */
   silence?: number;
-  /** Goes straight through armour, shields and immortality (ZOLTRAAK). */
+  /** Goes straight through armour, shields and immortality (SLAYING BEAM). */
   ignoreArmor?: boolean;
   /** WATER JET: hitting any foe resets the caster's first skill (Q) cooldown. */
   resetSkill1?: boolean;
@@ -352,7 +352,7 @@ export interface HeroDef {
   gun?: { attackCooldown: number; damage: number; range: number; shotSpeed: number; spread: number };
   /** Basic attack is a straight kick (a lane `range` long and this wide) instead of a swing. */
   lineAttack?: number;
-  /** DIAMOND SWORD: what basic attacks become while the sword is out. */
+  /** CRYSTAL BLADE: what basic attacks become while the sword is out. */
   sword?: { attackCooldown: number; damage: number; range: number; arc: number };
   /** Helpers called out by skills: not shown on the hero select screen. */
   summon?: boolean;
@@ -364,7 +364,7 @@ export interface HeroDef {
   noSkills?: boolean;
   /** Lane basic attacks (lineAttack) that also cut down hostile shots in the lane (Poseidon's trident). */
   laneParry?: boolean;
-  /** An alien form of this hero (ALIEN TRANSFORM): not on the hero select screen; turns back when the time runs out. */
+  /** An alien form of this hero (GENE SHIFT): not on the hero select screen; turns back when the time runs out. */
   formOf?: HeroId;
   /** Melee knockback, times a normal one. */
   knock?: number;
@@ -376,7 +376,7 @@ export interface HeroDef {
   ramKnock?: number;
   /** A long body that rams with all of it: a box `len` long and `half` * 2 tall, lying left-right (the dragon). */
   ramBody?: { len: number; half: number };
-  walk?: number; // walk speed multiplier on top of HERO_WALK (DIVINE DOGS run x1.5)
+  walk?: number; // walk speed multiplier on top of HERO_WALK (SHADOW WOLVES run x1.5)
   /** Has no basic attack (DRAGON FORM). */
   noAttack?: boolean;
 }
@@ -399,8 +399,8 @@ const BASE_HEROES: Record<BaseHeroId, HeroDef> = {
     pierce: 0,
     // SMASH also stuns everything it hits for `duration` seconds (bosses shrug it off).
     skill: { kind: "smash", name: "SMASH", cooldown: 5, damage: 60, radius: 70, duration: 1, desc: "slams the ground: hurts and stuns everything around him for 1s." },
-    // HEAT VISION: a beam `radius` long that follows his aim for `duration` seconds, `damage` per second.
-    skill2: { kind: "eyebeam", name: "HEAT VISION", cooldown: 8, damage: 140, radius: 220, width: 10, duration: 2.5, desc: "red laser beams from his eyes for 2.5s that follow his aim." },
+    // LASER EYES: a beam `radius` long that follows his aim for `duration` seconds, `damage` per second.
+    skill2: { kind: "eyebeam", name: "LASER EYES", cooldown: 8, damage: 140, radius: 220, width: 10, duration: 2.5, desc: "red laser beams from his eyes for 2.5s that follow his aim." },
   },
   isekai: {
     name: "Reborn Knight",
@@ -462,7 +462,7 @@ const BASE_HEROES: Record<BaseHeroId, HeroDef> = {
   howl: {
     name: "Sky Wizard",
     role: "Wizard",
-    blurb: "Long-range magic orbs that explode in a wide blast. MOVING CASTLE (E) sends a giant walking castle striding the way he aims until it leaves the map: everything it walks into is hit and stunned for 1s.",
+    blurb: "Long-range magic orbs that explode in a wide blast. WALKING FORTRESS (E) sends a giant walking castle striding the way he aims until it leaves the map: everything it walks into is hit and stunned for 1s.",
     stars: 3,
     maxHp: 100,
     speed: 105,
@@ -474,14 +474,14 @@ const BASE_HEROES: Record<BaseHeroId, HeroDef> = {
     aoe: 42,
     shotSpeed: 240,
     pierce: 0,
-    skill: { kind: "fireball", name: "FIRE SPIRIT", cooldown: 6, damage: 119.6, radius: 90, desc: "a big fire spirit fireball that explodes in a wide blast." },
-    // MOVING CASTLE: the castle is `radius` wide (each side), walks at CASTLE_SPEED and hits each target once.
-    skill2: { kind: "castle", name: "MOVING CASTLE", cooldown: 16, damage: 60, radius: 40, duration: 1 },
+    skill: { kind: "fireball", name: "FLAME WISP", cooldown: 6, damage: 119.6, radius: 90, desc: "a big fire spirit fireball that explodes in a wide blast." },
+    // WALKING FORTRESS: the castle is `radius` wide (each side), walks at CASTLE_SPEED and hits each target once.
+    skill2: { kind: "castle", name: "WALKING FORTRESS", cooldown: 16, damage: 60, radius: 40, duration: 1 },
   },
   ricardo: {
     name: "Champ Rico",
     role: "Boxer",
-    blurb: "Fast boxer with very short reach. JAB fires a long straight jab that stuns enemies for 0.5s. DEATH CROSS: a crushing straight right that sends targets flying.",
+    blurb: "Fast boxer with very short reach. JAB fires a long straight jab that stuns enemies for 0.5s. IRON CROSS: a crushing straight right that sends targets flying.",
     stars: 3,
     maxHp: 170,
     speed: 173, // 1.5x his old pace
@@ -495,8 +495,8 @@ const BASE_HEROES: Record<BaseHeroId, HeroDef> = {
     pierce: 0,
     // JAB: a long, narrow straight punch (radius = reach, width = thickness) that stuns for `duration`.
     skill: { kind: "jab", name: "JAB", cooldown: 1, damage: 30, radius: 62, width: 18, duration: 0.5 },
-    // DEATH CROSS: `duration` here is how many times further than a normal knockback it throws targets.
-    skill2: { kind: "cross", name: "DEATH CROSS", cooldown: 6, damage: 225, radius: 80, width: 26, duration: 4 },
+    // IRON CROSS: `duration` here is how many times further than a normal knockback it throws targets.
+    skill2: { kind: "cross", name: "IRON CROSS", cooldown: 6, damage: 225, radius: 80, width: 26, duration: 4 },
   },
   saitama: {
     name: "Plain Hero",
@@ -538,7 +538,7 @@ const BASE_HEROES: Record<BaseHeroId, HeroDef> = {
   deku: {
     name: "Green Rookie",
     role: "Brawler",
-    blurb: "SHADOW WHIP: a black whip shoots out to the nearest target and ties its legs, so it cannot walk for 2s. MAX SMASH (E): hold to charge (walking 60% slower) and let go to smash; the gauge shows how hard it will hit, up to 4x.",
+    blurb: "SHADOW WHIP: a black whip shoots out to the nearest target and ties its legs, so it cannot walk for 2s. FULL FORCE (E): hold to charge (walking 60% slower) and let go to smash; the gauge shows how hard it will hit, up to 4x.",
     stars: 4,
     maxHp: 130,
     speed: 160,
@@ -552,8 +552,8 @@ const BASE_HEROES: Record<BaseHeroId, HeroDef> = {
     pierce: 0,
     // SHADOW WHIP: locks on to the nearest target within `radius`; its legs are tied for `duration` seconds.
     skill: { kind: "whip", name: "SHADOW WHIP", cooldown: 7, damage: 20, radius: 220, duration: 2 },
-    // MAX SMASH: a smash lane `radius` long and `width` wide at no charge; a full charge multiplies it (chargePower).
-    skill2: { kind: "charge", name: "MAX SMASH", cooldown: 8, damage: 60, radius: 120, width: 40 },
+    // FULL FORCE: a smash lane `radius` long and `width` wide at no charge; a full charge multiplies it (chargePower).
+    skill2: { kind: "charge", name: "FULL FORCE", cooldown: 8, damage: 60, radius: 120, width: 40 },
   },
   okita: {
     name: "Sakura Blade",
@@ -577,7 +577,7 @@ const BASE_HEROES: Record<BaseHeroId, HeroDef> = {
   gojo: {
     name: "Void Sorcerer",
     role: "Sorcerer",
-    blurb: "Fights up close. VOID REALM opens a starry void in a small circle around him that hits every enemy inside it. PURPLE BEAM (E): one huge purple beam that hits everything in a long line for heavy damage.",
+    blurb: "Fights up close. COSMIC FIELD opens a starry void in a small circle around him that hits every enemy inside it. VIOLET RAY (E): one huge purple beam that hits everything in a long line for heavy damage.",
     stars: 4,
     maxHp: 140,
     speed: 115,
@@ -589,8 +589,8 @@ const BASE_HEROES: Record<BaseHeroId, HeroDef> = {
     aoe: 0,
     shotSpeed: 0,
     pierce: 0,
-    skill: { kind: "domain", name: "VOID REALM", cooldown: 18, damage: 200, radius: 160, duration: 1.6 },
-    skill2: { kind: "purple", name: "PURPLE BEAM", cooldown: 14, damage: 160, radius: 420, width: 40 },
+    skill: { kind: "domain", name: "COSMIC FIELD", cooldown: 18, damage: 200, radius: 160, duration: 1.6 },
+    skill2: { kind: "purple", name: "VIOLET RAY", cooldown: 14, damage: 160, radius: 420, width: 40 },
   },
   starplatinum: {
     name: "Chrono Brawler",
@@ -673,7 +673,7 @@ const BASE_HEROES: Record<BaseHeroId, HeroDef> = {
   titan: {
     name: "Giant Shifter",
     role: "Shifter",
-    blurb: "Very weak hits as a human. GIANT FORM turns him into a 50m giant for 10s: every hit smashes everything around him. ODM GEAR (E, 0.5s): fire a wire into the wall ahead and zip along it.",
+    blurb: "Very weak hits as a human. GIANT FORM turns him into a 50m giant for 10s: every hit smashes everything around him. GRAPPLE HOOK (E, 0.5s): fire a wire into the wall ahead and zip along it.",
     stars: 4,
     maxHp: 165,
     speed: 105,
@@ -687,8 +687,8 @@ const BASE_HEROES: Record<BaseHeroId, HeroDef> = {
     pierce: 0,
     // In Titan form: damage and radius of each smash, and seconds between smashes.
     skill: { kind: "titan", name: "GIANT FORM", cooldown: 20, damage: 90, radius: 75, duration: 10 },
-    // ODM GEAR: the wire reaches `radius`; he zips to where it hits a wall (or its end).
-    skill2: { kind: "grapple", name: "ODM GEAR", cooldown: 0.5, damage: 0, radius: 260 },
+    // GRAPPLE HOOK: the wire reaches `radius`; he zips to where it hits a wall (or its end).
+    skill2: { kind: "grapple", name: "GRAPPLE HOOK", cooldown: 0.5, damage: 0, radius: 260 },
   },
   yaotsu: {
     name: "Glitch God",
@@ -753,7 +753,7 @@ const BASE_HEROES: Record<BaseHeroId, HeroDef> = {
   joyboy: {
     name: "Rubber Pirate",
     role: "Rubber brawler",
-    blurb: "1.5x HP. Stretchy punches reach further. GATLING PUNCH fires a storm of fists down a medium-range lane, smashing shots in it. RUBBER PUNCH (E): the arm shoots out fast; anyone the fist hits is stunned for 1s, then it snaps back.",
+    blurb: "1.5x HP. Stretchy punches reach further. FIST BARRAGE fires a storm of fists down a medium-range lane, smashing shots in it. STRETCH PUNCH (E): the arm shoots out fast; anyone the fist hits is stunned for 1s, then it snaps back.",
     stars: 4,
     maxHp: 180,
     speed: 110,
@@ -765,15 +765,15 @@ const BASE_HEROES: Record<BaseHeroId, HeroDef> = {
     aoe: 0,
     shotSpeed: 0,
     pierce: 0,
-    // GATLING PUNCH: `damage` per hit, every 0.1s for `duration`, in a lane `radius` long and `width` wide.
-    skill: { kind: "gatling", name: "GATLING PUNCH", cooldown: 6, damage: 28, radius: 110, width: 40, duration: 1 },
-    // RUBBER PUNCH: a fast stretching punch that stuns for 1s, then snaps back.
-    skill2: { kind: "rubberpunch", name: "RUBBER PUNCH", cooldown: 10, damage: 40, radius: 0, duration: 3 },
+    // FIST BARRAGE: `damage` per hit, every 0.1s for `duration`, in a lane `radius` long and `width` wide.
+    skill: { kind: "gatling", name: "FIST BARRAGE", cooldown: 6, damage: 28, radius: 110, width: 40, duration: 1 },
+    // STRETCH PUNCH: a fast stretching punch that stuns for 1s, then snaps back.
+    skill2: { kind: "rubberpunch", name: "STRETCH PUNCH", cooldown: 10, damage: 40, radius: 0, duration: 3 },
   },
   rick: {
     name: "Mad Scientist",
     role: "Inventor",
-    blurb: "Laser gun. PORTAL GUN: shoot one portal, then another; walk into one to come out of the other (only he can use them); the 7s cooldown only starts once the pair has closed. MISSILES: 10 homing missiles that chase targets until they hit.",
+    blurb: "Laser gun. RIFT BLASTER: shoot one portal, then another; walk into one to come out of the other (only he can use them); the 7s cooldown only starts once the pair has closed. MISSILES: 10 homing missiles that chase targets until they hit.",
     stars: 5,
     maxHp: 110,
     speed: 110,
@@ -786,14 +786,14 @@ const BASE_HEROES: Record<BaseHeroId, HeroDef> = {
     shotSpeed: 420,
     pierce: 0,
     shot: "laser",
-    // PORTAL GUN: each press opens a portal up to `radius` ahead; the pair stays open `duration` seconds.
-    skill: { kind: "portal", name: "PORTAL GUN", cooldown: 7, damage: 0, radius: 160, duration: 20, waitGone: "portal" },
+    // RIFT BLASTER: each press opens a portal up to `radius` ahead; the pair stays open `duration` seconds.
+    skill: { kind: "portal", name: "RIFT BLASTER", cooldown: 7, damage: 0, radius: 160, duration: 20, waitGone: "portal" },
     skill2: { kind: "missiles", name: "MISSILES", cooldown: 14, damage: 25, radius: 0, count: 10, duration: 8 },
   },
   doraemon: {
     name: "Gadget Cat",
     role: "Robot cat",
-    blurb: "1.5x HP. Air cannon blasts. BIG LIGHT shines a flashlight ahead: enemies caught in it grow bigger (easier to hit) and walk at half speed for 5s. GUNNER BOTS: 6 little gunner robots (15% of his HP each).",
+    blurb: "1.5x HP. Air cannon blasts. GROW LAMP shines a flashlight ahead: enemies caught in it grow bigger (easier to hit) and walk at half speed for 5s. GUNNER BOTS: 6 little gunner robots (15% of his HP each).",
     stars: 3,
     maxHp: 180,
     speed: 100,
@@ -806,14 +806,14 @@ const BASE_HEROES: Record<BaseHeroId, HeroDef> = {
     shotSpeed: 260,
     pierce: 0,
     shot: "air",
-    // BIG LIGHT: a cone `radius` long and `width` radians wide (each side).
-    skill: { kind: "biglight", name: "BIG LIGHT", cooldown: 12, damage: 0, radius: 170, width: 0.6, duration: 5 },
+    // GROW LAMP: a cone `radius` long and `width` radians wide (each side).
+    skill: { kind: "biglight", name: "GROW LAMP", cooldown: 12, damage: 0, radius: 170, width: 0.6, duration: 5 },
     skill2: { kind: "summon", name: "GUNNER BOTS", cooldown: 22, damage: 0.15, radius: 0, count: 6, duration: 15, pet: "gunbot" },
   },
   trainer: {
     name: "Monster Tamer",
     role: "Tamer",
-    blurb: "Weak, slow punches. SPARK MOUSE: a fast electric mouse (30% HP) zaps enemies. FLAME DRAGON: a big fire dragon (100% HP). Pets stay until they fall or the Tamer does; each 10s cooldown only starts once its pet has fallen.",
+    blurb: "Weak, slow punches. VOLT CRITTER: a fast electric mouse (30% HP) zaps enemies. EMBER DRAKE: a big fire dragon (100% HP). Pets stay until they fall or the Tamer does; each 10s cooldown only starts once its pet has fallen.",
     stars: 3,
     maxHp: 110,
     speed: 110,
@@ -825,8 +825,8 @@ const BASE_HEROES: Record<BaseHeroId, HeroDef> = {
     aoe: 0,
     shotSpeed: 0,
     pierce: 0,
-    skill: { kind: "summon", name: "SPARK MOUSE", cooldown: 10, damage: 0.3, radius: 0, count: 1, pet: "sparkmouse", waitGone: "pet" },
-    skill2: { kind: "summon", name: "FLAME DRAGON", cooldown: 10, damage: 1, radius: 0, count: 1, pet: "flamedragon", waitGone: "pet" },
+    skill: { kind: "summon", name: "VOLT CRITTER", cooldown: 10, damage: 0.3, radius: 0, count: 1, pet: "sparkmouse", waitGone: "pet" },
+    skill2: { kind: "summon", name: "EMBER DRAKE", cooldown: 10, damage: 1, radius: 0, count: 1, pet: "flamedragon", waitGone: "pet" },
   },
   kid: {
     name: "Phantom Thief",
@@ -909,7 +909,7 @@ const BASE_HEROES: Record<BaseHeroId, HeroDef> = {
   zenitsu: {
     name: "Thunder Sleeper",
     role: "Lightning swordsman",
-    blurb: "A jumpy swordsman who only shines when it counts. THUNDER DASH: a lightning-fast dash that cuts the whole lane; every hit lets him dash again within 2s, so he can chain dashes; when the 2s run out, the cooldown starts. SEVENTH FORM (E): a huge lightning dash cutting a wide lane, which keeps crackling with lightning for 3s.",
+    blurb: "A jumpy swordsman who only shines when it counts. THUNDER DASH: a lightning-fast dash that cuts the whole lane; every hit lets him dash again within 2s, so he can chain dashes; when the 2s run out, the cooldown starts. THUNDERCLAP FINALE (E): a huge lightning dash cutting a wide lane, which keeps crackling with lightning for 3s.",
     stars: 4,
     maxHp: 115,
     speed: 135,
@@ -923,8 +923,8 @@ const BASE_HEROES: Record<BaseHeroId, HeroDef> = {
     pierce: 0,
     // THUNDER DASH: dashes `radius`, cutting a lane `width` wide; a hit opens a second dash for `duration` seconds.
     skill: { kind: "thunderdash", name: "THUNDER DASH", cooldown: 6, damage: 52, radius: 150, width: 26, duration: 2 },
-    // SEVENTH FORM: dashes `radius` cutting a lane `width` wide; the lane crackles for `duration` seconds.
-    skill2: { kind: "seventh", name: "SEVENTH FORM", cooldown: 12, damage: 78, radius: 230, width: 70, duration: 3 },
+    // THUNDERCLAP FINALE: dashes `radius` cutting a lane `width` wide; the lane crackles for `duration` seconds.
+    skill2: { kind: "seventh", name: "THUNDERCLAP FINALE", cooldown: 12, damage: 78, radius: 230, width: 70, duration: 3 },
   },
   theworld: {
     name: "Time Emperor",
@@ -968,7 +968,7 @@ const BASE_HEROES: Record<BaseHeroId, HeroDef> = {
   steve: {
     name: "Block Crafter",
     role: "Builder",
-    blurb: "Weak punches. DIAMOND SWORD: 10s of strong, long, fast sword swings. BUILD (E): place a random block where you aim: dirt (blocks a hit), TNT (explodes with a huge knockback when hit) or a craft table (break it yourself for 2x damage for good).",
+    blurb: "Weak punches. CRYSTAL BLADE: 10s of strong, long, fast sword swings. BUILD (E): place a random block where you aim: dirt (blocks a hit), TNT (explodes with a huge knockback when hit) or a craft table (break it yourself for 2x damage for good).",
     stars: 4,
     maxHp: 120,
     speed: 112,
@@ -981,7 +981,7 @@ const BASE_HEROES: Record<BaseHeroId, HeroDef> = {
     shotSpeed: 0,
     pierce: 0,
     sword: { attackCooldown: 0.28, damage: 45, range: 44, arc: 2.2 },
-    skill: { kind: "diamond", name: "DIAMOND SWORD", cooldown: 16, damage: 0, radius: 0, duration: 10 },
+    skill: { kind: "diamond", name: "CRYSTAL BLADE", cooldown: 16, damage: 0, radius: 0, duration: 10 },
     skill2: { kind: "build", name: "BUILD", cooldown: 3, damage: 90, radius: 110 },
   },
   agamemnon: {
@@ -1026,7 +1026,7 @@ const BASE_HEROES: Record<BaseHeroId, HeroDef> = {
   rider: {
     name: "Hopper Rider",
     role: "Masked hero",
-    blurb: "1.5x HP, very fast punches. RIDER KICK leaps into a flying kick that stuns everything it hits for 2s. MOTORCYCLE (E): rides for 4s, 2.2x faster; whoever he rams is stunned 1s and knocked back.",
+    blurb: "1.5x HP, very fast punches. HOPPER KICK leaps into a flying kick that stuns everything it hits for 2s. MOTORCYCLE (E): rides for 4s, 2.2x faster; whoever he rams is stunned 1s and knocked back.",
     stars: 4,
     maxHp: 165,
     speed: 165,
@@ -1038,7 +1038,7 @@ const BASE_HEROES: Record<BaseHeroId, HeroDef> = {
     aoe: 0,
     shotSpeed: 0,
     pierce: 0,
-    skill: { kind: "kick", name: "RIDER KICK", cooldown: 8, damage: 70, radius: 150, width: 30, duration: 2 },
+    skill: { kind: "kick", name: "HOPPER KICK", cooldown: 8, damage: 70, radius: 150, width: 30, duration: 2 },
     // MOTORCYCLE: `width` times faster for `duration` seconds; ramming hits for `damage`, stuns 1s and knocks back.
     skill2: { kind: "bike", name: "MOTORCYCLE", cooldown: 14, damage: 45, radius: 22, duration: 4, width: 2.2 },
   },
@@ -1539,7 +1539,7 @@ const BASE_HEROES: Record<BaseHeroId, HeroDef> = {
   omni: {
     name: "Omni Kid",
     role: "Alien shifter",
-    blurb: "A kid with an alien watch. ALIEN TRANSFORM: hold and aim at the alien you want on the wheel, release to turn into it for 10s (no skills while an alien, except Echo Mite's MITOSIS): Blaze Alien (flamethrower that burns and slows), Quad Brute (huge HP, crushing punches that knock far), Echo Mite (long-range sonic blasts; MITOSIS splits every copy in two, sharing HP) or Speed Raptor (10x speed, running into foes hurts them). Turning back restores the HP he had before the transform. SNACK (E): eat to heal 4% HP.",
+    blurb: "A kid with an alien watch. GENE SHIFT: hold and aim at the alien you want on the wheel, release to turn into it for 10s (no skills while an alien, except Echo Mite's MITOSIS): Blaze Alien (flamethrower that burns and slows), Quad Brute (huge HP, crushing punches that knock far), Echo Mite (long-range sonic blasts; MITOSIS splits every copy in two, sharing HP) or Speed Raptor (10x speed, running into foes hurts them). Turning back restores the HP he had before the transform. SNACK (E): eat to heal 4% HP.",
     stars: 4,
     maxHp: 110,
     speed: 112,
@@ -1551,8 +1551,8 @@ const BASE_HEROES: Record<BaseHeroId, HeroDef> = {
     aoe: 0,
     shotSpeed: 0,
     pierce: 0,
-    // ALIEN TRANSFORM: `duration` seconds as a random alien; `cooldown` counts from turning back.
-    skill: { kind: "omnitrix", name: "ALIEN TRANSFORM", cooldown: 8, damage: 0, radius: 0, duration: 10 },
+    // GENE SHIFT: `duration` seconds as a random alien; `cooldown` counts from turning back.
+    skill: { kind: "omnitrix", name: "GENE SHIFT", cooldown: 8, damage: 0, radius: 0, duration: 10 },
     // SNACK: heal `damage` of max HP.
     skill2: { kind: "eat", name: "SNACK", cooldown: 10, damage: 0.1, radius: 0 },
   },
@@ -2028,11 +2028,11 @@ export const ROCKS: Rock[] = [
   { x: 760, y: 360, r: 14 },
 ];
 
-/** MAX SMASH charge: full after this many seconds; the hero walks at this share of their speed while charging. */
+/** FULL FORCE charge: full after this many seconds; the hero walks at this share of their speed while charging. */
 export const CHARGE_FULL = 2.5;
 export const CHARGE_SLOW = 0.4;
 
-/** How much a MAX SMASH charged for `held` seconds hits (x1 at once, up to x4 at full charge). */
+/** How much a FULL FORCE charged for `held` seconds hits (x1 at once, up to x4 at full charge). */
 export function chargePower(held: number, full = CHARGE_FULL): number {
   return 1 + 3 * Math.min(1, Math.max(0, held) / full);
 }
@@ -2051,7 +2051,7 @@ export function chargeTimeOf(skill: SkillDef): number {
   return skill.chargeTime ?? CHARGE_FULL;
 }
 
-/** How long (and wide) the MAX SMASH lane is at that power: up to 1.8x. */
+/** How long (and wide) the FULL FORCE lane is at that power: up to 1.8x. */
 export function chargeReach(power: number): number {
   return 1 + ((power - 1) / 3) * 0.8;
 }
@@ -2110,8 +2110,8 @@ export function movesInStoppedTime(hero: string): boolean {
   return kind === "timestop" || kind === "truck";
 }
 
-/** How fast a hero runs right now (BIG LIGHT slows, the Hopper Rider's motorcycle speeds up). */
-/** ALIEN TRANSFORM: a hero's alien forms, in wheel order (the first at the top, then clockwise). */
+/** How fast a hero runs right now (GROW LAMP slows, the Hopper Rider's motorcycle speeds up). */
+/** GENE SHIFT: a hero's alien forms, in wheel order (the first at the top, then clockwise). */
 export function alienForms(hero: string): HeroId[] {
   return (Object.keys(HEROES) as HeroId[]).filter((h) => HEROES[h].formOf === hero);
 }
@@ -2121,7 +2121,7 @@ export function formAngle(i: number, n: number): number {
   return -Math.PI / 2 + (i * Math.PI * 2) / n;
 }
 
-/** ALIEN TRANSFORM: the form picked by aiming at it on the wheel. */
+/** GENE SHIFT: the form picked by aiming at it on the wheel. */
 export function formFromAim(hero: string, aim: number): HeroId | undefined {
   const forms = alienForms(hero);
   let best: HeroId | undefined;
@@ -2152,7 +2152,7 @@ export function heroSpeed(p: { hero: string; big: number; active2?: number; buff
   for (const b of fxBuffs(p)) bike *= b.speed ?? 1; // combo speed buffs
   const base = hero.ram ? hero.speed * MOVE_SCALE : HERO_WALK; // the Speed Raptor keeps its own speed
   if (hero.skill2?.kind === "yoyo" && p.mode === 1) bike *= 1.3; // YOYO MODE: lighter on his feet
-  if (hero.skill.kind === "deathnote" && (p.buff ?? 0) > 0) bike *= 0.2; // NAME WRITTEN: writing, barely moving
+  if (hero.skill.kind === "deathnote" && (p.buff ?? 0) > 0) bike *= 0.2; // FATAL INK: writing, barely moving
   const slowed = (p.slow ?? 0) > 0 ? 1 - ((p.slowPct ?? 0) > 0 ? p.slowPct! : 1 - BURN_SLOW) : 1;
   return base * HERO_SPEED_BOOST * (hero.walk ?? 1) * (p.big > 0 ? BIG_SLOW : 1) * slowed * bike;
 }

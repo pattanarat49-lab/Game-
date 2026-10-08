@@ -88,21 +88,21 @@ function hero(cls: HeroClass, name: string, role: string, maxHp: number, basic: 
 
 /** Queen's Bond's CURSED QUEEN: calls out the big curse (HP = this share of his max HP) for `duration`. */
 const NO_SKILL: SkillDef = { kind: "passive", name: "NO SKILL YET", cooldown: 1, damage: 0, radius: 0, desc: "no skill yet: everything is in his sword." };
-const DOGS_SKILL: SkillDef = { kind: "summon", name: "DIVINE DOGS", cooldown: 12, damage: 0.4, radius: 0, count: 1, duration: 10, pet: "whitewolf" as SkillDef["pet"], pet2: "blackwolf" as SkillDef["pet"], desc: "calls a white and a black shadow wolf for 10s: they run 1.5x as fast as a hero, chase down his foes and bite them." };
-const RIKA_SKILL: SkillDef = { kind: "summon", name: "CURSED QUEEN", cooldown: 16, damage: 2, radius: 0, count: 1, duration: 10, pet: "rika" as SkillDef["pet"], desc: "calls out his giant curse queen for 10s (as much HP as twice his own): she follows him and smashes his foes with huge claws that knock them back, and fires PURE LOVE with him." };
+const DOGS_SKILL: SkillDef = { kind: "summon", name: "SHADOW WOLVES", cooldown: 12, damage: 0.4, radius: 0, count: 1, duration: 10, pet: "whitewolf" as SkillDef["pet"], pet2: "blackwolf" as SkillDef["pet"], desc: "calls a white and a black shadow wolf for 10s: they run 1.5x as fast as a hero, chase down his foes and bite them." };
+const RIKA_SKILL: SkillDef = { kind: "summon", name: "CURSED QUEEN", cooldown: 16, damage: 2, radius: 0, count: 1, duration: 10, pet: "rika" as SkillDef["pet"], desc: "calls out his giant curse queen for 10s (as much HP as twice his own): she follows him and smashes his foes with huge claws that knock them back, and fires DEVOTION BEAM with him." };
 
-/** ODM GEAR (same as the Giant Shifter's): a wire into the wall ahead, and he zips along it. */
+/** GRAPPLE HOOK (same as the Giant Shifter's): a wire into the wall ahead, and he zips along it. */
 const ODM_TEXT = "fires a wire into the wall (or rock) ahead and zips along it at high speed (0.5s cooldown).";
-const ODM: SkillDef = { kind: "grapple", name: "ODM GEAR", cooldown: 0.5, damage: 0, radius: 260, desc: ODM_TEXT };
-const odm: Skill = ["ODM GEAR", 0.5, ODM_TEXT, []];
+const ODM: SkillDef = { kind: "grapple", name: "GRAPPLE HOOK", cooldown: 0.5, damage: 0, radius: 260, desc: ODM_TEXT };
+const odm: Skill = ["GRAPPLE HOOK", 0.5, ODM_TEXT, []];
 
-const DOMAIN_EXPANSION_SKILL: SkillDef = { kind: "domainx", name: "DOMAIN EXPANSION", cooldown: 20, damage: 2, radius: 220, duration: 10, desc: "locks onto the nearest foe within 220 and pulls it into his domain for 10s: both vanish from the map and nobody else can get in; inside he hits twice as hard but cannot use FIRE ARROW." };
-const FAKE_CLONE_SKILL: SkillDef = { kind: "fakeclone", name: "FAKE CLONE", cooldown: 10, damage: 0, radius: 220, count: 5, duration: 8, desc: "five clones of him run around him for 8s; they look just like him but deal no damage and vanish in one hit. When he uses SPIRAL SPHERE, every clone does it too, at the same foe." };
+const DOMAIN_EXPANSION_SKILL: SkillDef = { kind: "domainx", name: "CURSED ARENA", cooldown: 20, damage: 2, radius: 220, duration: 10, desc: "locks onto the nearest foe within 220 and pulls it into his domain for 10s: both vanish from the map and nobody else can get in; inside he hits twice as hard but cannot use BLAZE SPEAR." };
+const FAKE_CLONE_SKILL: SkillDef = { kind: "fakeclone", name: "FAKE CLONE", cooldown: 10, damage: 0, radius: 220, count: 5, duration: 8, desc: "five clones of him run around him for 8s; they look just like him but deal no damage and vanish in one hit. When he uses WHIRL ORB, every clone does it too, at the same foe." };
 const PIANO_SKILL: SkillDef = { kind: "piano", name: "PIANO", cooldown: 10, damage: 60, radius: 200, count: 24, desc: "a piano appears in front of him and plays: 24 notes (C D E F G) fly out all around it one after another, each hitting very hard." };
 const SWALLOW_SKILL: SkillDef = { kind: "copyskill", name: "SWALLOW", cooldown: 10, damage: 20, radius: 180, desc: "darkness grabs the nearest foe within 180 and copies its first skill; his next E uses that skill once." };
 const SWAP_SKILL: SkillDef = { kind: "swapany", name: "SWAP", cooldown: 10, damage: 0, radius: 2000, desc: "swaps places with any hero on the map: drag the skill toward the one to swap with." };
-const NAME_WRITTEN_SKILL: SkillDef = { kind: "deathnote", name: "NAME WRITTEN", cooldown: 12, damage: 0, radius: 280, duration: 10, desc: "writes in the notebook for 10s (a bar fills over his head and he walks 80% slower); when it is full, the nearest foe within 280 falls at once." };
-const BLOOD_HAMMER_SKILL: SkillDef = { kind: "bloodhammer", name: "BLOOD HAMMER", cooldown: 12, damage: 0, radius: 0, duration: 7, desc: "pays 10% of her HP for a hammer of blood: her swings hit twice as hard and reach twice as far for 7s." };
+const NAME_WRITTEN_SKILL: SkillDef = { kind: "deathnote", name: "FATAL INK", cooldown: 12, damage: 0, radius: 280, duration: 10, desc: "writes in the notebook for 10s (a bar fills over his head and he walks 80% slower); when it is full, the nearest foe within 280 falls at once." };
+const BLOOD_HAMMER_SKILL: SkillDef = { kind: "bloodhammer", name: "CRIMSON MALLET", cooldown: 12, damage: 0, radius: 0, duration: 7, desc: "pays 10% of her HP for a hammer of blood: her swings hit twice as hard and reach twice as far for 7s." };
 const BLOOD_TRAP_SKILL: SkillDef = { kind: "bloodtrap", name: "BLOOD TRAP", cooldown: 8, damage: 60.2, radius: 160, desc: "pays 5% of her HP and leaves a trail of blood wherever she walks for 4s; press again to pull all the blood back to her at once: every drop that passes through a foe hits it." };
 const EATER_SKILL: SkillDef = { kind: "eater", name: "EATER", cooldown: 11, damage: 0, radius: 160, desc: "swallows the ally he aims at (within 160): inside him it takes no damage at all, for as long as it likes; it comes back out when it presses any button." };
 const MARKED_KUNAI_SKILL: SkillDef = { kind: "kunai", name: "MARKED KUNAI", cooldown: 8, damage: 20, radius: 250, width: 0.6, count: 3, desc: "throws three spread kunai that fly out, hurting every foe they pass through, and stick in where they stop (walls stop them); for 6s, press again to flash to the kunai a line points at (aim to pick it), up to 3 times. Then the cooldown starts." };
@@ -110,7 +110,7 @@ const MARKED_KUNAI_SKILL: SkillDef = { kind: "kunai", name: "MARKED KUNAI", cool
 const ROSTER = {
   // ---------------------------------------------------------------- sheet 1
   nagi: hero("carry", "Ball Prodigy", "Striker", 95, shoot("ball", 22, 0.55, 220), "Kicks footballs.",
-    ["DIRECT VOLLEY", 6, "one rocket of a shot that flies through up to 3 foes, knocks them flying and bounces off walls 5 times.", [
+    ["ROCKET VOLLEY", 6, "one rocket of a shot that flies through up to 3 foes, knocks them flying and bounces off walls 5 times.", [
       { do: "shots", n: 1, spread: 0, speed: 1040, range: 900, pierce: 3, shape: "orb", size: 5, color: "ffffff", dmg: 82.5, knock: 2, bounce: 5 },
     ]],
     ["FLOW STATE", 11, "enters the flow: runs 35% faster and shoots 40% faster for 4s.", [
@@ -118,7 +118,7 @@ const ROSTER = {
       { do: "ring", radius: 30, look: "shock", color: "3a8aff" },
     ]]),
   roger: hero("fighter", "Pirate King", "Legend captain", 115, blade(32, 0.55, 32), "Cutlass swings.",
-    ["DIVINE DEPARTURE", 7, "a flash of black haki that stuns close foes, then a huge red cut down the lane.", [
+    ["RED HORIZON", 7, "a flash of black will that stuns close foes, then a huge red cut down the lane.", [
       { do: "ring", radius: 50, look: "shock", color: "202020", stun: 0.4 },
       { do: "lane", wait: 0.25, len: 180, width: 40, look: "slash", color: "ff3030", dmg: 80, knock: 1.5 },
     ]],
@@ -135,9 +135,9 @@ const ROSTER = {
       { do: "cone", wait: 0.25, range: 90, arc: 2.8, reflect: true, color: "ff3050", dmg: 65, stun: 0.6, look: "hawkcut2" },
     ]]),
   sukuna: hero("fighter", "Cursed King", "King of curses", 105, { ...punch(30), knock: 0 }, "Cursed punches (no knockback).",
-    // DOMAIN EXPANSION: `damage` = how much harder he hits inside; `radius` = how far the target can be.
+    // CURSED ARENA: `damage` = how much harder he hits inside; `radius` = how far the target can be.
     DOMAIN_EXPANSION_SKILL,
-    ["FIRE ARROW", 13, "a burning arrow, then the aimed ground bursts into flames for 3s.", [
+    ["BLAZE SPEAR", 13, "a burning arrow, then the aimed ground bursts into flames for 3s.", [
       { do: "shots", n: 1, spread: 0, speed: 420, range: 200, shape: "spike", size: 6, color: "ff6a00", dmg: 30 },
       { do: "field", wait: 0.4, at: 170, radius: 70, life: 3, tick: 0.5, look: "flames", color: "ff5a00", dmg: 18 },
     ]]),
@@ -150,7 +150,7 @@ const ROSTER = {
       { do: "ring", radius: 40, look: "burst", color: "ffe060", dmg: 45, knock: 2 },
     ]]),
   naruto: hero("fighter", "Fox Ninja", "Loud ninja", 110, punch(28), "Ninja punches.",
-    ["SPIRAL SPHERE", 6, "flickers forward with a spinning sphere that blows foes away.", [
+    ["WHIRL ORB", 6, "flickers forward with a spinning sphere that blows foes away.", [
       { do: "blink", to: "aim", range: 100, color: "ffa030" },
       { do: "ring", radius: 50, look: "spin", color: "3ad8ff", dmg: 70, knock: 3 },
     ]],
@@ -168,7 +168,7 @@ const ROSTER = {
       { do: "dash", len: 150, width: 30, color: "30d060", dmg: 40 },
       { do: "ring", wait: 0.25, radius: 35, look: "spin", color: "30d060", dmg: 30 },
     ]],
-    ["DRAGON TWISTER", 10, "spins into a tornado that drags foes in, then flings them out.", [
+    ["CYCLONE SLASH", 10, "spins into a tornado that drags foes in, then flings them out.", [
       { do: "ring", times: 4, gap: 0.3, radius: 60, look: "spin", color: "60ff90", dmg: 16, knock: -0.4 },
       { do: "ring", wait: 1.2, radius: 60, look: "burst", color: "60ff90", dmg: 30, knock: 3 },
     ]]),
@@ -181,14 +181,14 @@ const ROSTER = {
       { do: "drop", at: "self", delay: 0.25, radius: 55, look: "fist", color: "ff8040", dmg: 60, stun: 0.7 },
     ]]),
   usopp: hero("carry", "Sling Sniper", "Liar with great aim", 90, shoot("pebble", 22, 0.5, 280), "Sling shots from far away.",
-    ["FIRE BIRD STAR", 7, "a blast shaped like a red skull goes off on the aimed spot.", [
+    ["PHOENIX PELLET", 7, "a blast shaped like a red skull goes off on the aimed spot.", [
       { do: "drop", at: 160, delay: 0.5, radius: 65, look: "skull", color: "ff2020", dmg: 70 },
     ]],
     ["COCKROACH SHOT", 10, "a shot that bursts into cockroaches where it lands; anyone they touch freezes in fright for 2s.", [
       { do: "shots", n: 1, spread: 0, speed: 380, range: 200, shape: "orb", size: 5, color: "6a4020", dmg: 10, split: { n: 10, range: 70, speed: 200, shape: "roach", size: 3, color: "3a2010", stun: 2 } },
     ]]),
   chopper: hero("support", "Reindeer Doctor", "Tiny doctor", 100, punch(22), "Hoof punches.",
-    ["RUMBLE BALL", 12, "turns huge: 40% less damage taken and 30% harder hits for 5s, and heals 6%.", [
+    ["GROWTH PILL", 12, "turns huge: 40% less damage taken and 30% harder hits for 5s, and heals 6%.", [
       { do: "buff", dur: 5, armor: 0.6, dmg: 1.3, color: "ff80b0" },
       { do: "heal", pct: 0.15, color: "ff80b0" },
     ]],
@@ -197,7 +197,7 @@ const ROSTER = {
       { do: "field", at: "self", radius: 90, life: 3, tick: 0.5, look: "petals", color: "ff80c0", heal: 0.03 },
     ]]),
   nami: hero("mage", "Weather Witch", "Navigator", 90, shoot(orb("6ad0ff"), 22), "Weather orbs.",
-    ["THUNDER TEMPO", 7, "lightning strikes the nearest foe, stunning.", [
+    ["STORM BEAT", 7, "lightning strikes the nearest foe, stunning.", [
       { do: "drop", at: "target", delay: 0.5, radius: 45, look: "bolt", color: "fff060", dmg: 60, stun: 0.8 },
     ]],
     ["MIRAGE CLOUD", 11, "a rain cloud over the aimed spot: hurts and slows for 4s.", [
@@ -226,7 +226,7 @@ const ROSTER = {
       { do: "ring", wait: 0.8, radius: 40, look: "burst", color: "a0f0ff", dmg: 35 },
     ]]),
   jinbe: hero("tank", "Sea Knight", "Fishman karate master", 150, punch(30, 0.5), "Karate punches.",
-    ["FISHMAN KARATE", 7, "a wave punch that throws everything in the lane back.", [
+    ["TIDE PALM", 7, "a wave punch that throws everything in the lane back.", [
       { do: "lane", len: 180, width: 50, look: "wave", color: "3a8aff", dmg: 110, knock: 2.5 },
     ]],
     ["WHIRLPOOL", 12, "a whirlpool around him slows and hurts foes for 3s, and water shields him for 1.5s.", [
@@ -237,12 +237,12 @@ const ROSTER = {
     ["DIVINE SLASH", 7, "one long red slash down the lane.", [
       { do: "lane", len: 220, width: 26, look: "slash", color: "ff2020", dmg: 128 },
     ]],
-    ["HAKI PRESSURE", 13, "his will stuns everyone around for 1s, then he attacks 30% faster for 3s.", [
+    ["WILL PRESSURE", 13, "his will stuns everyone around for 1s, then he attacks 30% faster for 3s.", [
       { do: "ring", radius: 140, look: "shock", color: "300010", dmg: 15, stun: 1 },
       { do: "buff", dur: 3, atk: 0.7, color: "ff2020" },
     ]]),
   kaido: hero("tank", "Beast Emperor", "Dragon king", 170, blade(42, 0.8, 34, 2), "Heavy club swings.",
-    ["THUNDER CLUB", 7, "charges with the club through the lane, stunning, and the ground shakes where he stops.", [
+    ["STORM CLUB", 7, "charges with the club through the lane, stunning, and the ground shakes where he stops.", [
       { do: "dash", len: 120, width: 34, color: "ffd040", dmg: 50, stun: 0.8 },
       { do: "ring", radius: 55, look: "shock", color: "ffd040", dmg: 30 },
     ]],
@@ -304,14 +304,14 @@ const ROSTER = {
       { do: "drop", at: "target", delay: 0.8, radius: 40, look: "pillar", color: "8040c0", dmg: 80, knock: -1 },
     ]]),
   sasuke: hero("assassin", "Lightning Avenger", "Last of his clan", 95, blade(26, 0.4), "Katana cuts.",
-    ["PURPLE FLAME", 6, "breathes a stream of purple fire ahead that burns and slows.", [
+    ["VIOLET BLAZE", 6, "breathes a stream of purple fire ahead that burns and slows.", [
       { do: "cone", times: 4, gap: 0.12, range: 120, arc: 0.9, color: "a040ff", dmg: 16, slow: 1.5 },
     ]],
     ["LIGHTNING DASH", 9, "dashes through the lane wrapped in lightning: whoever he hits is stunned, then lightning strikes down on them.", [
       { do: "dash", len: 190, width: 28, color: "c0a0ff", dmg: 40, stun: 1 },
       { do: "drop", at: "target", delay: 0.35, radius: 40, look: "bolt", color: "c0a0ff", dmg: 70 },
     ]]),
-  madara: hero("mage", "Ancient Warlord", "Ghost of the war", 110, shoot(orb("ff4000", 4), 26, 0.6), "Fire jutsu.",
+  madara: hero("mage", "Ancient Warlord", "Ghost of the war", 110, shoot(orb("ff4000", 4), 26, 0.6), "Fire magic.",
     ["SKY METEOR", 12, "a meteor falls on the aimed spot.", [
       { do: "drop", at: 160, delay: 1.2, radius: 80, look: "meteor", color: "8a5a3a", dmg: 120, stun: 0.5 },
     ]],
@@ -327,14 +327,14 @@ const ROSTER = {
       { do: "shots", n: 6, spread: 1, speed: 380, range: 200, shape: "spike", size: 4, color: "9a6a3a", dmg: 22, root: 0.5 },
     ]]),
   pain: hero("mage", "Rain Lord", "God of the rain village", 100, shoot(spike("404050"), 24), "Black rods.",
-    ["ALMIGHTY PUSH", 8, "repels everything around him far away.", [
+    ["REPULSE", 8, "repels everything around him far away.", [
       { do: "ring", radius: 120, look: "shock", color: "e0d0ff", dmg: 40, knock: 4 },
     ]],
-    ["UNIVERSAL PULL", 9, "a wide ring of gravity pulls every foe inside it right up to him and stuns them.", [
+    ["GRAVITY PULL", 9, "a wide ring of gravity pulls every foe inside it right up to him and stuns them.", [
       { do: "ring", radius: 200, look: "pull", color: "6a5a8a", dmg: 20, stun: 0.6 },
     ]]),
   gaara: hero("tank", "Sand Ninja", "Sand gourd", 130, shoot(orb("d8b070"), 22, 0.6, 200), "Sand bullets.",
-    ["SAND COFFIN", 8, "sand wraps the nearest foe and holds it, then crushes it.", [
+    ["SAND TOMB", 8, "sand wraps the nearest foe and holds it, then crushes it.", [
       { do: "field", at: "target", radius: 40, life: 1.4, tick: 0.5, look: "sand", color: "d8b070", dmg: 10, root: 1.5 },
       { do: "drop", at: "target", delay: 1.4, radius: 45, look: "pillar", color: "d8b070", dmg: 70 },
     ]],
@@ -355,15 +355,15 @@ const ROSTER = {
     ]],
     odm, { skill2: ODM }),
   tanjiro: hero("fighter", "Flowing Blade", "Demon slayer", 105, blade(28, 0.45), "Katana cuts.",
-    ["WATER WHEEL", 6, "a rolling wave of a cut down the lane.", [
+    ["TIDE ROLL", 6, "a rolling wave of a cut down the lane.", [
       { do: "lane", len: 160, width: 36, look: "wave", color: "3aa8ff", dmg: 55 },
     ]],
-    ["SUN DANCE", 11, "a burst of sun flames, then every hit is 35% harder for 5s.", [
+    ["DAWN DANCE", 11, "a burst of sun flames, then every hit is 35% harder for 5s.", [
       { do: "ring", radius: 50, look: "burst", color: "ff7020", dmg: 30 },
       { do: "buff", dur: 5, dmg: 1.35, color: "ff7020" },
     ]]),
   inosuke: hero("assassin", "Boar Mask", "Wild boy", 95, blade(24, 0.4), "Jagged twin-blade cuts.",
-    ["CRAZY CUTTING", 7, "five wild cuts ahead.", [
+    ["WILD SLASHES", 7, "five wild cuts ahead.", [
       { do: "cone", times: 5, gap: 0.1, range: 70, arc: 1.6, color: "b0c0d0", dmg: 36 },
     ]],
     ["WILD SENSE", 10, "feels out the nearest foe and slows it, and runs 40% faster for 3s.", [
@@ -371,13 +371,13 @@ const ROSTER = {
       { do: "buff", dur: 3, speed: 1.4, color: "8a8aa0" },
     ]]),
   nezuko: hero("fighter", "Demon Sister", "Demon girl", 110, kick(28), "Kicks.",
-    ["BLOOD FLAME", 9, "her blood bursts into pink flames around her for 3s.", [
+    ["CRIMSON BLAZE", 9, "her blood bursts into pink flames around her for 3s.", [
       { do: "field", at: "self", follow: true, radius: 55, life: 3, tick: 0.5, look: "flames", color: "ff3a8a", dmg: 12 },
     ]],
     ["DEMON FORM", 14, "grows into her demon form: heals 1.6% a second, hits 20% harder, runs 15% faster for 5s.", [
       { do: "buff", dur: 5, regen: 0.04, dmg: 1.2, speed: 1.15, color: "ff6aa0" },
     ]]),
-  rengoku: hero("carry", "Flame Pillar", "Flame hashira", 105, blade(30, 0.5), "Flame-blade cuts.",
+  rengoku: hero("carry", "Flame Pillar", "Flame Pillar", 105, blade(30, 0.5), "Flame-blade cuts.",
     ["RISING SUN", 6, "a rising flame cut ahead that leaves the ground burning.", [
       { do: "cone", range: 90, arc: 1, color: "ff8020", dmg: 50, knock: 1 },
       { do: "field", at: 60, radius: 45, life: 1.5, tick: 0.5, look: "flames", color: "ff8020", dmg: 10 },
@@ -400,26 +400,26 @@ const ROSTER = {
     ["GLACIER", 7, "a wave of ice down the lane that freezes foes solid (stunned).", [
       { do: "lane", len: 200, width: 40, look: "wave", color: "a0e8ff", dmg: 40, stun: 1.2 },
     ]],
-    ["FLASHFIRE", 8, "a blast of fire from his left side.", [
+    ["HEAT BURST", 8, "a blast of fire from his left side.", [
       { do: "cone", range: 150, arc: 0.9, color: "ff5020", dmg: 84 },
     ]]),
   bakugo: hero("fighter", "Blast Hero", "Explosive hothead", 105, punch(30), "Exploding punches.",
-    ["AP SHOT", 6, "a narrow piercing blast straight down the lane that throws foes far back.", [
+    ["PIERCE BLAST", 6, "a narrow piercing blast straight down the lane that throws foes far back.", [
       { do: "lane", len: 200, width: 14, look: "beam", color: "ffb040", dmg: 70, knock: 4 },
     ]],
-    ["HOWITZER", 9, "rockets forward and spins into a huge explosion.", [
+    ["CYCLONE BLAST", 9, "rockets forward and spins into a huge explosion.", [
       { do: "dash", len: 140, color: "ff8020", dmg: 20 },
       { do: "ring", wait: 0.1, radius: 70, look: "spin", color: "ffb040", dmg: 70, knock: 3 },
     ]]),
   allmight: hero("fighter", "Smiling Hero", "Symbol of peace", 120, punch(38, 0.5), "Mighty punches.",
-    ["TEXAS SMASH", 7, "a punch so strong the air pressure throws everything ahead far back.", [
+    ["PRAIRIE PUNCH", 7, "a punch so strong the air pressure throws everything ahead far back.", [
       { do: "cone", range: 160, arc: 0.7, color: "c8e0ff", dmg: 105, knock: 4 },
     ]],
-    ["DETROIT TYPHOON", 12, "a typhoon of a punch down a wide lane, wherever he aims.", [
+    ["CITY TYPHOON", 12, "a typhoon of a punch down a wide lane, wherever he aims.", [
       { do: "lane", len: 280, width: 70, look: "wave", color: "e0f0ff", dmg: 90, knock: 5 },
     ]]),
   law: hero("mage", "Surgeon Pirate", "Surgeon of death", 100, blade(28, 0.5, 34), "Long nodachi cuts.",
-    ["SHAMBLES", 9, "opens a ROOM and swaps the nearest foe right next to him, stunned.", [
+    ["SHUFFLE", 9, "opens a ROOM and swaps the nearest foe right next to him, stunned.", [
       { do: "field", at: "self", radius: 130, life: 1, tick: 1, look: "light", color: "60c0ff" },
       { do: "lock", range: 250, look: "eye", color: "60c0ff", dmg: 30, stun: 0.5, drag: true },
     ]],
@@ -438,7 +438,7 @@ const ROSTER = {
     ["LIGHT KICK", 8, "a kick at the speed of light, flashing across the lane.", [
       { do: "dash", len: 240, width: 24, color: "fff080", dmg: 60 },
     ]],
-    ["SACRED JEWELS", 2, "a beam of light straight down the lane.", [
+    ["LIGHT RAIN", 2, "a beam of light straight down the lane.", [
       { do: "lane", len: 250, width: 14, look: "beam", color: "ffe860", dmg: 40 },
     ]]),
   aokiji: hero("mage", "Ice Admiral", "Lazy ice admiral", 105, shoot(spike("a0e8ff"), 22), "Ice spikes.",
@@ -449,7 +449,7 @@ const ROSTER = {
       { do: "shots", n: 1, spread: 0, speed: 300, range: 280, pierce: 9, shape: "blade", size: 9, color: "a0e8ff", dmg: 55, slow: 3 },
     ]]),
   akainu: hero("fighter", "Magma Admiral", "Absolute justice", 120, punch(36, 0.5), "Magma punches.",
-    ["GREAT ERUPTION", 8, "six magma fists burst out ahead.", [
+    ["MAGMA FISTS", 8, "six magma fists burst out ahead.", [
       { do: "shots", n: 6, spread: 0.8, speed: 260, range: 220, shape: "orb", size: 5, color: "ff4010", dmg: 25 },
     ]],
     ["MAGMA BODY", 12, "his body turns to magma for 4s: burns everything close and takes 20% less damage.", [
@@ -471,23 +471,23 @@ const ROSTER = {
       { do: "field", at: 130, radius: 70, life: 4, tick: 0.3, look: "sand", color: "c8a060", dmg: 6, knock: -0.3 },
     ]]),
   doflamingo: hero("mage", "String Puppeteer", "Heavenly demon", 105, shoot(spike("ffffff", 2), 22), "String bullets.",
-    ["OVERHEAT", 6, "five strings whip down the lane one after another.", [
+    ["STRING LASH", 6, "five strings whip down the lane one after another.", [
       { do: "lane", times: 5, gap: 0.06, len: 220, width: 10, look: "slash", color: "ff80c0", dmg: 14 },
     ]],
-    ["BIRDCAGE", 13, "a small cage of strings around him for 4s: foes caught inside cannot walk out and get sliced.", [
+    ["STRING CAGE", 13, "a small cage of strings around him for 4s: foes caught inside cannot walk out and get sliced.", [
       { do: "field", at: "self", radius: 85, life: 4, tick: 0.5, look: "web", color: "ff80c0", dmg: 14, cage: true },
     ]]),
   // ---------------------------------------------------------------- sheet 3 (Non One Piece)
   gon: hero("fighter", "Jungle Boy", "Wild hunter", 105, punch(30), "Punches.",
-    ["ROCK!", 7, "one huge punch at once that bursts in a very small circle around him.", [
+    ["POWER FIST", 7, "one huge punch at once that bursts in a very small circle around him.", [
       { do: "ring", radius: 40, look: "burst", color: "ffd040", dmg: 110, knock: 3 },
     ]],
-    ["GROWN UP", 15, "grows up all at once: 50% harder hits, 20% faster, 20% less damage taken for 4s.", [
+    ["SURGE FORM", 15, "grows up all at once: 50% harder hits, 20% faster, 20% less damage taken for 4s.", [
       { do: "ring", radius: 60, look: "shock", color: "ffd040" },
       { do: "buff", dur: 4, dmg: 1.5, speed: 1.2, armor: 0.8, color: "ffd040" },
     ]]),
   hisoka: hero("assassin", "Bungee Clown", "Magician", 95, blade(26, 0.4, 28, 1.8), "Card-edge slashes up close.",
-    ["ELASTIC LOVE", 7, "sticky gum snaps the nearest foe to him and stuns it.", [
+    ["GUM SNAP", 7, "sticky gum snaps the nearest foe to him and stuns it.", [
       { do: "lock", range: 240, look: "chain", color: "ff60c0", dmg: 25, stun: 0.4, knock: -2 },
     ]],
     ["CARD TRICK", 9, "vanishes and pops up ahead, cards flying out all around.", [
@@ -511,10 +511,10 @@ const ROSTER = {
       { do: "buff", dur: 4, regen: 0.02, color: "80ff80" },
     ], 0.7]),
   genos: hero("carry", "Cyborg Disciple", "Demon cyborg", 100, shoot(orb("ffb040"), 24, 0.45), "Arm cannon shots.",
-    ["INCINERATE", 7, "a wide stream of fire from his arms.", [
+    ["FLAME CANNON", 7, "a wide stream of fire from his arms.", [
       { do: "lane", wait: 0.2, len: 230, width: 36, look: "beam", color: "ff9020", dmg: 80 },
     ]],
-    ["MACHINE GUN BLOWS", 8, "eight punches in a blur.", [
+    ["RAPID BLOWS", 8, "eight punches in a blur.", [
       { do: "cone", times: 8, gap: 0.06, range: 60, arc: 1, color: "ffd080", dmg: 10 },
     ]]),
   lelouch: hero("support", "Rebel Prince", "Masked rebel", 90, shoot(orb("c040ff"), 20), "Pistol shots.",
@@ -533,7 +533,7 @@ const ROSTER = {
       { do: "buff", dur: 4, regen: 0.15, color: "80ff80" },
     ], 0.6]),
   light: hero("mage", "Notebook Judge", "Self-made god", 90, shoot(orb("f0f0f0"), 20), "Pen shots.",
-    // NAME WRITTEN: writes for `duration` s (walking 80% slower), then the nearest foe within `radius` falls.
+    // FATAL INK: writes for `duration` s (walking 80% slower), then the nearest foe within `radius` falls.
     NAME_WRITTEN_SKILL,
     null),
   geto: hero("summoner", "Curse Collector", "Curse user", 100, shoot(orb("6a4a8a", 4), 22), "Curse shots.",
@@ -558,11 +558,11 @@ const ROSTER = {
       { do: "lock", range: 300, look: "chain", color: "ff4040", dmg: 60, stun: 0.6 },
     ]]),
   yuji: hero("fighter", "Divergent Fist", "Vessel boy", 110, punch(32), "Strong punches.",
-    ["BLACK SPARK", 6, "a perfectly timed punch: black sparks and a huge hit.", [
+    ["DARK IMPACT", 6, "a perfectly timed punch: black sparks and a huge hit.", [
       { do: "cone", wait: 0.15, range: 45, arc: 1.2, color: "202020", dmg: 100, knock: 2 },
       { do: "ring", wait: 0.15, radius: 30, look: "burst", color: "ff2040" },
     ]],
-    ["DIVERGENT COMBO", 7, "three quick hits, then the cursed energy lands a moment later as a second impact.", [
+    ["ECHO COMBO", 7, "three quick hits, then the cursed energy lands a moment later as a second impact.", [
       { do: "cone", times: 3, gap: 0.2, range: 45, arc: 1.4, color: "4060ff", dmg: 20 },
       { do: "cone", wait: 0.7, range: 45, arc: 1.4, color: "8090ff", dmg: 30 },
     ]]),
@@ -593,7 +593,7 @@ const ROSTER = {
       { do: "drop", at: "target", delay: 1.2, radius: 35, look: "blade", color: "802020", dmg: 100 },
     ]]),
   ichigo: hero("carry", "Moon Fang", "Soul reaper", 105, blade(30, 0.5, 34), "Big-blade cuts.",
-    ["MOON FANG", 6, "a wave of blue spirit energy down the lane that slows what it hits by 60%.", [
+    ["CRESCENT WAVE", 6, "a wave of blue spirit energy down the lane that slows what it hits by 60%.", [
       { do: "lane", len: 240, width: 40, look: "wave", color: "3050ff", dmg: 75, slow: 2, slowPct: 0.6 },
     ]],
     ["SWORD DANCE", 13, "three slashing steps forward: everyone in the way is stunned, and nothing can stop or slow him while he dances.", [
@@ -659,7 +659,7 @@ const ROSTER = {
     ["PSYCHIC LIFT", 8, "lifts the nearest foe into the air and drops it, stunned.", [
       { do: "drop", at: "target", delay: 0.6, radius: 60, look: "pillar", color: "a080ff", dmg: 60, stun: 1 },
     ]],
-    ["100%", 15, "hits 100%: a psychic explosion throws everything away, then 60% harder hits for 3s.", [
+    ["MAX OUTPUT", 15, "hits 100%: a psychic explosion throws everything away, then 60% harder hits for 3s.", [
       { do: "ring", radius: 140, look: "psychic", color: "c060ff", dmg: 30, knock: 3 },
       { do: "buff", dur: 3, dmg: 1.6, armor: 0.7, color: "e0e0ff" },
     ]]),
@@ -672,7 +672,7 @@ const ROSTER = {
       { do: "shield", dur: 0.8, radius: 120, color: "80ffc0" },
     ], 0.6]),
   rimuru: hero("support", "Slime Lord", "Reborn slime", 200, shoot(orb("60c0ff", 4), 22), "Water bullets.",
-    ["PREDATOR", 9, "a mouth on the aimed spot swallows foes in for 2s, and he heals 3.2%.", [
+    ["DEVOUR", 9, "a mouth on the aimed spot swallows foes in for 2s, and he heals 3.2%.", [
       { do: "field", at: 110, radius: 60, life: 2, tick: 0.25, look: "dark", color: "3060c0", dmg: 8, knock: -0.6 },
       { do: "heal", pct: 0.08, color: "60c0ff" },
     ]],
@@ -682,7 +682,7 @@ const ROSTER = {
     ["DEATH DANCE", 8, "two spinning dark sweeps around him.", [
       { do: "ring", times: 2, gap: 0.3, radius: 70, look: "spin", color: "800020", dmg: 30 },
     ]],
-    ["TEMPTATION", 12, "a dark world around him for 3s: foes in it slow down and hurt.", [
+    ["DREAM SNARE", 12, "a dark world around him for 3s: foes in it slow down and hurt.", [
       { do: "field", at: "self", radius: 130, life: 3, tick: 0.5, look: "dark", color: "400020", dmg: 10, slow: 2 },
     ]]),
   ainz: hero("mage", "Skeleton Overlord", "Undead king", 105, shoot(orb("8040c0", 4), 26, 0.65), "Death magic.",
@@ -724,15 +724,15 @@ const ROSTER = {
       { do: "dash", len: 180, width: 22, color: "202040", dmg: 70 },
     ]]),
   asuna: hero("assassin", "Flash Fencer", "Lightning flash", 90, blade(22, 0.3, 30, 1), "Rapier thrusts.",
-    ["FLASHING PENETRATOR", 6, "a lightning-fast lunge across the lane.", [
+    ["LIGHTNING LUNGE", 6, "a lightning-fast lunge across the lane.", [
       { do: "dash", len: 220, width: 20, color: "fff0c0", dmg: 55 },
     ]],
-    ["ROSARIO", 10, "five thrusts and a final big one.", [
+    ["STAR FLURRY", 10, "five thrusts and a final big one.", [
       { do: "lane", times: 5, gap: 0.07, len: 90, width: 14, look: "slash", color: "fff0c0", dmg: 14 },
       { do: "lane", wait: 0.45, len: 120, width: 18, look: "slash", color: "ff80c0", dmg: 40 },
     ]]),
   minato: hero("assassin", "Yellow Flash", "Fastest ninja", 95, shoot(spike("ffe040"), 22), "Kunai.",
-    ["FLYING THUNDER", 7, "teleports behind the nearest foe and strikes.", [
+    ["THUNDER BLINK", 7, "teleports behind the nearest foe and strikes.", [
       { do: "blink", to: "behind", range: 300, color: "ffe040" },
       { do: "cone", range: 40, arc: 1.4, color: "ffe040", dmg: 60 },
     ]],
@@ -755,14 +755,14 @@ const ROSTER = {
       { do: "heal", pct: 0.1, radius: 120, color: "ffa0d0" },
     ]]),
   frieren: hero("mage", "Elf Mage", "Thousand-year elf", 95, shoot(orb("e0e0ff"), 26, 0.65, 260), "Magic bolts.",
-    ["ZOLTRAAK", 3, "the killing magic: a magic circle fires a violet beam that goes through armour, shields and immortality.", [
+    ["SLAYING BEAM", 3, "the killing magic: a magic circle fires a violet beam that goes through armour, shields and immortality.", [
       { do: "lane", len: 280, width: 14, look: "zoltrak", color: "b8a0ff", dmg: 87.5, ignoreArmor: true },
     ]],
     ["FLOWER FIELD", 13, "a field of mana flowers around her for 4s: hurts foes and heals friends.", [
       { do: "field", at: "self", radius: 100, life: 4, tick: 0.5, look: "flowerbed", color: "ffd0dc", dmg: 8, heal: 0.075 },
     ]]),
   fern: hero("carry", "Apprentice Mage", "Fastest caster", 90, shoot(orb("c080ff"), 18, 0.35, 240, 380), "Rapid magic bolts.",
-    ["MACHINE ZOLTRAAK", 8, "ten killing-magic bolts in a stream.", [
+    ["SLAYING BARRAGE", 8, "ten killing-magic bolts in a stream.", [
       { do: "shots", times: 10, gap: 0.05, n: 1, spread: 0.15, speed: 420, range: 250, shape: "orb", size: 2, color: "c080ff", dmg: 9 },
     ]],
     ["HIDDEN MANA", 12, "stops hiding her mana: twice as fast casts and 20% faster steps for 4s.", [
@@ -802,10 +802,10 @@ const ROSTER = {
       { do: "cone", times: 4, gap: 0.07, range: 60, arc: 2, color: "80c0ff", dmg: 12 },
     ]]),
   frieza: hero("mage", "Galaxy Tyrant", "Emperor of the universe", 100, shoot(orb("ff60ff", 2), 20, 0.35, 260, 500), "Death beams.",
-    ["DEATH SAUCERS", 8, "two spinning energy discs that chase foes and cut through everything.", [
+    ["DOOM DISCS", 8, "two spinning energy discs that chase foes and cut through everything.", [
       { do: "shots", n: 2, spread: 0.6, speed: 300, range: 280, pierce: 9, shape: "blade", size: 7, color: "ff60ff", dmg: 45, home: true },
     ]],
-    ["DEATH BEAM", 8, "two thin piercing beams.", [
+    ["DOOM RAY", 8, "two thin piercing beams.", [
       { do: "lane", times: 2, gap: 0.25, len: 300, width: 6, look: "beam", color: "ff40ff", dmg: 64 },
     ]]),
   cell: hero("fighter", "Perfect Bio", "Perfect being", 115, punch(30), "Punches.",
@@ -829,7 +829,7 @@ const ROSTER = {
     ["ANTI-MAGIC CUT", 5, "a wide cut that also slices every shot in front of him; whoever it hits cannot use skills for 5s.", [
       { do: "cone", range: 80, arc: 1.6, color: "303030", dmg: 50, silence: 5 },
     ]],
-    ["BLACK DIVIDER", 13, "black anti-magic covers him: 30% harder, 30% less damage taken for 4s, and he rushes in.", [
+    ["NULL DIVIDER", 13, "black anti-magic covers him: 30% harder, 30% less damage taken for 4s, and he rushes in.", [
       { do: "buff", dur: 4, dmg: 1.3, armor: 0.7, color: "202020" },
       { do: "dash", len: 120, width: 30, color: "202020", dmg: 30 },
     ]]),
@@ -850,7 +850,7 @@ const ROSTER = {
       { do: "cone", times: 3, gap: 0.1, range: 50, arc: 1.2, color: "ff6020", dmg: 25 },
     ]]),
   koro: hero("support", "Octo Teacher", "Mach-20 teacher", 100, punch(22, 0.3), "Tentacle slaps.",
-    ["MACH 20", 8, "zooms ahead hitting everything on the way, stands there for 1s, then zooms right back.", [
+    ["SUPERSONIC", 8, "zooms ahead hitting everything on the way, stands there for 1s, then zooms right back.", [
       { do: "dash", len: 200, width: 30, color: "ffe040", dmg: 35 },
       { do: "blink", wait: 1, to: "start", range: 0, color: "ffe040" },
     ]],
@@ -868,17 +868,17 @@ const ROSTER = {
       { do: "buff", dur: 4, dmg: 1.4, regen: 0.02, color: "c0c0ff" },
     ]]),
   piccolo: hero("fighter", "Green Sage", "Wise warrior", 110, punch(28), "Punches.",
-    charged(["PIERCING CANNON", 10, "hold to charge a finger (walking at half speed); let go for a thin spiralling beam through everything, much stronger at a full charge.", [
+    charged(["DRILL BEAM", 10, "hold to charge a finger (walking at half speed); let go for a thin spiralling beam through everything, much stronger at a full charge.", [
       { do: "lane", len: 300, width: 6, look: "bolt", color: "ffe040", dmg: 120 },
     ]], 1.5, 0.5),
     ["REGENERATION", 14, "regrows his wounds: heals 12%.", [
       { do: "heal", pct: 0.3, color: "50c050" },
     ], 0.5]),
   garou: hero("fighter", "Hero Hunter", "Monster martial artist", 105, punch(30, 0.4), "Fast punches.",
-    ["FLOWING ROCK FIST", 7, "six flowing strikes in a blur.", [
+    ["RIVER FIST", 7, "six flowing strikes in a blur.", [
       { do: "cone", times: 6, gap: 0.08, range: 50, arc: 1.4, color: "c0e0ff", dmg: 18 },
     ]],
-    ["COSMIC FEAR", 13, "a burst of cosmic power stuns everyone around, and he takes 30% less damage for 3s.", [
+    ["COSMIC DREAD", 13, "a burst of cosmic power stuns everyone around, and he takes 30% less damage for 3s.", [
       { do: "ring", radius: 100, look: "shock", color: "4020a0", dmg: 50, stun: 0.6 },
       { do: "buff", dur: 3, armor: 0.7, color: "4020a0" },
     ]]),
@@ -913,20 +913,20 @@ const ROSTER = {
       { do: "cone", range: 80, arc: 2.4, color: "ffd040", dmg: 40 },
       { do: "drop", at: 60, spots: 3, delay: 0.4, radius: 32, look: "meteor", color: "ffd040", dmg: 28 },
     ]]),
-  muichiro: hero("assassin", "Mist Pillar", "Mist hashira", 90, blade(26, 0.4), "Katana cuts.",
-    ["OBSCURING CLOUDS", 10, "a wide fog rolls out around him for 3s: nobody inside can be seen except by him, foes inside take small hits and slow down, and he runs 30% faster.", [
+  muichiro: hero("assassin", "Mist Pillar", "Mist Pillar", 90, blade(26, 0.4), "Katana cuts.",
+    ["HAZE VEIL", 10, "a wide fog rolls out around him for 3s: nobody inside can be seen except by him, foes inside take small hits and slow down, and he runs 30% faster.", [
       { do: "field", at: "self", radius: 160, life: 3, tick: 0.5, look: "fog", color: "c0f0f0", dmg: 6, slow: 2, fog: true },
       { do: "buff", dur: 3, speed: 1.3, color: "c0f0f0" },
     ]],
     ["MIST SPIN", 8, "two spinning mist cuts around him, slowing.", [
       { do: "ring", times: 2, gap: 0.25, radius: 60, look: "spin", color: "c0f0f0", dmg: 30, slow: 1 },
     ]]),
-  shinobu: hero("assassin", "Insect Pillar", "Poison hashira", 85, blade(18, 0.3, 32, 0.8), "Stinger thrusts.",
-    ["BUTTERFLY STING", 7, "darts through the lane, then poison eats at the nearest foe for 3s.", [
+  shinobu: hero("assassin", "Insect Pillar", "Poison Pillar", 85, blade(18, 0.3, 32, 0.8), "Stinger thrusts.",
+    ["WASP STING", 7, "darts through the lane, then poison eats at the nearest foe for 3s.", [
       { do: "dash", len: 180, width: 18, color: "c080ff", dmg: 30 },
       { do: "field", at: "target", radius: 30, life: 3, tick: 0.5, look: "mist", color: "80ff80", dmg: 14 },
     ]],
-    ["CENTIPEDE DANCE", 9, "four zigzag stings in a row.", [
+    ["STINGER DANCE", 9, "four zigzag stings in a row.", [
       { do: "dash", times: 4, gap: 0.12, len: 60, width: 18, color: "c080ff", dmg: 12 },
     ]]),
   akaza: hero("fighter", "Martial Demon", "Demon martial artist", 110, punch(30, 0.35), "Demon punches.",
@@ -938,14 +938,14 @@ const ROSTER = {
       { do: "buff", dur: 5, regen: 0.03, atk: 0.75, color: "60c0ff" },
     ]]),
   doma: hero("mage", "Ice Fan Demon", "Smiling demon", 100, shoot(bladeShot("c0e8ff", 3), 22), "Ice fan cuts.",
-    ["WINTER ICICLES", 8, "four icicles fall from the sky around the spot he aims at (anywhere in his circle), slowing.", [
+    ["FROST SPIKES", 8, "four icicles fall from the sky around the spot he aims at (anywhere in his circle), slowing.", [
       { do: "drop", times: 4, gap: 0.2, at: { upTo: 220, scatter: 30 }, delay: 0.4, radius: 30, look: "icefall", color: "c0e8ff", dmg: 25, slow: 1 },
     ]],
-    ["FROZEN LOTUS", 12, "an ice lotus blooms for 3s on the spot he picks in his circle (near or far), freezing feet.", [
+    ["ICE BLOOM", 12, "an ice lotus blooms for 3s on the spot he picks in his circle (near or far), freezing feet.", [
       { do: "field", at: { upTo: 200 }, radius: 50, life: 3, tick: 0.5, look: "lotus", color: "c0e8ff", dmg: 10, root: 0.5 },
     ]]),
   mahito: hero("assassin", "Soul Shaper", "Cursed spirit", 100, punch(28), "Shape-shifting punches.",
-    ["IDLE TRANSFIGURATION", 8, "touches the nearest foe's soul and twists it (slowed 3s).", [
+    ["SOUL TWIST", 8, "touches the nearest foe's soul and twists it (slowed 3s).", [
       { do: "lock", range: 100, look: "grab", color: "80a0c0", dmg: 60, slow: 3 },
     ]],
     ["SOUL BULLETS", 9, "throws five twisted souls that chase foes.", [
@@ -962,11 +962,11 @@ const ROSTER = {
     ["CURSED QUEEN", 16, "calls out his giant curse queen for 10s: she follows him and smashes his foes with huge claws that knock them back.", [
       { do: "ring", radius: 50, look: "shock", color: "e0e0f0" },
     ]],
-    ["PURE LOVE", 14, "one huge, strong pink beam of cursed energy, wherever he aims. If his Cursed Queen is out, she fires the same beam at the same target.", [
+    ["DEVOTION BEAM", 14, "one huge, strong pink beam of cursed energy, wherever he aims. If his Cursed Queen is out, she fires the same beam at the same target.", [
       { do: "lane", len: 280, width: 44, look: "pinkbeam", color: "ff60d0", dmg: 110 },
     ]], { skill: RIKA_SKILL }),
   maki: hero("fighter", "Cursed Tool Master", "Weapon expert", 105, blade(30, 0.45, 40, 1.4), "Polearm swings.",
-    ["PLAYFUL CLOUD", 8, "three wide staff swings.", [
+    ["TRIPLE STAFF", 8, "three wide staff swings.", [
       { do: "cone", times: 3, gap: 0.15, range: 70, arc: 2.4, color: "c0c0a0", dmg: 25, knock: 1 },
     ]],
     ["SPEAR THROW", 7, "throws a spear that goes through three foes.", [
@@ -1006,23 +1006,23 @@ const ROSTER = {
     { noSkills: true }),
   // 2026-10-07 (user's picture): the Shinsengumi captain. Okita Souji is a historical figure.
   souji: hero("assassin", "Okita Souji", "Shinsengumi first captain", 100, blade(28, 0.4, 34), "Quick katana cuts.",
-    ["SANDANZUKI", 7, "three thrusts down the lane so fast they land almost as one; the third pierces armor and stuns 0.5s.", [
+    ["TRIPLE THRUST", 7, "three thrusts down the lane so fast they land almost as one; the third pierces armor and stuns 0.5s.", [
       { do: "lane", len: 120, width: 22, look: "slash", color: "7fc8ff", dmg: 30 },
       { do: "lane", wait: 0.06, len: 120, width: 22, look: "slash", color: "a0d8ff", dmg: 30 },
       { do: "lane", wait: 0.12, len: 120, width: 22, look: "slash", color: "ffffff", dmg: 30, ignoreArmor: true, stun: 0.5 },
     ]],
-    ["SHUKUCHI", 9, "steps through space to the aimed spot, cutting everything around where he lands, then moves 40% faster and attacks faster for 3s.", [
+    ["SWIFT STEP", 9, "steps through space to the aimed spot, cutting everything around where he lands, then moves 40% faster and attacks faster for 3s.", [
       { do: "blink", to: "aim", range: 170, color: "7fc8ff" },
       { do: "ring", radius: 60, look: "spin", color: "7fc8ff", dmg: 35 },
       { do: "buff", dur: 3, speed: 1.4, atk: 0.6, color: "7fc8ff" },
     ]]),
   // 2026-10-07 (user's picture): the London fog killer. Jack the Ripper is a historical figure.
   ripper: hero("assassin", "Jack the Ripper", "Whitechapel phantom", 95, shoot(bladeShot("d0d0e0", 3), 18, 0.35, 180, 340), "Throws scalpels fast.",
-    ["WHITECHAPEL FOG", 12, "breathes out a blood-red fog that follows him for 5s: foes inside can't see him and take damage every 0.5s, and his hits deal 50% more.", [
+    ["BLOOD FOG", 12, "breathes out a blood-red fog that follows him for 5s: foes inside can't see him and take damage every 0.5s, and his hits deal 50% more.", [
       { do: "field", at: "self", follow: true, radius: 120, life: 5, tick: 0.5, fog: true, look: "fog", color: "8a1020", dmg: 6 },
       { do: "buff", dur: 5, dmg: 1.5, color: "c01030" },
     ]],
-    ["MARIA THE RIPPER", 10, "appears behind the nearest foe and cuts four times in a flash; the cuts slow by 50% for 2s.", [
+    ["MIDNIGHT RIPPER", 10, "appears behind the nearest foe and cuts four times in a flash; the cuts slow by 50% for 2s.", [
       { do: "blink", to: "behind", range: 200, color: "c01030" },
       { do: "cone", times: 4, gap: 0.08, range: 50, arc: 2.5, color: "c01030", dmg: 20, slow: 2, slowPct: 0.5 },
     ]]),
@@ -1158,7 +1158,7 @@ for (const [id, e] of Object.entries(ROSTER)) {
 
 /** Helpers the new heroes call out (not pickable). */
 const SUMMONS = {
-  // DIVINE DOGS: Shadow Summoner's two wolves, fast biters.
+  // SHADOW WOLVES: Shadow Summoner's two wolves, fast biters.
   whitewolf: {
     name: "White Shadow Wolf",
     role: "Summon",
@@ -1178,7 +1178,7 @@ const SUMMONS = {
     pierce: 0,
     skill: { kind: "passive", name: "", cooldown: 1, damage: 0, radius: 0 },
   },
-  // DIVINE DOGS: Shadow Summoner's two wolves, fast biters.
+  // SHADOW WOLVES: Shadow Summoner's two wolves, fast biters.
   blackwolf: {
     name: "Black Shadow Wolf",
     role: "Summon",
