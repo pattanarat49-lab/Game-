@@ -7,6 +7,7 @@ import { HEROES, HERO_CLASSES, HERO_IDS, HeroId, RANKED_CODE, StageId, heroClass
 import { heroPortrait, paintPortrait } from "./heroArt";
 import { showHeroInfo } from "./heroInfo";
 import { AttackMode, attackMode, setAttackMode } from "./settings";
+import { audioLevels, setAudioLevels, uiClick } from "./audio";
 import { heroMastery, loadProfile, masteryColor, wearTitle } from "./profile";
 
 export interface HomeActions {
@@ -122,6 +123,9 @@ const CSS = `
 .hm-switch button.adv { background: #d8693a; }
 .hm-switch button::after { content: ""; position: absolute; top: 3px; left: 3px; width: 24px; height: 24px; border-radius: 50%; background: #fff; box-shadow: 0 2px 0 #0008; transition: left .15s; }
 .hm-switch button.adv::after { left: 41px; }
+.hm-vol { display: flex; align-items: center; gap: 12px; font-size: 10px; color: #c8cce0; }
+.hm-vol span { width: 64px; }
+.hm-vol input { flex: 1; accent-color: #ffd23f; }
 .hm-set p { margin: 0; font-size: 9px; line-height: 1.8; color: #c8cce0; }
 `;
 
@@ -314,6 +318,26 @@ export class Home {
     );
     box.querySelectorAll<HTMLElement>(".lbl").forEach((l) => (l.style.cursor = "pointer"));
     show(attackMode());
+    // Sound: music and effects volume, kept on this device.
+    const sound = document.createElement("div");
+    sound.innerHTML = `<h3>SOUND</h3>`;
+    sound.style.cssText = "display:flex;flex-direction:column;gap:10px";
+    for (const [key, label] of [["music", "MUSIC"], ["sfx", "EFFECTS"]] as const) {
+      const row = document.createElement("label");
+      row.className = "hm-vol";
+      row.innerHTML = `<span>${label}</span><input type="range" min="0" max="100" step="5"><b></b>`;
+      const range = row.querySelector("input")!;
+      const val = row.querySelector("b")!;
+      range.value = String(Math.round(audioLevels()[key] * 100));
+      val.textContent = range.value;
+      range.addEventListener("input", () => {
+        val.textContent = range.value;
+        setAudioLevels({ [key]: Number(range.value) / 100 });
+      });
+      range.addEventListener("change", () => uiClick());
+      sound.append(row);
+    }
+    box.append(sound);
     el.append(box);
   }
 

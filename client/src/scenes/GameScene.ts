@@ -64,6 +64,7 @@ import { LocalRoom } from "../localRoom";
 import { drawFxAura, drawFxZone, fxBuffStep, fxGuide, fxShotTexture } from "../fx";
 import { Lobby } from "../lobby";
 import { drawClassicGround, drawRoyaleGround } from "../classicMap";
+import { SongId, attackSound, dashSound, hurtSound, koSound, playJingle, playMusic, skillSound } from "../audio";
 import { ROYALE_HEAL_RADIUS, ROYALE_MAP } from "../../../shared/royale";
 import { MAP_H, MAP_Y, classicMap, inBush, mapBlocksShot, seesInto } from "../../../shared/maps";
 import { RiftSim, TITAN_ATTACK_COOLDOWN } from "../../../shared/sim";
@@ -90,6 +91,7 @@ interface PlayerView {
   tag?: Phaser.GameObjects.Text;
   bar: Phaser.GameObjects.Graphics;
   lastHp: number;
+  wasDead?: boolean;
   hurtFlash: number;
   attackSeq: number;
   skillSeq: number;
@@ -361,6 +363,8 @@ export class GameScene extends Phaser.Scene {
   async create() {
     const stage = stageOf(this.registry.get("stage"));
     const open = stage === "world" || stage === "dungeon";
+    const song: SongId = stage === "classic" || stage === "royale" || stage === "world" || stage === "dungeon" || stage === "tutorial" ? stage : "ring";
+    playMusic(song);
     if (stage === "classic") this.classicGround = this.add.image(0, 0, this.classicTexture(0)).setOrigin(0).setDepth(-10);
     else if (stage === "royale") {
       // The island is drawn once, then cut into tiles: one huge texture made every frame slow to draw.
@@ -492,6 +496,7 @@ export class GameScene extends Phaser.Scene {
       else won = state.winner === me.name;
       if (mode) recordResult({ mode, won, hero, at: Date.now() });
       if (mode) this.endOfMatch(state, me);
+      playJingle(won !== false);
     }
     if (phase === "intermission" && this.lastPhase !== "intermission") closeScoreboard(); // the next match is starting
     if (state.stage === "dungeon" && !this.dungeonCleared && String(state.notice ?? "").startsWith("BOSS DEFEATED")) {
@@ -1291,7 +1296,10 @@ export class GameScene extends Phaser.Scene {
         const mine = id === this.room?.sessionId;
         if ((!p.owner || p.hp > 0) && !hiddenNow) this.popDamage(body.x, body.y - 20, view.lastHp - p.hp, mine ? "#ff5a5a" : "#ffffff");
         if (mine) this.cameras.main.shake(80, 0.004);
+        if (!p.owner || mine) hurtSound(mine, mine ? 1 : this.nearness(body.x, body.y) * 0.7);
       } else if (p.hp > view.lastHp + 1 && p.hp - view.lastHp < p.maxHp * 0.5 && view.lastHp > 0 && !p.dead && !hiddenNow) this.popDamage(body.x, body.y - 20, p.hp - view.lastHp, "#5aff7a", "+");
+      if (p.dead && !view.wasDead && !p.owner) koSound(id === this.room?.sessionId ? 1 : this.nearness(body.x, body.y));
+      view.wasDead = !!p.dead;
       view.lastHp = p.hp;
       view.hurtFlash = Math.max(0, view.hurtFlash - dt);
       const stoppedHere = state.timeStop > 0 && state.timeStopBy !== id && !movesInStoppedTime(p.hero);
@@ -1549,15 +1557,24 @@ export class GameScene extends Phaser.Scene {
       view.attackSeq = p.attackSeq;
       view.swing = SWING_TIME;
       // Online, our own swings were already drawn the moment we pressed attack.
-      if (!(isMe && this.takePredicted(this.predictedAttacks))) this.playAttack(p, x, y, aim);
+      if (!(isMe && this.takePredicted(this.predictedAttacks))) {
+        this.playAttack(p, x, y, aim);
+        if (!p.owner || isMe) attackSound(p.hero, isMe ? 1 : this.nearness(x, y) * 0.6);
+      }
     }
     if (p.skillSeq !== view.skillSeq) {
       view.skillSeq = p.skillSeq;
-      if (!(isMe && this.takePredicted(this.predictedSkills))) this.playSkillEffect(hero.skill, x, y, aim, view);
+      if (!(isMe && this.takePredicted(this.predictedSkills))) {
+        this.playSkillEffect(hero.skill, x, y, aim, view);
+        skillSound(p.hero, 1, isMe ? 1 : this.nearness(x, y) * 0.8);
+      }
     }
     if (hero.skill2 && p.skill2Seq !== view.skill2Seq) {
       view.skill2Seq = p.skill2Seq;
-      if (!(isMe && this.takePredicted(this.predictedSkills2))) this.playSkillEffect(hero.skill2, x, y, aim, view);
+      if (!(isMe && this.takePredicted(this.predictedSkills2))) {
+        this.playSkillEffect(hero.skill2, x, y, aim, view);
+        skillSound(p.hero, 2, isMe ? 1 : this.nearness(x, y) * 0.8);
+      }
     }
   }
 
@@ -1588,6 +1605,7 @@ export class GameScene extends Phaser.Scene {
       this.localAttackTimer = me.titan > 0 ? TITAN_ATTACK_COOLDOWN : hero.gun && me.mode === 1 ? hero.gun.attackCooldown : hero.sword && me.buff > 0 ? hero.sword.attackCooldown : hero.attackCooldown;
       this.predictedAttacks.push(performance.now());
       this.playAttack(me, x, y, this.aim);
+      attackSound(me.hero);
     }
     // Ordinary humans (a rival's reality change) cannot use skills.
     if (state.reality > 0 && state.realityBy !== room.sessionId && ringStage(state.stage)) return;
@@ -1599,11 +1617,13 @@ export class GameScene extends Phaser.Scene {
       this.localSkillLock = lock;
       this.predictedSkills.push(performance.now());
       this.playSkillEffect(hero.skill, x, y, this.aim, this.players.get(room.sessionId));
+      skillSound(me.hero, 1);
     }
     if (hero.skill2 && input.skill2 && me.skill2Cooldown <= 0 && this.localSkill2Lock <= 0 && !unready(hero.skill2)) {
       this.localSkill2Lock = lock;
       this.predictedSkills2.push(performance.now());
       this.playSkillEffect(hero.skill2, x, y, this.aim, this.players.get(room.sessionId));
+      skillSound(me.hero, 2);
     }
   }
 
@@ -2671,7 +2691,15 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
+  /** How loud something at (x, y) should be: full near the middle of the view, nothing well off screen. */
+  private nearness(x: number, y: number): number {
+    const v = this.cameras.main.worldView;
+    const d = Math.hypot(x - v.centerX, y - v.centerY);
+    return Math.max(0, Math.min(1, 1 - (d - Math.max(v.width, v.height) * 0.4) / 400));
+  }
+
   private playDashBurst(x: number, y: number, angle: number) {
+    dashSound(this.nearness(x, y));
     // The frames point left with the burst's front at (5, 38); turn them half round to point along the dash.
     this.playFrames("dashburst", 11, 45, x, y, angle + Math.PI, 5 / 100, 38 / 75, 0.55, Math.cos(angle) > 0);
   }

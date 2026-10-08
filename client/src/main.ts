@@ -9,6 +9,11 @@ import { deviceStats } from "./stats";
 import { accountLoaded, heroLocked, ownedHeroes, pickStarters, spinSlot, spinsLeft, starterOffer } from "./account";
 import { showSlot, showStarterPicker } from "./unlocks";
 import { Home } from "./home";
+import { playMusic, uiClick } from "./audio";
+// A soft click on every menu button.
+document.addEventListener("click", (e) => {
+  if ((e.target as HTMLElement | null)?.closest?.("button")) uiClick();
+}, true);
 
 const menu = document.getElementById("menu")!;
 const backButton = document.getElementById("back-btn")!;
@@ -80,6 +85,7 @@ function backToMenu() {
   errorText.textContent = "";
   menu.classList.remove("hidden");
   home.refresh();
+  playMusic(soloOnly || currentAccount() ? "home" : "login");
   if (document.fullscreenElement) document.exitFullscreen?.().catch(() => undefined);
 }
 backButton.addEventListener("click", backToMenu);
@@ -256,6 +262,7 @@ function drawAccount() {
   const a = currentAccount();
   accountModal.classList.toggle("hidden", !!a);
   home.refresh();
+  if (!game) playMusic(a ? "home" : "login");
   if (!a) {
     fitLogin(); // sized now that the panel is on screen
     setTimeout(() => accUser.focus(), 0);
@@ -300,6 +307,7 @@ if (soloOnly) {
   accountModal.remove();
   // First visit: the tutorial (every hero is open in the solo build).
   if (!localStorageGet("uv-tutorial")) startTutorial();
+  else playMusic("home");
 } else {
   setupLoginScene();
   setSignupMode(false);
