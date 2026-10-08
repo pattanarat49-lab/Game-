@@ -23,3 +23,17 @@ export function beatKnight(): boolean {
   if (currentAccount()) saveAccountData({ knight: true });
   return first;
 }
+
+/** Cthulhu beaten (Sunken Temple); true the first time (so Chapter III plays once). */
+const CTHULHU_KEY = "uv-cthulhu-beaten";
+export function beatCthulhu(): boolean {
+  let first = !(currentAccount() && accountData().cthulhu);
+  try {
+    if (localStorage.getItem(CTHULHU_KEY) === "1") first = false;
+    localStorage.setItem(CTHULHU_KEY, "1");
+  } catch {
+    // private window: the account still keeps it
+  }
+  if (currentAccount()) saveAccountData({ cthulhu: true });
+  return first;
+}

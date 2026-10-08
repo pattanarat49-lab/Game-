@@ -357,7 +357,16 @@ type Circle = [number, number, number];
  * A boss room drawn by the user as one 1536x1024 picture: `open` rectangles (picture pixels) are floor,
  * `solid` circles are pillars, statues and braziers standing on it. Spawn, boss and torches are picture pixels too.
  */
-function pictureRoom(name: string, open: Rect[], solid: Circle[], spawn: [number, number], boss: [number, number], torches: [number, number][], size: [number, number] = [1536, 1024]): DungeonMap {
+function pictureRoom(
+  name: string,
+  open: Rect[],
+  solid: Circle[],
+  spawn: [number, number],
+  boss: [number, number],
+  torches: [number, number][],
+  size: [number, number] = [1536, 1024],
+  ovals: [number, number, number, number][] = [], // more open ground: [cx, cy, rx, ry]
+): DungeonMap {
   const C = Math.ceil(size[0] / 24);
   const R = Math.ceil(size[1] / 24);
   const tiles = new Uint8Array(C * R).fill(T_WALL);
@@ -366,7 +375,9 @@ function pictureRoom(name: string, open: Rect[], solid: Circle[], spawn: [number
     for (let c = 0; c < C; c++) {
       const x = c * 24 + 12;
       const y = r * 24 + 12;
-      if (!open.some(([x0, y0, x1, y1]) => x >= x0 && x <= x1 && y >= y0 && y <= y1)) continue;
+      const inRect = open.some(([x0, y0, x1, y1]) => x >= x0 && x <= x1 && y >= y0 && y <= y1);
+      const inOval = ovals.some(([cx, cy, rx, ry]) => ((x - cx) / rx) ** 2 + ((y - cy) / ry) ** 2 <= 1);
+      if (!inRect && !inOval) continue;
       if (solid.some(([sx, sy, sr]) => Math.hypot(x - sx, y - sy) < sr + 6)) continue;
       tiles[r * C + c] = T_FLOOR;
       look[r * C + c] = D_FLOOR;
@@ -397,23 +408,21 @@ function pictureRoom(name: string, open: Rect[], solid: Circle[], spawn: [number
 function buildAbyss(): DungeonMap {
   return pictureRoom(
     "SUNKEN TEMPLE",
-    // The flooded hall, the bridges and side rooms, the two stairways.
+    // Only the stonework (2026-10-08, user: no wading into the water): the stairs, the bridges and side rooms...
     [
-      [255, 100, 1285, 900], // the hall
-      [640, 880, 900, 955], // ...and its south end, between the ruins
-      [90, 400, 420, 590], // west room and its bridge
-      [1120, 400, 1445, 590], // east room and its bridge
       [705, 20, 835, 260], // north stairs
       [705, 740, 835, 1000], // south stairs (the way in)
+      [260, 440, 450, 565], // west bridge
+      [85, 385, 265, 600], // west room
+      [1090, 440, 1280, 565], // east bridge
+      [1270, 385, 1455, 600], // east room
     ],
-    // Pillars, the tentacles rising from the water and the lanterns round the dais.
+    // The lanterns on the dais and the posts round its rim and beside the stairs.
     [
-      [350, 345, 22], [420, 190, 25], [968, 168, 22], [1110, 175, 25], [1188, 340, 22], [370, 675, 22], [1160, 670, 22],
-      [432, 830, 30], [1100, 820, 30], [572, 860, 22], [962, 860, 22],
-      [295, 195, 45], [1225, 205, 45], [305, 755, 50], [1245, 740, 50],
       [620, 335, 28], [905, 335, 28], [625, 630, 28], [905, 630, 28],
       [455, 340, 20], [1075, 335, 20], [465, 672, 20], [1062, 672, 20],
-      [660, 190, 26], [870, 190, 26], [660, 770, 26], [870, 770, 26], // the lantern posts beside the stairs
+      [660, 190, 26], [870, 190, 26], [660, 770, 26], [870, 770, 26],
+      [230, 400, 18], [230, 580, 18], [1305, 400, 18], [1305, 580, 18],
     ],
     [770, 960],
     [765, 480],
@@ -422,6 +431,8 @@ function buildAbyss(): DungeonMap {
       [455, 335], [1075, 335], [465, 670], [1060, 670], [660, 765], [870, 765], [660, 930], [870, 930],
       [80, 395], [230, 400], [75, 570], [230, 560], [1455, 395], [1305, 400], [1455, 570], [1305, 560],
     ],
+    undefined,
+    [[768, 505, 332, 296]], // ...and the round dais
   );
 }
 

@@ -547,7 +547,7 @@ interface EnemyBrain {
 /** Someone has to change rooms: the Open World's portal, the dungeon's way out, or an accepted duel. */
 export interface Warp {
   ids: string[];
-  stage: StageId;
+  stage: StageId | "home"; // "home": back to the home screen
   code: string;
 }
 
@@ -792,9 +792,21 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
     s.enemies.forEach((e) => {
       if (e.kind === "cthulhu" || e.kind === "godknight") boss = true;
     });
-    if (boss || this.dungeonCleared) return;
-    this.dungeonCleared = true;
-    s.notice = s.stage === "heaven" ? "BOSS DEFEATED! The God Knight falls" : "BOSS DEFEATED! Cthulhu sinks back into the deep";
+    if (boss) return;
+    if (!this.dungeonCleared) {
+      this.dungeonCleared = true;
+      s.notice = s.stage === "heaven" ? "BOSS DEFEATED! The God Knight falls" : "BOSS DEFEATED! A rift home opens in the middle of the temple";
+      // Cthulhu's temple: a rift opens on the dais that takes everyone home.
+      if (s.stage === "abyss") this.addZone("exitportal", ABYSS.boss.x, ABYSS.boss.y, PORTAL_RADIUS, Infinity, { owner: "", every: Infinity, damage: 0 });
+    }
+    if (s.stage !== "abyss") return;
+    s.players.forEach((p, id) => {
+      if (p.owner || p.dead || this.leaving.has(id)) return;
+      if (Math.hypot(p.x - ABYSS.boss.x, p.y - ABYSS.boss.y) <= PORTAL_RADIUS) {
+        this.leaving.add(id);
+        this.warps.push({ ids: [id], stage: "home", code: "" });
+      }
+    });
   }
 
   /** Hero-against-hero stages are fought inside the boxing ring's ropes. */

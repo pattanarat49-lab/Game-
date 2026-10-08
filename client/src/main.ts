@@ -152,9 +152,11 @@ async function startGame(stage: StageId, solo: boolean, code: string, roomId = "
   // The Open World's portal, the dungeon's way out, or an accepted duel: off to that room.
   // The party leader got into a room: the party follows.
   game.events.on("joined-room", (at: { stage: string; roomId: string }) => partyEntered(at.stage, at.roomId));
-  game.events.on("switch-room", (to: { stage: StageId; code: string }) => {
+  game.events.on("switch-room", (to: { stage: StageId | "home"; code: string }) => {
     if (mine !== game) return;
-    setTimeout(() => startGame(to.stage, solo, to.code), 0);
+    const stage = to.stage;
+    if (stage === "home") return void setTimeout(backToMenu, 0); // the rift out of a boss room
+    setTimeout(() => startGame(stage, solo, to.code), 0);
   });
   // Tutorial finished or skipped: never shown again, back to the menu.
   game.events.on("tutorial-done", () => {

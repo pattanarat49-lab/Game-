@@ -8,6 +8,7 @@ export interface AccountData {
   prefs?: { hero?: string; stage?: string; bot?: string; fav?: string };
   tutorial?: boolean; // the tutorial was played (or skipped)
   knight?: boolean; // the Ancient Knight was beaten: Cthulhu's Sunken Temple is open
+  cthulhu?: boolean; // Cthulhu was beaten (Chapter III was shown)
   owned?: string[]; // heroes unlocked (the server's to change)
   spins?: number; // slot spins waiting (the server's to change)
   profile?: unknown; // hero mastery and titles (profile.ts)

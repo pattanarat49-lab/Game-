@@ -36,6 +36,18 @@ export const CHAPTER_TWO: Chapter = {
   ],
 };
 
+/** Chapter III: after Cthulhu falls in the Sunken Temple (it points to the God Knight in Heaven). */
+export const CHAPTER_THREE: Chapter = {
+  lead: "As the deep falls silent once more....",
+  chapter: "CHAPTER III",
+  name: "HEAVEN",
+  lines: [
+    "With Cthulhu sunk back into the abyss, the adventurers have found a new clue that brings them closer to THE GLITCH.",
+    "The key to enter the VOID lies with the GOD KNIGHT, who stands watch in HEAVEN.",
+    "Look to the stained glass... the Celestial Sanctum awaits.",
+  ],
+};
+
 const CSS = `
 #opening { position: fixed; inset: 0; z-index: 100000; background: #000; overflow: hidden; font-family: "Press Start 2P", monospace;
   transition: opacity .8s; }
