@@ -437,9 +437,9 @@ export class GameScene extends Phaser.Scene {
     } else if (open) {
       const m = stage === "world" ? OPEN_WORLD : stage === "abyss" ? ABYSS : DUNGEON;
       cam.setBounds(0, 0, m.cols * BLOCK, m.rows * BLOCK);
-      this.cameras.main.setBackgroundColor(stage === "world" ? "#2a6232" : stage === "abyss" ? "#050a08" : "#09070c");
+      this.cameras.main.setBackgroundColor(stage === "world" ? "#2a6232" : stage === "abyss" ? "#04070d" : "#09070c");
     } else cam.setBounds(0, 0, WORLD_W, WORLD_H);
-    cam.setZoom(stage === "classic" || stage === "royale" ? CLASSIC_ZOOM : stage === "world" ? WORLD_ZOOM : stage === "abyss" ? 1.35 : 2); // Cthulhu is huge: see more of his hall
+    cam.setZoom(stage === "classic" || stage === "royale" ? CLASSIC_ZOOM : stage === "world" ? WORLD_ZOOM : stage === "abyss" ? 1.05 : 2); // Cthulhu is huge: see more of his hall
     // Lock the camera to our hero; smoothing on top of rounded pixels makes sprites shimmer.
     cam.startFollow(this.cameraTarget, true, 1, 1);
     cam.setRoundPixels(true);

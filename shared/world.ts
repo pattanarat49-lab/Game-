@@ -347,44 +347,56 @@ export const D_POOL = 5; // the Sunken Temple's flooded pits (water you can't wa
  * screen. A round hall of old green stone with a mossy walk round its edge, four flooded pits, broken
  * pillars to hide behind from his beam, his dais at the top and the steps in at the bottom. No minions.
  */
+/** The user's picture of Cthulhu's hall (client/public/abyss-room.jpg) is 1536x1024; one block is 24 of its pixels. */
+export const ABYSS_ART = { w: 1536, h: 1024, scale: BLOCK / 24 };
+
 function buildAbyss(): DungeonMap {
-  const C = 40;
-  const R = 42;
+  const C = 64;
+  const R = 43;
   const tiles = new Uint8Array(C * R).fill(T_WALL);
   const look = new Uint8Array(C * R).fill(D_WALL);
-  const set = (c: number, r: number, l: number, t = T_FLOOR) => {
-    if (c < 0 || r < 0 || c >= C || r >= R) return;
-    tiles[r * C + c] = t;
-    look[r * C + c] = l;
-  };
-  const mc = 19.5;
-  const mr = 20.5;
-  const rad = 17;
+  // Where a hero can walk, in the picture's pixels: the flooded hall, the bridges and side rooms, the two stairways.
+  const open: [number, number, number, number][] = [
+    [255, 100, 1285, 900], // the hall
+    [640, 880, 900, 955], // ...and its south end, between the ruins
+    [90, 400, 420, 590], // west room and its bridge
+    [1120, 400, 1445, 590], // east room and its bridge
+    [705, 20, 835, 260], // north stairs
+    [705, 740, 835, 1000], // south stairs (the way in)
+  ];
+  // What stands in the way: pillars, the tentacles rising from the water and the lanterns round the dais.
+  const solid: [number, number, number][] = [
+    [350, 345, 22], [420, 190, 25], [968, 168, 22], [1110, 175, 25], [1188, 340, 22], [370, 675, 22], [1160, 670, 22],
+    [432, 830, 30], [1100, 820, 30], [572, 860, 22], [962, 860, 22],
+    [295, 195, 45], [1225, 205, 45], [305, 755, 50], [1245, 740, 50],
+    [620, 335, 28], [905, 335, 28], [625, 630, 28], [905, 630, 28],
+    [455, 340, 20], [1075, 335, 20], [465, 672, 20], [1062, 672, 20],
+    [660, 190, 26], [870, 190, 26], [660, 770, 26], [870, 770, 26], // the lantern posts beside the stairs
+  ];
   for (let r = 0; r < R; r++)
     for (let c = 0; c < C; c++) {
-      const d = Math.hypot(c - mc, (r - mr) * 1.05);
-      if (d <= rad) set(c, r, d > rad - 2 ? D_WALK : D_FLOOR);
+      const x = c * 24 + 12;
+      const y = r * 24 + 12;
+      if (!open.some(([x0, y0, x1, y1]) => x >= x0 && x <= x1 && y >= y0 && y <= y1)) continue;
+      if (solid.some(([sx, sy, sr]) => Math.hypot(x - sx, y - sy) < sr + 6)) continue;
+      tiles[r * C + c] = T_FLOOR;
+      look[r * C + c] = D_FLOOR;
     }
-  for (let r = 1; r < 5; r++) for (let c = 17; c <= 22; c++) set(c, r, D_WALK); // his dais
-  for (let r = 37; r < R; r++) for (let c = 18; c <= 21; c++) set(c, r, D_STAIRS); // the way in
-  // Four flooded pits on the diagonals.
-  for (const [pc, pr] of [[11, 12], [28, 12], [11, 29], [28, 29]])
-    for (let r = pr - 2; r <= pr + 2; r++)
-      for (let c = pc - 3; c <= pc + 3; c++) if (Math.hypot((c - pc) / 3.2, (r - pr) / 2.3) <= 1) set(c, r, D_POOL, T_WATER);
-  // Broken pillars: cover from the beam.
-  for (const [pc, pr] of [[14, 20], [25, 20], [19, 14], [19, 27], [8, 20], [31, 20]]) set(pc, pr, D_WALL, T_WALL);
-  const b = BLOCK;
-  const midX = 20 * b;
+  const k = ABYSS_ART.scale;
+  const at = (x: number, y: number) => ({ x: x * k, y: y * k });
+  const spawn = at(770, 960);
+  // The picture's lanterns, for their flickering glow.
   const torches = [
-    [4, 14], [4, 27], [35, 14], [35, 27], [12, 5], [27, 5], [12, 36], [27, 36],
-  ].map(([c, r]) => ({ x: c * b, y: r * b }));
-  const spawn = { x: midX, y: 38.5 * b };
+    [665, 55], [860, 55], [660, 180], [870, 180], [620, 325], [905, 325], [625, 625], [905, 625],
+    [455, 335], [1075, 335], [465, 670], [1060, 670], [660, 765], [870, 765], [660, 930], [870, 930],
+    [80, 395], [230, 400], [75, 570], [230, 560], [1455, 395], [1305, 400], [1455, 570], [1305, 560],
+  ].map(([x, y]) => at(x, y));
   return {
     name: "SUNKEN TEMPLE",
     theme: { ...THEME, floor: "#22302c", floor2: "#1e2a27", wall: "#0c1412", wallTop: "#3e5a48" },
     tiles,
     look,
-    rooms: [{ c0: 3, r0: 4, c1: 36, r1: 37, monsters: [], role: "boss" }],
+    rooms: [{ c0: 3, r0: 4, c1: 60, r1: 40, monsters: [], role: "boss" }],
     guards: [],
     spawns: { 1: [spawn], 2: [spawn] },
     cols: C,
@@ -392,10 +404,10 @@ function buildAbyss(): DungeonMap {
     ox: 0,
     oy: 0,
     spawn,
-    exit: { x: midX, y: 34.5 * b },
-    boss: { x: midX, y: 9 * b },
+    exit: at(770, 900),
+    boss: at(765, 480),
     torches,
-    rune: { x: midX, y: 21 * b, r: 96 },
+    rune: { ...at(765, 480), r: 0 },
   };
 }
 

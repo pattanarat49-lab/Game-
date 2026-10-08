@@ -3,7 +3,7 @@
 
 import Phaser from "phaser";
 import { BLOCK } from "../../shared/maps";
-import { ABYSS, D_POOL, DUNGEON, L_DEEP, L_WATER, OPEN_WORLD, PORTAL_RADIUS } from "../../shared/world";
+import { ABYSS, ABYSS_ART, D_POOL, DUNGEON, L_DEEP, L_WATER, OPEN_WORLD, PORTAL_RADIUS } from "../../shared/world";
 import { CHUNK, dungeonChunk, propCanvas, worldChunk } from "./worldArt";
 import { WorldUi } from "./worldUi";
 import { playSanctuaryIntro } from "./cutscene";
@@ -33,11 +33,21 @@ export class WorldView {
     if (stage === "dungeon") playSanctuaryIntro();
     const w = map.cols * BLOCK;
     const h = map.rows * BLOCK;
+    if (stage === "abyss") {
+      // Cthulhu's hall is the user's own picture of it (loaded on first visit).
+      const show = () => scene.add.image(0, 0, "abyss_room").setOrigin(0).setScale(ABYSS_ART.scale).setDepth(-10);
+      if (scene.textures.exists("abyss_room")) show();
+      else {
+        scene.load.image("abyss_room", "abyss-room.jpg");
+        scene.load.once(Phaser.Loader.Events.COMPLETE, show);
+        scene.load.start();
+      }
+    }
     // The ground, in squares.
-    for (let cy = 0; cy * CHUNK < h; cy++)
+    for (let cy = 0; stage !== "abyss" && cy * CHUNK < h; cy++)
       for (let cx = 0; cx * CHUNK < w; cx++) {
         const key = `${stage}_chunk_${cx}_${cy}`;
-        if (!scene.textures.exists(key)) scene.textures.addCanvas(key, stage === "world" ? worldChunk(cx, cy) : dungeonChunk(cx, cy, stage === "abyss" ? ABYSS : DUNGEON));
+        if (!scene.textures.exists(key)) scene.textures.addCanvas(key, stage === "world" ? worldChunk(cx, cy) : dungeonChunk(cx, cy, DUNGEON));
         scene.add.image(cx * CHUNK, cy * CHUNK, key).setOrigin(0).setDepth(-10);
       }
     if (stage === "world") {
@@ -200,11 +210,12 @@ export class WorldView {
       const abyss = this.stage === "abyss";
       for (const t of (abyss ? ABYSS : DUNGEON).torches) {
         const f = 0.7 + 0.3 * Math.sin(now / 90 + t.x * 0.13 + t.y * 0.07);
-        floor.fillStyle(abyss ? 0x40ff9a : 0xffa040, 0.08 * f).fillCircle(t.x, t.y, 46);
-        floor.fillStyle(abyss ? 0x80ffc0 : 0xffc060, 0.12 * f).fillCircle(t.x, t.y, 24);
-        g.fillStyle(abyss ? 0x2a3a34 : 0x5a3a1a, 1).fillRect(t.x - 2, t.y - 4, 4, 8);
-        g.fillStyle(abyss ? 0x3aff8a : 0xff8a2a, 1).fillRect(t.x - 2, t.y - 9 - f * 2, 4, 5);
-        g.fillStyle(abyss ? 0xc8ffe0 : 0xffe08a, 1).fillRect(t.x - 1, t.y - 8 - f * 2, 2, 3);
+        floor.fillStyle(abyss ? 0x40d8ff : 0xffa040, (abyss ? 0.14 : 0.08) * f).fillCircle(t.x, t.y, 46);
+        floor.fillStyle(abyss ? 0x90f0ff : 0xffc060, (abyss ? 0.1 : 0.12) * f).fillCircle(t.x, t.y, 24);
+        if (abyss) continue; // the picture has its own lanterns: just their glow
+        g.fillStyle(0x5a3a1a, 1).fillRect(t.x - 2, t.y - 4, 4, 8);
+        g.fillStyle(0xff8a2a, 1).fillRect(t.x - 2, t.y - 9 - f * 2, 4, 5);
+        g.fillStyle(0xffe08a, 1).fillRect(t.x - 1, t.y - 8 - f * 2, 2, 3);
       }
       if (abyss) {
         // Ripples on the flooded pits.
