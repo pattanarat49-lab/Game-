@@ -1,4 +1,4 @@
-// The home screen (2026-10-06): the user's sky-island picture with the favourite hero on a pedestal,
+// The home screen (2026-10-06): the user's picture (stained-glass hall since 2026-10-08) with the favourite hero on a pedestal,
 // the profile box, and OPEN WORLD / START GAME / CHARACTER. START GAME opens the mode list (every mode
 // then picks heroes on the PvP-style select screen); CHARACTER opens the hero gallery by class, where
 // one hero can be made the favourite.
@@ -33,12 +33,26 @@ const H = 850;
 const CSS = `
 #home-stage { position: absolute; left: 0; top: 0; width: ${W}px; height: ${H}px; transform-origin: 0 0; }
 #home-stage > img.bg { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; image-rendering: auto; }
-#menu { padding: 0 !important; overflow: hidden !important; background: #6ab4e8 !important; display: block !important; }
+#menu { padding: 0 !important; overflow: hidden !important; background: #120c10 !important; display: block !important; }
 #menu.hidden { display: none !important; }
-#menu::before { content: ""; position: absolute; inset: -20px; background: url(/home-bg.jpg) center / cover; filter: blur(12px); }
+#menu::before { content: ""; position: absolute; inset: -20px; background: url(home-bg.jpg) center / cover; filter: blur(12px); }
 .hm-hit { position: absolute; border-radius: 14px; cursor: pointer; background: transparent; border: 0; padding: 0; transition: box-shadow .15s, transform .1s; }
 .hm-hit:hover { box-shadow: 0 0 0 4px rgba(255, 230, 120, 0.7), 0 0 30px rgba(255, 220, 100, 0.6); }
 .hm-hit:active { transform: scale(0.97); }
+/* The three main buttons (2026-10-08): drawn here now that the stained-glass picture has none of its own. */
+.hm-main { position: absolute; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; cursor: pointer; padding: 0;
+  font-family: "Press Start 2P", monospace; color: #ffe9a8; text-shadow: 0 3px 0 #000, 0 0 10px rgba(255, 190, 80, 0.7);
+  background: linear-gradient(#2a1a22ee, #120a10f2); border: 4px solid #c9932e; border-radius: 6px;
+  clip-path: polygon(16px 0, calc(100% - 16px) 0, 100% 16px, 100% calc(100% - 16px), calc(100% - 16px) 100%, 16px 100%, 0 calc(100% - 16px), 0 16px);
+  box-shadow: inset 0 0 0 3px #3a2410, inset 0 0 24px rgba(255, 170, 60, 0.35); transition: filter .15s, transform .1s; }
+.hm-main:hover { filter: brightness(1.25) drop-shadow(0 0 12px #ffcf6a); }
+.hm-main:active { transform: scale(0.97); }
+.hm-main .ic { font-size: 34px; line-height: 1; text-shadow: none; filter: drop-shadow(0 2px 0 #000); }
+.hm-main .tx { font-size: 18px; }
+#hm-start { border-color: #ffd23f; background: linear-gradient(#4a2a14f0, #1c0e08f4); box-shadow: inset 0 0 0 3px #6a3a0a, inset 0 0 30px rgba(255, 200, 80, 0.5), 0 0 26px rgba(255, 200, 90, 0.5); }
+#hm-start .tx { font-size: 30px; color: #ffd23f; }
+#hm-world { border-color: #3aa8c8; }
+#hm-char { border-color: #8a5ad8; }
 #hm-corner { position: absolute; left: 0; top: 0; width: 0; height: 0; z-index: 3; }
 #hm-frame { position: absolute; left: 30px; top: 6px; width: 432px; height: 122px; pointer-events: none; }
 #hm-pic { position: absolute; left: 60px; top: 26px; width: 90px; height: 86px; display: flex; align-items: flex-end; justify-content: center; overflow: hidden;
@@ -77,7 +91,7 @@ const CSS = `
 #home-error { position: absolute; left: 0; right: 0; bottom: 30px; text-align: center; color: #ff6a5a; font-size: 18px; text-shadow: 0 2px 0 #000; pointer-events: none; }
 
 .hm-screen { position: fixed; inset: 0; z-index: 15; display: flex; flex-direction: column; align-items: center; overflow-y: auto; padding: 14px; box-sizing: border-box; gap: 12px;
-  background: linear-gradient(rgba(10, 16, 40, 0.86), rgba(10, 16, 40, 0.94)), url(/home-bg.jpg) center / cover; color: #fff; font-family: "Press Start 2P", monospace; }
+  background: linear-gradient(rgba(10, 16, 40, 0.86), rgba(10, 16, 40, 0.94)), url(home-bg.jpg) center / cover; color: #fff; font-family: "Press Start 2P", monospace; }
 .hm-top { width: min(100%, 1100px); display: flex; align-items: center; gap: 10px; }
 .hm-top h2 { flex: 1; margin: 0; font-size: clamp(14px, 2.6vw, 24px); color: #ffd23f; font-weight: normal; text-shadow: 0 3px 0 #8a5a12; text-align: center; }
 .hm-back { font: inherit; font-size: 11px; padding: 9px 12px; color: #fff; background: #2a3458; border: 3px solid #5a6aa0; border-radius: 6px; cursor: pointer; }
@@ -151,14 +165,14 @@ export class Home {
     const stage = document.createElement("div");
     stage.id = "home-stage";
     stage.innerHTML = `
-      <img class="bg" src="/home-bg.jpg" alt="" />
+      <img class="bg" src="home-bg.jpg" alt="" />
       <div id="hm-ped"></div>
       <div id="hm-hero"></div>
       <div id="hm-title"></div>
       <div id="hm-heroname"></div>
       <div id="hm-mastery"><span></span><i><b></b></i></div>
       <div id="hm-corner">
-        <img id="hm-frame" src="/home-frame.png" alt="" />
+        <img id="hm-frame" src="home-frame.png" alt="" />
         <div id="hm-pic"></div>
         <div id="hm-name"></div>
         <button type="button" class="hm-hit" id="hm-profile" aria-label="Profile"></button>
@@ -166,9 +180,9 @@ export class Home {
         <button type="button" id="hm-titles">TITLE</button>
         <div id="hm-drop"></div>
       </div>
-      <button type="button" class="hm-hit" id="hm-world" aria-label="Open World" style="left:455px;top:637px;width:238px;height:125px"></button>
-      <button type="button" class="hm-hit" id="hm-start" aria-label="Start game" style="left:712px;top:632px;width:425px;height:125px"></button>
-      <button type="button" class="hm-hit" id="hm-char" aria-label="Characters" style="left:1158px;top:637px;width:240px;height:125px"></button>
+      <button type="button" class="hm-main" id="hm-world" style="left:455px;top:637px;width:238px;height:125px"><span class="ic">🌍</span><span class="tx">OPEN WORLD</span></button>
+      <button type="button" class="hm-main" id="hm-start" style="left:712px;top:632px;width:425px;height:125px"><span class="tx">⚔ START GAME</span></button>
+      <button type="button" class="hm-main" id="hm-char" style="left:1158px;top:637px;width:240px;height:125px"><span class="ic">👤</span><span class="tx">CHARACTER</span></button>
       <div id="home-error"></div>`;
     root.append(stage);
     // SETTING sits in the top-right corner of the screen (outside the scaled picture, so it is always reachable).
