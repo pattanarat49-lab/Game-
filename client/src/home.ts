@@ -143,6 +143,28 @@ const CSS = `
 .hm-vol span { width: 64px; }
 .hm-vol input { flex: 1; accent-color: #ffd23f; }
 .hm-set p { margin: 0; font-size: 9px; line-height: 1.8; color: #c8cce0; }
+
+/* 2026-10-08 the user's mock-up: every home button in a bronze frame with gold corner stars (frame-dark/light.png, 9-sliced). */
+.hm-fr { border: 18px solid transparent !important; border-image: url(frame-dark.png) 18 fill / 18px stretch !important; image-rendering: pixelated;
+  background: none !important; box-shadow: none !important; clip-path: none !important; border-radius: 0 !important; box-sizing: border-box;
+  font-family: "Press Start 2P", monospace; color: #f0d9a8; text-shadow: 0 2px 0 #000; }
+.hm-main { padding: 0 !important; }
+.hm-main .tx { font-size: 20px !important; color: #f0d9a8 !important; letter-spacing: 1px; }
+#hm-start .tx { font-size: 32px !important; color: #fbe3b0 !important; }
+#hm-start { filter: drop-shadow(0 0 14px rgba(255, 190, 90, 0.55)); }
+.hm-main:hover { filter: brightness(1.2) drop-shadow(0 0 14px #ffcf6a); }
+#hm-frame { display: none; }
+#hm-pic { left: 34px; top: 16px; width: 120px; height: 104px; padding: 0; }
+#hm-pic.hm-fr { border-width: 14px !important; border-image-width: 14px !important; background: radial-gradient(circle at 50% 40%, #e08a3a, #8a3a16 75%) padding-box !important; }
+#hm-plate { position: absolute; left: 146px; top: 26px; width: 312px; height: 84px; pointer-events: none; }
+#hm-name { left: 180px; top: 54px; width: 230px; color: #f0d9a8; font-size: 22px; }
+#hm-plate::after { content: "\\2726"; position: absolute; right: 22px; top: 22px; font-size: 26px; color: #e8c088; }
+#hm-spin { left: 38px; top: 138px; width: 146px; height: 72px; padding: 0; font-size: 18px; line-height: 1.25; color: #2a1608 !important; text-shadow: none;
+  border-image-source: url(frame-light.png) !important; animation: hm-pulse 1.2s ease-in-out infinite alternate; }
+@keyframes hm-pulse { to { filter: drop-shadow(0 0 10px #ffd890); } }
+#hm-titles { left: 38px; width: 146px; height: 54px; padding: 0; font-size: 15px; }
+#hm-setting.hm-fr { right: 10px; top: 10px; padding: 2px 6px; font-size: 12px; gap: 10px; border-width: 10px !important; border-image-width: 10px !important; }
+#hm-setting svg { width: 18px; height: 18px; }
 `;
 
 export class Home {
@@ -175,23 +197,25 @@ export class Home {
       <div id="hm-mastery"><span></span><i><b></b></i></div>
       <div id="hm-corner">
         <img id="hm-frame" src="home-frame.png" alt="" />
-        <div id="hm-pic"></div>
+        <div id="hm-plate" class="hm-fr"></div>
+        <div id="hm-pic" class="hm-fr"></div>
         <div id="hm-name"></div>
         <button type="button" class="hm-hit" id="hm-profile" aria-label="Profile"></button>
-        <button type="button" id="hm-spin"></button>
-        <button type="button" id="hm-titles">TITLE</button>
+        <button type="button" id="hm-spin" class="hm-fr"></button>
+        <button type="button" id="hm-titles" class="hm-fr">\u2726 TITLE \u2726</button>
         <div id="hm-drop"></div>
       </div>
-      <button type="button" class="hm-main" id="hm-world" style="left:455px;top:637px;width:238px;height:125px"><span class="ic">🌍</span><span class="tx">OPEN WORLD</span></button>
-      <button type="button" class="hm-main" id="hm-start" style="left:712px;top:632px;width:425px;height:125px"><span class="tx">⚔ START GAME</span></button>
-      <button type="button" class="hm-main" id="hm-char" style="left:1158px;top:637px;width:240px;height:125px"><span class="ic">👤</span><span class="tx">CHARACTER</span></button>
+      <button type="button" class="hm-main hm-fr" id="hm-world" style="left:390px;top:612px;width:290px;height:104px"><span class="tx">OPEN WORLD</span></button>
+      <button type="button" class="hm-main hm-fr" id="hm-start" style="left:700px;top:596px;width:452px;height:122px"><span class="tx">\u2726 START GAME \u2726</span></button>
+      <button type="button" class="hm-main hm-fr" id="hm-char" style="left:1172px;top:612px;width:292px;height:104px"><span class="tx">CHARACTER</span></button>
       <div id="home-error"></div>`;
     root.append(stage);
     // SETTING sits in the top-right corner of the screen (outside the scaled picture, so it is always reachable).
     const setting = document.createElement("button");
     setting.type = "button";
     setting.id = "hm-setting";
-    setting.innerHTML = `<svg viewBox="0 0 9 9" shape-rendering="crispEdges"><path fill="#ffd23f" d="M3 0h3v1h1v1h1v1h1v3h-1v1h-1v1h-1v1h-3v-1h-1v-1h-1v-1h-1v-3h1v-1h1v-1h1z"/><path fill="#2a3458" d="M3 3h3v3h-3z"/></svg>SETTING`;
+    setting.className = "hm-fr";
+    setting.innerHTML = `<svg viewBox="0 0 9 9" shape-rendering="crispEdges"><path fill="#c9913e" d="M3 0h3v1h1v1h1v1h1v3h-1v1h-1v1h-1v1h-3v-1h-1v-1h-1v-1h-1v-3h1v-1h1v-1h1z"/><path fill="#1a0e08" d="M3 3h3v3h-3z"/></svg>SETTING`;
     setting.addEventListener("click", (e) => {
       e.stopPropagation();
       this.showSettings();
@@ -226,7 +250,7 @@ export class Home {
       const h = innerHeight;
       // Cover the whole screen with the picture (no empty bands), centred, as long as the three buttons still fit;
       // only a very narrow (portrait) screen shrinks it to keep them in view.
-      const BTN = { l: 435, r: 1418, t: 622, b: 772 };
+      const BTN = { l: 390, r: 1464, t: 596, b: 718 };
       const s = Math.min(Math.max(w / W, h / H), w / (BTN.r - BTN.l + 40));
       const vw = w / s;
       const vh = h / s;
@@ -274,8 +298,8 @@ export class Home {
     const spins = this.act.spins();
     this.spinBtn.style.display = this.act.online && spins > 0 ? "" : "none";
     // The TITLE button sits where SPIN is, just under it when SPIN shows.
-    this.stage.querySelector<HTMLElement>("#hm-titles")!.style.top = this.act.online && spins > 0 ? "196px" : "136px";
-    this.spinBtn.textContent = `SPIN x${spins}`;
+    this.stage.querySelector<HTMLElement>("#hm-titles")!.style.top = this.act.online && spins > 0 ? "222px" : "138px";
+    this.spinBtn.innerHTML = `SPIN<br>x${spins}`;
     // The profile menu.
     this.drop.innerHTML = "";
     const item = (label: string, f: () => void) => {
