@@ -150,8 +150,9 @@ const CSS = `
   font-family: "Press Start 2P", monospace; color: #f0d9a8; text-shadow: 0 2px 0 #000; }
 .hm-main { padding: 0 !important; }
 .hm-main .tx { font-size: 20px !important; color: #f0d9a8 !important; letter-spacing: 1px; }
-#hm-start .tx { font-size: 32px !important; color: #fbe3b0 !important; }
-#hm-start { filter: drop-shadow(0 0 14px rgba(255, 190, 90, 0.55)); }
+/* START GAME is the button cut straight out of the user's mock-up (start-btn.png), text and all. */
+#hm-start.hm-fr { border: 0 !important; border-image: none !important; background: url(start-btn.png) center / 100% 100% no-repeat !important; }
+#hm-start .tx { visibility: hidden; }
 .hm-main:hover { filter: brightness(1.2) drop-shadow(0 0 14px #ffcf6a); }
 #hm-frame { display: none; }
 #hm-pic { left: 34px; top: 16px; width: 120px; height: 104px; padding: 0; }
@@ -206,7 +207,7 @@ export class Home {
         <div id="hm-drop"></div>
       </div>
       <button type="button" class="hm-main hm-fr" id="hm-world" style="left:390px;top:612px;width:290px;height:104px"><span class="tx">OPEN WORLD</span></button>
-      <button type="button" class="hm-main hm-fr" id="hm-start" style="left:700px;top:596px;width:452px;height:122px"><span class="tx">\u2726 START GAME \u2726</span></button>
+      <button type="button" class="hm-main hm-fr" id="hm-start" aria-label="Start game" style="left:692px;top:586px;width:472px;height:142px"><span class="tx">\u2726 START GAME \u2726</span></button>
       <button type="button" class="hm-main hm-fr" id="hm-char" style="left:1172px;top:612px;width:292px;height:104px"><span class="tx">CHARACTER</span></button>
       <div id="home-error"></div>`;
     root.append(stage);
