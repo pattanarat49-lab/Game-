@@ -141,7 +141,7 @@ export class HudScene extends Phaser.Scene {
       });
       const t = state.phase === "fight" ? state.phaseTimer : 0;
       const storm = t < ROYALE_SAFE_TIME ? `STORM IN ${Math.ceil(ROYALE_SAFE_TIME - t)}s` : t < ROYALE_SAFE_TIME + ROYALE_SHRINK_TIME ? "STORM CLOSING IN!" : "FINAL CIRCLE";
-      this.waveText.setText(`BATTLE ROYALE  ${alive}/${all} ALIVE  ${state.phase === "fight" ? storm : ""}`);
+      this.waveText.setText(`${alive}/${all} ALIVE  ${state.phase === "fight" ? storm : "ROYALE"}`);
       const outside = me && !me.dead && state.phase === "fight" && Math.hypot(me.x - ROYALE_MAP.center.x, me.y - ROYALE_MAP.center.y) > state.lavaRadius;
       if (state.phase === "victory") banner = state.winner === "NO" ? `NO ONE SURVIVED!
 Back to select in ${Math.ceil(state.phaseTimer)}` : `${state.winner === me?.name ? "#1 VICTORY ROYALE!" : `${state.winner} WINS!`}

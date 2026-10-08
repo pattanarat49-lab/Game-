@@ -95,10 +95,7 @@ async function startGame(stage: StageId, solo: boolean, code: string) {
   if (touch && !document.fullscreenElement) await goFullscreenLandscape();
   await document.fonts?.ready;
 
-  // Match the game's shape to the screen (always landscape) so phones are not letterboxed.
-  const height = touch ? 440 : 600;
-  const aspect = Math.max(innerWidth, innerHeight) / Math.min(innerWidth, innerHeight);
-  const width = Math.round(Math.min(1300, Math.max(720, height * aspect)));
+  const { width, height } = gameSize(touch);
 
   if (game) {
     // Moving on from another room (a portal or a duel): leave it first.
@@ -120,7 +117,8 @@ async function startGame(stage: StageId, solo: boolean, code: string) {
     scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH },
     scene: [BootScene, GameScene, HudScene],
   });
-  (window as unknown as { riftGame?: Phaser.Game }).riftGame = game; // handy for debugging and tests
+  (window as unknown as { riftGame?: Phaser.Game }).riftGame = game;
+  fitGameToScreen(game, touch); // handy for debugging and tests
   game.registry.set("playerName", name);
   game.registry.set("token", account?.token ?? "");
   game.registry.set("solo", solo);
@@ -153,6 +151,54 @@ async function startGame(stage: StageId, solo: boolean, code: string) {
 }
 
 /** On phones, go fullscreen and lock to landscape where the browser allows it. */
+/**
+ * The game's size in game pixels, shaped like the screen (always landscape) so nothing is letterboxed:
+ * phones keep a 440-pixel-tall view, tablets and squarer screens get a taller one (iPad 4:3 included), never narrower than 1000.
+ */
+function gameSize(touch: boolean): { width: number; height: number } {
+  const vw = visualViewport?.width ?? innerWidth;
+  const vh = visualViewport?.height ?? innerHeight;
+  const aspect = Math.max(vw, vh) / Math.max(1, Math.min(vw, vh));
+  let height = touch ? 440 : 600;
+  let width = Math.round(height * aspect);
+  if (width < 1000) [width, height] = [1000, Math.round(1000 / aspect)]; // wide enough for the HUD's top row
+  if (width > 1300) [width, height] = [1300, Math.max(360, Math.round(1300 / aspect))];
+  return { width, height };
+}
+
+/** The screen changed shape (turned, went fullscreen, the browser bar hid): reshape the game to fill it again. */
+let fitListener: (() => void) | undefined;
+function fitGameToScreen(g: Phaser.Game, touch: boolean) {
+  if (fitListener) {
+    removeEventListener("resize", fitListener);
+    removeEventListener("orientationchange", fitListener);
+    visualViewport?.removeEventListener("resize", fitListener);
+    document.removeEventListener("fullscreenchange", fitListener);
+  }
+  let timer = 0;
+  const refit = () => {
+    if (game !== g) return;
+    const { width, height } = gameSize(touch);
+    if (Math.abs(width - g.scale.width) > 2 || Math.abs(height - g.scale.height) > 2) {
+      g.scale.setGameSize(width, height);
+      const hud = g.scene.getScene("Hud");
+      if (hud?.scene.isActive()) hud.scene.restart(); // the HUD lays itself out for the new size
+    }
+    g.scale.refresh();
+  };
+  fitListener = () => {
+    clearTimeout(timer);
+    timer = window.setTimeout(refit, 250);
+  };
+  addEventListener("resize", fitListener);
+  addEventListener("orientationchange", fitListener);
+  visualViewport?.addEventListener("resize", fitListener);
+  document.addEventListener("fullscreenchange", fitListener);
+  // Fullscreen and the phone turning can finish after the game starts: check again shortly.
+  setTimeout(fitListener, 600);
+  setTimeout(fitListener, 1500);
+}
+
 async function goFullscreenLandscape() {
   try {
     await document.documentElement.requestFullscreen?.({ navigationUI: "hide" });
