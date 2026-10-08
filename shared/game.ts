@@ -1714,7 +1714,7 @@ const REMOVED_HEROES: HeroId[] = ["swordgod", "yaotsu", "badigadi",
   // removed 2026-10-07 (user)
   "penblade",
   // removed 2026-10-08 (user)
-  "golem", "cc", "levi", "yami", "emilia", "cryomancer", "ainz", "rengoku",
+  "golem", "cc", "levi", "yami", "emilia", "cryomancer", "ainz", "rengoku", "lancer",
 ];
 export const HERO_IDS = [
   ...PVP_RANKING,
