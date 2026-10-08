@@ -42,9 +42,14 @@ export function setAudioLevels(next: Partial<Levels>) {
   } catch {
     // kept until the page closes
   }
-  if (ctx && musicBus) musicBus.gain.setTargetAtTime(levels.music * 0.32, ctx.currentTime, 0.05);
-  if (ctx && sfxBus) sfxBus.gain.setTargetAtTime(levels.sfx * 0.5, ctx.currentTime, 0.05);
+  if (ctx && musicBus) musicBus.gain.setTargetAtTime(levels.music * MUSIC_GAIN, ctx.currentTime, 0.05);
+  if (ctx && sfxBus) sfxBus.gain.setTargetAtTime(levels.sfx * SFX_GAIN, ctx.currentTime, 0.05);
 }
+
+/** Loudness of the two buses at full volume (phone speakers need it loud). */
+const MUSIC_GAIN = 1.4;
+const SFX_GAIN = 1.3;
+let keepAlive: HTMLAudioElement | undefined;
 
 /** Make the audio context on the first touch, click or key (browsers block sound before that). */
 function unlock() {
@@ -53,23 +58,54 @@ function unlock() {
     if (!AC) return;
     ctx = new AC();
     const comp = ctx.createDynamicsCompressor();
-    comp.threshold.value = -14;
-    comp.ratio.value = 4;
+    comp.threshold.value = -16;
+    comp.ratio.value = 5;
     comp.connect(ctx.destination);
     musicBus = ctx.createGain();
-    musicBus.gain.value = levels.music * 0.32;
+    musicBus.gain.value = levels.music * MUSIC_GAIN;
     musicBus.connect(comp);
     sfxBus = ctx.createGain();
-    sfxBus.gain.value = levels.sfx * 0.5;
+    sfxBus.gain.value = levels.sfx * SFX_GAIN;
     sfxBus.connect(comp);
     noise = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate);
     const d = noise.getChannelData(0);
     for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
   }
-  if (ctx.state === "suspended") void ctx.resume();
+  // iPhone/iPad: Web Audio is muted by the silent switch unless a media element plays too, so loop a silent clip.
+  const session = (navigator as unknown as { audioSession?: { type: string } }).audioSession;
+  if (session && session.type !== "playback") session.type = "playback";
+  if (!keepAlive) {
+    keepAlive = new Audio(silentWav());
+    keepAlive.loop = true;
+    keepAlive.setAttribute("playsinline", "");
+  }
+  if (keepAlive.paused) void keepAlive.play().catch(() => undefined);
+  if (ctx.state !== "running") void ctx.resume();
   if (wanted && !playing) startSong(wanted);
 }
-for (const ev of ["pointerdown", "keydown", "touchend"]) addEventListener(ev, unlock, { capture: true, passive: true });
+/** Half a second of silence as a WAV data URL. */
+function silentWav(): string {
+  const n = 4000;
+  const buf = new DataView(new ArrayBuffer(44 + n));
+  const str = (o: number, t: string) => [...t].forEach((c, i) => buf.setUint8(o + i, c.charCodeAt(0)));
+  str(0, "RIFF");
+  buf.setUint32(4, 36 + n, true);
+  str(8, "WAVEfmt ");
+  buf.setUint32(16, 16, true);
+  buf.setUint16(20, 1, true);
+  buf.setUint16(22, 1, true);
+  buf.setUint32(24, 8000, true);
+  buf.setUint32(28, 8000, true);
+  buf.setUint16(32, 1, true);
+  buf.setUint16(34, 8, true);
+  str(36, "data");
+  buf.setUint32(40, n, true);
+  for (let i = 0; i < n; i++) buf.setUint8(44 + i, 128);
+  let bin = "";
+  new Uint8Array(buf.buffer).forEach((b) => (bin += String.fromCharCode(b)));
+  return "data:audio/wav;base64," + btoa(bin);
+}
+for (const ev of ["pointerdown", "pointerup", "click", "keydown", "touchstart", "touchend"]) addEventListener(ev, unlock, { capture: true, passive: true });
 // Back from another tab or app: carry on.
 document.addEventListener("visibilitychange", () => {
   if (!ctx) return;
