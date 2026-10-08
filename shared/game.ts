@@ -1713,6 +1713,8 @@ const REMOVED_HEROES: HeroId[] = ["swordgod", "yaotsu", "badigadi",
   "nobara", "marco", "cell", "hinata", "geto", "leorio", "roger", "akaza", "shinra", "anya", "byakuya", "momo", "denji", "reigen", "jiraiya", "stark", "aokiji", "itachi", "hancock", "armin", "kurapika", "alphonse", "hijikata", "kirito", "sakura", "toji", "yuno", "rukia", "robin", "kagura", "gohan", "okarun", "trunks", "albedo", "makima", "franky", "ryuk", "sabo", "kakashi", "mikasa", "ace", "aki", "vegeta", "taekwondo", "oni",
   // removed 2026-10-07 (user)
   "penblade",
+  // removed 2026-10-08 (user)
+  "golem", "cc", "levi", "yami", "emilia", "cryomancer", "ainz", "rengoku",
 ];
 export const HERO_IDS = [
   ...PVP_RANKING,
