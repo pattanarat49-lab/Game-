@@ -10,7 +10,7 @@ import { accountLoaded, heroLocked, ownedHeroes, pickStarters, spinSlot, spinsLe
 import { showSlot, showStarterPicker } from "./unlocks";
 import { Home } from "./home";
 import { playMusic, uiClick } from "./audio";
-import { showIntro } from "./intro";
+import { showCthulhuStory, showIntro } from "./intro";
 // A soft click on every menu button.
 document.addEventListener("click", (e) => {
   if ((e.target as HTMLElement | null)?.closest?.("button")) uiClick();
@@ -94,6 +94,7 @@ backButton.addEventListener("click", backToMenu);
 
 /** Start (or move to) a game: a stage, solo or online, and a room number ("" = any open room). */
 async function startGame(stage: StageId, solo: boolean, code: string) {
+  if (stage === "abyss" && !game) await showCthulhuStory(); // the comic before the Sunken Temple
   const signedIn = currentAccount();
   const account = solo ? undefined : signedIn;
   const name = signedIn?.username ?? soloName;

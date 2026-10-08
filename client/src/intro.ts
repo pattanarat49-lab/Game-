@@ -101,3 +101,88 @@ function drawStars(canvas: HTMLCanvasElement) {
     ctx.fillRect(x, y, s, s);
   }
 }
+
+/** The user's Cthulhu comic page (public/cthulhu-story.jpg, 1536x1024): each panel as [x, y, w, h, seconds]. */
+const CTHULHU_PANELS: [number, number, number, number, number][] = [
+  [4, 4, 546, 342, 4.2],
+  [558, 4, 437, 342, 3.8],
+  [1004, 4, 528, 342, 3.8],
+  [4, 356, 376, 218, 2.2],
+  [389, 356, 363, 218, 2.2],
+  [761, 356, 344, 218, 2.4],
+  [1114, 356, 418, 218, 3],
+  [4, 584, 1528, 436, 6],
+];
+
+const STORY_CSS = `
+#cth-story { position: fixed; inset: 0; z-index: 100000; background: #000; overflow: hidden; transition: opacity .8s; }
+#cth-story.out { opacity: 0; pointer-events: none; }
+#cth-story .panel { position: absolute; left: 50%; top: 50%; background-image: url(cthulhu-story.jpg); background-repeat: no-repeat;
+  opacity: 0; transition: opacity .7s; box-shadow: 0 0 60px rgba(40, 255, 200, .15); }
+#cth-story .panel.on { opacity: 1; }
+#cth-story .skip { position: absolute; right: max(16px, env(safe-area-inset-right)); bottom: max(16px, env(safe-area-inset-bottom)); z-index: 2;
+  font-family: "Press Start 2P", monospace; font-size: clamp(11px, 1.8vmin, 16px); color: #7affd0; background: rgba(0, 0, 0, .55);
+  border: 3px solid #3ad8a8; border-radius: 6px; padding: .8em 1.2em; cursor: pointer; letter-spacing: .1em; }
+#cth-story .skip:hover { background: #3ad8a8; color: #000; }
+`;
+
+/** Before the Sunken Temple: the comic's panels one by one, slowly drifting closer. SKIP jumps straight in. */
+export function showCthulhuStory(): Promise<void> {
+  return new Promise((resolve) => {
+    if (!document.getElementById("cth-story-css")) {
+      const style = document.createElement("style");
+      style.id = "cth-story-css";
+      style.textContent = STORY_CSS;
+      document.head.append(style);
+    }
+    const root = document.createElement("div");
+    root.id = "cth-story";
+    root.innerHTML = `<button type="button" class="skip">SKIP &#9654;&#9654;</button>`;
+    document.body.append(root);
+    let done = false;
+    const timers: number[] = [];
+    const finish = () => {
+      if (done) return;
+      done = true;
+      timers.forEach((t) => clearTimeout(t));
+      root.classList.add("out");
+      setTimeout(() => root.remove(), 850);
+      resolve();
+    };
+    root.querySelector(".skip")!.addEventListener("click", (e) => {
+      e.stopPropagation();
+      finish();
+    });
+    let at = 0.3;
+    let last: HTMLElement | undefined;
+    for (const [x, y, w, h, secs] of CTHULHU_PANELS) {
+      timers.push(
+        window.setTimeout(() => {
+          const s = Math.min((innerWidth * 0.94) / w, (innerHeight * 0.9) / h);
+          const el = document.createElement("div");
+          el.className = "panel";
+          Object.assign(el.style, {
+            width: `${w * s}px`,
+            height: `${h * s}px`,
+            backgroundSize: `${1536 * s}px ${1024 * s}px`,
+            backgroundPosition: `${-x * s}px ${-y * s}px`,
+            transform: "translate(-50%, -50%) scale(1)",
+            transition: `opacity .7s, transform ${secs + 1}s linear`,
+          });
+          root.insertBefore(el, root.firstChild);
+          void el.offsetWidth;
+          el.classList.add("on");
+          el.style.transform = "translate(-50%, -50%) scale(1.07)";
+          const prev = last;
+          if (prev) {
+            prev.classList.remove("on");
+            setTimeout(() => prev.remove(), 800);
+          }
+          last = el;
+        }, at * 1000),
+      );
+      at += secs;
+    }
+    timers.push(window.setTimeout(finish, (at + 0.4) * 1000));
+  });
+}
