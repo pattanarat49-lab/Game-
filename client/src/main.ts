@@ -12,6 +12,7 @@ import { Home } from "./home";
 import { playMusic, uiClick } from "./audio";
 import { showCthulhuStory, showIntro } from "./intro";
 import { cthulhuUnlocked } from "./progress";
+import { onPartyGo, partyEntered, partySize, showParty } from "./party";
 // A soft click on every menu button.
 document.addEventListener("click", (e) => {
   if ((e.target as HTMLElement | null)?.closest?.("button")) uiClick();
@@ -57,6 +58,7 @@ const home = new Home(menu, {
   openWorld: () => void startGame("world", soloOnly, ""),
   heaven: () => void startGame("heaven", soloOnly, ""),
   glitch: () => void startGame("glitch", soloOnly, ""),
+  party: () => showParty(currentAccount()?.username ?? soloName, () => home.setParty(partySize())),
   abyss: () => {
     if (cthulhuUnlocked()) void startGame("abyss", soloOnly, "");
     else home.note("The door is sealed... Defeat the Ancient Knight in the Open World dungeon to find the stone tablet that opens it.");
@@ -75,6 +77,9 @@ const home = new Home(menu, {
       }
     : undefined,
 });
+home.setParty(0);
+// A party member: the leader started a mode, so warp into the same room.
+onPartyGo((stage, roomId) => void startGame(stage as StageId, false, "", roomId));
 const errorText = home.error;
 
 /** BACK: leave the room (or the solo game) and return to the menu. */
@@ -99,7 +104,7 @@ function backToMenu() {
 backButton.addEventListener("click", backToMenu);
 
 /** Start (or move to) a game: a stage, solo or online, and a room number ("" = any open room). */
-async function startGame(stage: StageId, solo: boolean, code: string) {
+async function startGame(stage: StageId, solo: boolean, code: string, roomId = "") {
   if (stage === "abyss" && !game) await showCthulhuStory(); // the comic before the Sunken Temple
   const signedIn = currentAccount();
   const account = solo ? undefined : signedIn;
@@ -141,9 +146,12 @@ async function startGame(stage: StageId, solo: boolean, code: string) {
   game.registry.set("stage", stage);
   // Same mode + same room number = same room; no number = any open room of that mode.
   game.registry.set("roomCode", code);
+  game.registry.set("roomId", roomId); // following a party leader: that exact room
   backButton.classList.remove("hidden");
   const mine = game;
   // The Open World's portal, the dungeon's way out, or an accepted duel: off to that room.
+  // The party leader got into a room: the party follows.
+  game.events.on("joined-room", (at: { stage: string; roomId: string }) => partyEntered(at.stage, at.roomId));
   game.events.on("switch-room", (to: { stage: StageId; code: string }) => {
     if (mine !== game) return;
     setTimeout(() => startGame(to.stage, solo, to.code), 0);

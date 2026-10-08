@@ -1923,7 +1923,7 @@ export const ENEMIES: Record<EnemyKind, EnemyDef> = {
   stonecrawler: { hp: 90, speed: 80, radius: 9, touchDamage: 14, score: 20 },
   stonewisp: { hp: 60, speed: 45, radius: 6, touchDamage: 6, score: 20, shootEvery: 2, shotDamage: 14, shot: "boulder", keepAway: 120 },
   // The Sunken Temple (2026-10-08): Cthulhu, alone, no minions.
-  cthulhu: { hp: 16000, speed: 26, radius: 24, touchDamage: 400, score: 5000, boss: true },
+  cthulhu: { hp: 16000, speed: 26, radius: 24, touchDamage: 160, score: 5000, boss: true },
   // The God Knight (2026-10-08): only stands in his sanctum for now; his moves come later.
   godknight: { hp: 20000, speed: 0, radius: 22, touchDamage: 0, score: 5000, boss: true },
   godzilla: { hp: 7000, speed: 24, radius: 22, touchDamage: 105, score: 2000, shootEvery: 3, shotDamage: ENEMY_SHOT_DAMAGE_BASE * 3, boss: true },
@@ -1977,19 +1977,19 @@ export const ANCIENT_KNIGHT = {
 export const ANCIENT_KNIGHT_MOVES = ["", "cleave", "sweep", "leap", "summon", "guard"] as const;
 
 /**
- * Cthulhu's moves (2026-10-08), one for each row of the user's attack sheet. They hit about 10x as hard as
- * the Ancient Knight's (user request). Each winds up (beamState 1,
+ * Cthulhu's moves (2026-10-08), one for each row of the user's attack sheet. They hit about 4x as hard as
+ * the Ancient Knight's (user asked for 10x, then cut it by 2.5). Each winds up (beamState 1,
  * a warning shows), then strikes (beamState 2). Seconds, pixels and damage per hit.
  */
 export const CTHULHU = {
   rest: 1.1, // walking after you between moves (x0.6 once MADNESS has begun)
-  lash: { windup: 0.6, active: 0.4, length: 170, width: 54, damage: 650, knock: 2 }, // tentacles whip straight ahead
-  beam: { windup: 1.0, active: 0.55, length: 640, width: 30, damage: 900 }, // a beam of madness from his hand
-  wave: { windup: 0.8, active: 1.9, speed: 330, width: 230, damage: 550, knock: 2.4 }, // a tidal wave rolls out at you
-  leap: { windup: 0.5, air: 0.9, range: 360, radius: 125, damage: 750, stun: 1 }, // flies up and crashes down on you
-  sigil: { windup: 0.7, fuse: 1.3, count: 4, radius: 62, damage: 600, spread: 70 }, // elder sigils burn under your feet
-  gas: { windup: 0.7, active: 0.5, clouds: 5, radius: 58, life: 6, tick: 0.5, damage: 90, spread: 150 }, // poison miasma
-  madness: { windup: 1.4, active: 0.6, radius: 190, damage: 700, below: 0.45 }, // once, at low health: a roar that sends him mad
+  lash: { windup: 0.6, active: 0.4, length: 170, width: 54, damage: 260, knock: 2 }, // tentacles whip straight ahead
+  beam: { windup: 1.0, active: 0.55, length: 640, width: 30, damage: 360 }, // a beam of madness from his hand
+  wave: { windup: 0.8, active: 1.9, speed: 330, width: 230, damage: 220, knock: 2.4 }, // a tidal wave rolls out at you
+  leap: { windup: 0.5, air: 0.9, range: 360, radius: 125, damage: 300, stun: 1 }, // flies up and crashes down on you
+  sigil: { windup: 0.7, fuse: 1.3, count: 4, radius: 62, damage: 240, spread: 70 }, // elder sigils burn under your feet
+  gas: { windup: 0.7, active: 0.5, clouds: 5, radius: 58, life: 6, tick: 0.5, damage: 36, spread: 150 }, // poison miasma
+  madness: { windup: 1.4, active: 0.6, radius: 190, damage: 280, below: 0.45 }, // once, at low health: a roar that sends him mad
 };
 export const CTHULHU_MOVES = ["", "lash", "beam", "wave", "leap", "sigil", "gas", "madness"] as const;
 

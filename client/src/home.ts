@@ -26,6 +26,8 @@ export interface HomeActions {
   heaven(): void;
   /** The dark figure's head in the middle window: into The Rift. */
   glitch(): void;
+  /** Online: open the PARTY window. */
+  party?(): void;
   play(stage: StageId, solo: boolean, code: string): void;
   logout?(): void;
   rename?(): void;
@@ -183,6 +185,8 @@ const CSS = `
 #hm-titles { left: 38px; width: 146px; height: 54px; padding: 0; font-size: 15px; }
 #hm-setting.hm-fr { right: 10px; top: 10px; padding: 2px 6px; font-size: 12px; gap: 10px; border-width: 10px !important; border-image-width: 10px !important; }
 #hm-setting svg { width: 18px; height: 18px; }
+#hm-party { position: absolute; right: 10px; top: 66px; z-index: 4; font-family: "Press Start 2P", monospace; font-size: 12px; padding: 8px 10px; color: #fff;
+  background: #1a0e08; cursor: pointer; border: 10px solid transparent; border-image: url(frame-dark.png) 18 fill / 10px stretch; min-width: 110px; }
 `;
 
 export class Home {
@@ -243,6 +247,19 @@ export class Home {
       this.showSettings();
     });
     root.append(setting);
+    // PARTY under SETTING (online only): friends follow the leader into games.
+    if (act.online && act.party) {
+      const party = document.createElement("button");
+      party.type = "button";
+      party.id = "hm-party";
+      party.className = "hm-fr";
+      party.addEventListener("click", (e) => {
+        e.stopPropagation();
+        act.party?.();
+      });
+      root.append(party);
+      this.partyBtn = party;
+    }
     this.stage = stage;
     this.pic = stage.querySelector("#hm-pic")!;
     this.nameEl = stage.querySelector("#hm-name")!;
@@ -353,6 +370,12 @@ export class Home {
   }
 
   /** SETTING: the attack mode switch (DEFAULT aims for you, ADVANCE is the sword joystick). */
+  private partyBtn?: HTMLButtonElement;
+  /** The PARTY button's label: how many are in your party. */
+  setParty(size: number) {
+    if (this.partyBtn) this.partyBtn.textContent = size > 1 ? `PARTY (${size})` : "PARTY";
+  }
+
   /** A short message over the hall (e.g. why Cthulhu's door is still shut). */
   note(text: string) {
     const el = this.stage.querySelector<HTMLElement>("#hm-note");

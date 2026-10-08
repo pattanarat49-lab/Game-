@@ -463,7 +463,12 @@ export class GameScene extends Phaser.Scene {
     }
     try {
       const client = new Client(serverUrl());
-      this.room = new RoomLink(client, await client.joinOrCreate(ROOM_NAME, { name: this.registry.get("playerName"), hero: this.registry.get("hero"), stage, code: this.registry.get("roomCode") ?? "", stats: statsJson(), token: this.registry.get("token") ?? "", title: wornTitle(), mastery: heroMastery(this.registry.get("hero")).level }));
+      const options = { name: this.registry.get("playerName"), hero: this.registry.get("hero"), stage, code: this.registry.get("roomCode") ?? "", stats: statsJson(), token: this.registry.get("token") ?? "", title: wornTitle(), mastery: heroMastery(this.registry.get("hero")).level };
+      // Following a party leader: their exact room. Otherwise any open room of this mode and number.
+      const followId = String(this.registry.get("roomId") ?? "");
+      const inner = followId ? await client.joinById(followId, options) : await client.joinOrCreate(ROOM_NAME, options);
+      this.room = new RoomLink(client, inner);
+      this.game.events.emit("joined-room", { stage, roomId: inner.roomId });
       this.registry.set("room", this.room);
     } catch (err) {
       console.error(err);

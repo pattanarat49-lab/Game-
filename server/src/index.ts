@@ -6,6 +6,7 @@ import { existsSync } from "fs";
 import { resolve } from "path";
 import { ROOM_NAME, SERVER_PORT } from "../../shared/game";
 import { RiftRoom } from "./RiftRoom";
+import { PartyRoom } from "./PartyRoom";
 import { accountRoutes } from "./accounts";
 
 // Log stray errors instead of letting them kill the process (that would drop every player at once).
@@ -24,4 +25,6 @@ app.get("/health", (_req, res) => res.send("ok"));
 const gameServer = new Server({ transport: new WebSocketTransport({ server: createServer(app) }) });
 // Players only share a room with others who picked the same stage.
 gameServer.define(ROOM_NAME, RiftRoom).filterBy(["stage", "code"]); // same mode + same room number meet
+// Parties: friends sharing a party code follow their leader into games.
+gameServer.define("party", PartyRoom).filterBy(["code"]);
 gameServer.listen(port).then(() => console.log(`Untitled Versus server listening on http://localhost:${port}`));
