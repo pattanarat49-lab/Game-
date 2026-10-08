@@ -82,6 +82,7 @@ function unlock() {
   if (keepAlive.paused) void keepAlive.play().catch(() => undefined);
   if (ctx.state !== "running") void ctx.resume();
   if (wanted && !playing) startSong(wanted);
+  else if (track && playing === track.id && track.el.paused) void track.el.play().catch(() => undefined);
 }
 /** Half a second of silence as a WAV data URL. */
 function silentWav(): string {
@@ -336,9 +337,40 @@ function fadeOut() {
   if (ctx && songGain) {
     const g = songGain;
     g.gain.setTargetAtTime(0.0001, ctx.currentTime, 0.25);
-    setTimeout(() => g.disconnect(), 1500);
+    setTimeout(() => {
+      g.disconnect();
+      if (track && trackGain === g && playing !== track.id) track.el.pause();
+    }, 1500);
   }
   songGain = undefined;
+}
+
+/** Recorded songs (user's own tracks), played instead of the made-up ones. Relative paths so the solo page finds them too. */
+const TRACKS: Partial<Record<SongId, string>> = { home: "soundtrack-home.mp3" };
+/** Recorded songs sit lower than full scale next to the synth ones. */
+const TRACK_LEVEL = 0.8;
+let track: { el: HTMLAudioElement; src: MediaElementAudioSourceNode; id: SongId } | undefined;
+let trackGain: GainNode | undefined;
+
+function startTrack(id: SongId, url: string, gain: GainNode) {
+  if (!ctx) return;
+  if (!track || track.id !== id) {
+    track?.el.pause();
+    track?.src.disconnect();
+    const el = new Audio(url);
+    el.loop = true;
+    el.preload = "auto";
+    el.setAttribute("playsinline", "");
+    track = { el, src: ctx.createMediaElementSource(el), id };
+  } else track.src.disconnect();
+  const level = ctx.createGain();
+  level.gain.value = TRACK_LEVEL;
+  track.src.connect(level).connect(gain);
+  trackGain = gain;
+  if (track.el.paused) {
+    track.el.currentTime = 0;
+    void track.el.play().catch(() => undefined); // blocked until a tap: unlock() starts it again
+  }
 }
 
 function startSong(id: SongId) {
@@ -352,6 +384,8 @@ function startSong(id: SongId) {
   gain.gain.exponentialRampToValueAtTime(1, ctx.currentTime + 1.2);
   gain.connect(musicBus);
   songGain = gain;
+  const url = TRACKS[id];
+  if (url) return startTrack(id, url, gain);
   const stepLen = 60 / song.bpm / 4;
   let step = 0;
   let next = ctx.currentTime + 0.1;
