@@ -265,11 +265,11 @@ export class DraftScreen {
     if (d.stage === "ban") {
       const mine = d.bans[myId]?.length ?? 0;
       this.mode = mine < DRAFT_BANS ? "ban" : "wait";
-      this.phase.innerHTML = `BAN PHASE · everyone bans <b>${DRAFT_BANS}</b> heroes`;
+      this.phase.innerHTML = `BAN PHASE · everyone bans <b>${DRAFT_BANS}</b> heroes before anyone picks`;
       this.go.textContent = mine < DRAFT_BANS ? `BAN (${mine}/${DRAFT_BANS})` : "BANS DONE";
       this.go.className = "go ban";
       this.go.disabled = mine >= DRAFT_BANS;
-      this.note.textContent = mine < DRAFT_BANS ? "Tap a hero, then BAN" : "Waiting for the others to ban...";
+      this.note.textContent = mine < DRAFT_BANS ? "Tap a hero, then BAN. Out of time = random bans" : "Waiting for the others to finish their bans...";
     } else {
       const turn = d.order[d.turn];
       const mine = turn === myId;

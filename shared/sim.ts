@@ -1021,12 +1021,22 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
     const mine = (d.bans[id] ??= []);
     if (mine.length >= DRAFT_BANS) return;
     mine.push(hero);
-    // Everyone has banned: on to the picks at once.
+    // Every player has banned 3: the bots ban theirs, then on to the picks at once.
     if (d.order.every((pid) => this.brains.get(pid)?.bot || (d.bans[pid]?.length ?? 0) >= DRAFT_BANS)) this.startPicks();
     this.publishDraft();
   }
 
+  /** Picks only start once every side has all 3 bans in (user request 2026-10-08): bots and anyone out of time get random ones. */
   private startPicks() {
+    const d = this.draftState!;
+    for (const pid of d.order) {
+      const mine = (d.bans[pid] ??= []);
+      while (mine.length < DRAFT_BANS) {
+        const open = HERO_IDS.filter((h) => !this.draftTaken(h));
+        if (!open.length) break;
+        mine.push(open[Math.floor(Math.random() * open.length)]);
+      }
+    }
     this.draftState!.stage = "pick";
     this.draftState!.turn = 0;
     this.state.draftTimer = DRAFT_PICK_TIME;
