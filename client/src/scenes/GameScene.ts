@@ -95,7 +95,7 @@ function meleeKind(p: any): "punch" | "sword" | "kick" | undefined {
   if (hero.attack === "sword") return "sword";
   return undefined;
 }
-import { DRAGON_FRAMES, attackArtLayout, attackFrame, facingOf, frontOnly, hasHeroArt, heroArtLayout, SWING_TIME, WALK_FRAMES, WALK_FRAME_TIME, walksWithFeet, walkContact, walkOriginY } from "../heroArt";
+import { DRAGON_FRAMES, attackArtLayout, attackPose, attackFrame, facingOf, frontOnly, hasHeroArt, heroArtLayout, SWING_TIME, WALK_FRAMES, WALK_FRAME_TIME, walksWithFeet, walkContact, walkOriginY } from "../heroArt";
 
 interface PlayerView {
   body: Phaser.GameObjects.Image;
@@ -1248,6 +1248,8 @@ export class GameScene extends Phaser.Scene {
         view.walkT = (view.walkT ?? 0) + dt;
         view.walkStill = 0;
       } else if ((view.walkStill = (view.walkStill ?? 0) + dt) > 0.1) view.walkT = 0; // a missed frame is not a stop
+      // A punch or sword swing plays its own poses (built from the picture); on the move the legs keep walking.
+      const melee = !p.dead && view.swing && !swing && art && walksWithFeet(shown) && !DRAGON_FRAMES[shown] ? meleeKind(p) : undefined;
       const walking = art && !swing && walksWithFeet(shown) && (view.walkT ?? 0) > 0;
       const walkFrame = walking ? Math.floor((view.walkT ?? 0) / WALK_FRAME_TIME) % WALK_FRAMES : 0;
       if (!walking) view.walkFrame = undefined;
@@ -1296,8 +1298,7 @@ export class GameScene extends Phaser.Scene {
         } else body.setRotation(0);
       }
       // Punch and sword heroes: the body winds up, lunges into the hit and springs back, with the fist or blade drawn.
-      const melee = !p.dead && view.swing && !swing && !anim && look === `hero_${shown}` ? meleeKind(p) : undefined;
-      if (melee) this.animateMelee(view, body, melee, p, aim, 1 - view.swing! / SWING_TIME, k);
+      if (melee) this.animateMelee(view, body, melee, p, shown, walking ? walkFrame : undefined, aim, 1 - view.swing! / SWING_TIME, k);
       if (view.look !== look) {
         const first = view.look === undefined;
         view.look = look;
@@ -3699,25 +3700,28 @@ export class GameScene extends Phaser.Scene {
    * A punch throws a glowing fist (left and right in turn) with speed lines; a sword swings its blade through the
    * arc with a coloured smear behind it (heroes holding a sword sprite swing that sprite instead).
    */
-  private animateMelee(view: PlayerView, body: Phaser.GameObjects.Image, kind: "punch" | "sword" | "kick", p: any, aim: number, t: number, k: number) {
+  private animateMelee(view: PlayerView, body: Phaser.GameObjects.Image, kind: "punch" | "sword" | "kick", p: any, shown: string, walkFrame: number | undefined, aim: number, t: number, k: number) {
     const hero = heroOf(p.hero);
     const cos = Math.cos(aim);
     const sin = Math.sin(aim);
     const side = cos < 0 ? -1 : 1;
     const ease = (v: number) => 1 - (1 - v) * (1 - v);
-    // how far the body has moved toward the target: back a little, then well forward, then home
-    // wind-up, fast strike, a short hold on the hit pose, then home with a little overshoot
-    const push = t < 0.25 ? -ease(t / 0.25) * 1.5 : t < 0.4 ? -1.5 + ease((t - 0.25) / 0.15) * 6.5 : t < 0.52 ? 5 : t < 0.85 ? 5 - ease((t - 0.52) / 0.33) * 5.8 : -0.8 * (1 - (t - 0.85) / 0.15);
+    // The pose: wind-up, then the hit (held a moment), then standing again. The body stays upright.
+    const frame = t < 0.25 ? 0 : t < 0.62 ? 1 : -1;
+    const tex = frame >= 0 ? attackPose(this.textures, shown, kind === "sword" ? "atks" : "atkp", frame, walkFrame) : undefined;
+    if (tex) {
+      if (body.texture.key !== tex) body.setTexture(tex).setOrigin(0.5, walkOriginY(shown));
+      body.setFlipX(side < 0).setRotation(0);
+    }
+    // a small step into the hit (on the move the legs already carry the hero)
+    const push = walkFrame !== undefined ? 0 : t < 0.25 ? 0 : t < 0.35 ? ease((t - 0.25) / 0.1) * 2 : t < 0.62 ? 2 : 2 * (1 - ease((t - 0.62) / 0.38));
     body.x += cos * push * k;
-    body.y += sin * push * k * 0.7;
+    body.y += sin * push * k * 0.6;
     const style = heroFxStyle(p.hero);
     const g = view.bar;
     const hx = body.x;
     const hy = body.y - 7 * k;
     if (kind === "sword") {
-      // the body turns away on the wind-up and twists through the cut
-      const lean = t < 0.25 ? -ease(t / 0.25) * 0.28 : t < 0.4 ? -0.28 + ease((t - 0.25) / 0.15) * 0.58 : t < 0.52 ? 0.3 : 0.3 * (1 - ease((t - 0.52) / 0.48));
-      body.setRotation(lean * side);
       const arc = Math.min(Math.PI * 1.2, Math.max(1.4, hero.arc ?? 1.6));
       const cut = t < 0.25 ? 0 : t < 0.4 ? ease((t - 0.25) / 0.15) : 1;
       // above the head on the wind-up, then down through the arc toward the target
@@ -3751,48 +3755,36 @@ export class GameScene extends Phaser.Scene {
       }
       return;
     }
-    // punch / kick: a squash on the wind-up, a stretch on the hit
-    const squash = t < 0.25 ? ease(t / 0.25) * 0.08 : t < 0.45 ? 0.08 - ease((t - 0.25) / 0.2) * 0.2 : -0.12 * (1 - ease((t - 0.45) / 0.55));
-    body.setScale(body.scaleX * (1 - squash), body.scaleY * (1 + squash * 0.6));
-    body.setRotation(0.12 * side * (push / 5));
-    const reach = t < 0.25 ? 3 - ease(t / 0.25) * 3 : t < 0.4 ? ease((t - 0.25) / 0.15) * 18 : t < 0.52 ? 18 : 18 * (1 - ease((t - 0.52) / 0.48)) + 3 * ease((t - 0.52) / 0.48);
-    const hand = (view.attackSeq ?? 0) % 2 ? 1 : -1; // left and right in turn
-    const off = kind === "kick" ? 0 : hand * 3;
+    // The arm itself shoots out in the pose; in front of it go a smear, speed lines and a burst where it lands.
+    if (t < 0.25 || t > 0.62) return;
+    const hit = ease(Math.min(1, (t - 0.25) / 0.1));
+    const fade = t < 0.45 ? 1 : 1 - (t - 0.45) / 0.17;
     const fy = kind === "kick" ? body.y - 2 * k : hy + 1 * k;
-    const fx = hx + cos * reach * k * 0.6 - sin * off * k * 0.6;
-    const fyy = fy + sin * reach * k * 0.6 + cos * off * k * 0.6;
-    if (t > 0.27 && t < 0.45) {
-      // a smear: a tapered streak in the hero's colour from the shoulder to the fist, only on the fast frames
-      const sx = hx - sin * off * k * 0.6;
-      const sy = fy + cos * off * k * 0.6;
-      const w = 3.2 * k * 0.6;
-      const a = t < 0.4 ? 0.75 : 0.75 * (1 - (t - 0.4) / 0.05);
-      g.fillStyle(style.color, a * 0.6).fillTriangle(sx, sy, fx - sin * w, fyy + cos * w, fx + sin * w, fyy - cos * w);
-      g.fillStyle(0xffffff, a * 0.7).fillTriangle(sx, sy, fx - sin * w * 0.45, fyy + cos * w * 0.45, fx + sin * w * 0.45, fyy - cos * w * 0.45);
+    const tipD = 9 * k * 0.6; // about where the stretched arm ends
+    const reach = (9 + 9 * hit) * k * 0.6;
+    const tx = hx + cos * tipD;
+    const ty = fy + sin * tipD;
+    const fx = hx + cos * reach;
+    const fyy = fy + sin * reach;
+    const w = 2.6 * k * 0.6;
+    // smear from the arm's end to the impact
+    g.fillStyle(style.color, 0.55 * fade).fillTriangle(tx - sin * w, ty + cos * w, tx + sin * w, ty - cos * w, fx + cos * w * 2, fyy + sin * w * 2);
+    g.fillStyle(0xffffff, 0.7 * fade).fillTriangle(tx - sin * w * 0.4, ty + cos * w * 0.4, tx + sin * w * 0.4, ty - cos * w * 0.4, fx + cos * w * 1.6, fyy + sin * w * 1.6);
+    // speed lines
+    for (let i = -1; i <= 1; i += 2) {
+      const lx = tx - sin * i * 4 * k * 0.6;
+      const ly = ty + cos * i * 4 * k * 0.6;
+      g.lineStyle(1.5, 0xffffff, 0.7 * fade).lineBetween(lx, ly, lx + cos * reach * 0.6, ly + sin * reach * 0.6);
     }
-    if (t > 0.25 && t < 0.6) {
-      // speed lines behind the fist
-      const a = (1 - (t - 0.25) / 0.35) * 0.8;
-      for (let i = -1; i <= 1; i++) {
-        const lx = fx - cos * 6 * k + -sin * i * 2.5 * k * 0.6;
-        const ly = fyy - sin * 6 * k + cos * i * 2.5 * k * 0.6;
-        g.lineStyle(1.5, 0xffffff, a).lineBetween(lx, ly, lx - cos * (6 + 3 * Math.abs(i)) * k * 0.6, ly - sin * (6 + 3 * Math.abs(i)) * k * 0.6);
-      }
+    // the burst where it lands, strongest on the held hit pose
+    const r = 3 * k * 0.6;
+    g.fillStyle(style.color, 0.4 * fade).fillCircle(fx, fyy, r * 2.4);
+    g.fillStyle(style.core, 0.8 * fade).fillCircle(fx, fyy, r * 1.1);
+    g.lineStyle(1.5, 0xffffff, 0.9 * fade);
+    for (let i = 0; i < 6; i++) {
+      const a = aim + ((i - 2.5) / 2.5) * 1.1;
+      g.lineBetween(fx + Math.cos(a) * r * 1.6, fyy + Math.sin(a) * r * 1.6, fx + Math.cos(a) * r * 3, fyy + Math.sin(a) * r * 3);
     }
-    // the fist (or foot): glove in the hero's colour, with a dark outline and a light knuckle
-    const r = (kind === "kick" ? 3.4 : 3) * k * 0.6 * (t > 0.38 && t < 0.52 ? 1.3 : 1);
-    if (t > 0.38 && t < 0.52) {
-      // the hit pose: a glow and a little starburst at the fist
-      g.fillStyle(style.color, 0.35).fillCircle(fx, fyy, r * 2.4);
-      g.lineStyle(1.5, 0xffffff, 0.9);
-      for (let i = 0; i < 6; i++) {
-        const a = aim + ((i - 2.5) / 2.5) * 1.1;
-        g.lineBetween(fx + Math.cos(a) * r * 1.6, fyy + Math.sin(a) * r * 1.6, fx + Math.cos(a) * r * 2.8, fyy + Math.sin(a) * r * 2.8);
-      }
-    }
-    g.fillStyle(0x140c10, 1).fillCircle(fx, fyy, r + 1);
-    g.fillStyle(style.color, 1).fillCircle(fx, fyy, r);
-    g.fillStyle(style.core, 1).fillCircle(fx + cos * r * 0.35 - sin * r * 0.2, fyy + sin * r * 0.35 - r * 0.25, r * 0.45);
   }
 
   /** Is this hero on the other side from us (as the server's isFoe sees it)? */

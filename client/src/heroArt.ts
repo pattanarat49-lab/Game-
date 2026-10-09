@@ -295,3 +295,88 @@ export function makeWalkFrames(textures: Phaser.Textures.TextureManager, hero: s
     textures.addCanvas(name, c);
   });
 }
+
+/**
+ * Basic-attack poses made from the front picture (2026-10-09), two for a punch and two for a sword:
+ * `hero_<id>_atkp_<n>` / `hero_<id>_atks_<n>`, 0 = the wind-up, 1 = the hit. The picture faces right (it is
+ * mirrored to aim left), so the right-hand arm is the striking one: it pulls back (punch) or goes up over the
+ * head (sword) on the wind-up, then shoots out in front on the hit while the head and body follow it and the
+ * feet spread into a stance. Attacking on the move keeps the legs walking: `..._w<walk frame>` takes the legs
+ * from that walk frame instead. Made on first use (there are many heroes); same padding as the walk frames,
+ * so walkOriginY fits. Returns the texture key, or undefined for a hero without a picture.
+ */
+export function attackPose(textures: Phaser.Textures.TextureManager, hero: string, kind: "atkp" | "atks", f: number, walk?: number): string | undefined {
+  const name = `hero_${hero}_${kind}_${f}${walk === undefined ? "" : `_w${walk}`}`;
+  if (textures.exists(name)) return name;
+  const key = `hero_${hero}_south`;
+  if (!textures.exists(key)) return undefined;
+  const img = textures.get(key).getSourceImage() as HTMLImageElement;
+  const w = img.width;
+  const h = img.height;
+  const src = document.createElement("canvas");
+  src.width = w;
+  src.height = h;
+  const sctx = src.getContext("2d")!;
+  sctx.drawImage(img, 0, 0);
+  const alpha = sctx.getImageData(0, 0, w, h).data;
+  const solid = (x: number, y: number) => alpha[(y * w + x) * 4 + 3] > 0;
+  const headEnd = Math.round(h * 0.47);
+  const legTop = Math.round(h * 0.8);
+  const midY = Math.round((headEnd + legTop) / 2);
+  let bodyL = 0;
+  while (bodyL < w && !solid(bodyL, midY)) bodyL++;
+  let bodyR = w - 1;
+  while (bodyR > bodyL && !solid(bodyR, midY)) bodyR--;
+  const armW = Math.max(3, Math.round((bodyR - bodyL + 1) * 0.28));
+  const armL = Math.min(w, bodyL + armW); // the back arm is columns 0..armL
+  const armR = Math.max(armL, bodyR + 1 - armW); // the striking arm is columns armR..w
+  const PAD = 6;
+  const W = w + 2 * PAD;
+  const H = h + PAD_TOP + PAD_BOTTOM;
+  type Pose = { head: [number, number]; body: [number, number]; front: [number, number]; back: [number, number]; legF: number; legB: number };
+  const poses: Record<string, Pose[]> = {
+    atkp: [
+      { head: [-1, 0], body: [-1, 0], front: [-3, -1], back: [0, 1], legF: 0, legB: -1 },
+      { head: [1, 0], body: [1, 0], front: [5, -1], back: [-1, 1], legF: 1, legB: -1 },
+    ],
+    atks: [
+      { head: [-1, 0], body: [-1, 0], front: [-1, -5], back: [0, 0], legF: 0, legB: -1 },
+      { head: [1, 1], body: [1, 1], front: [4, 2], back: [-1, 1], legF: 2, legB: -1 },
+    ],
+  };
+  const pose = poses[kind][f];
+  const c = document.createElement("canvas");
+  c.width = W;
+  c.height = H;
+  const ctx = c.getContext("2d")!;
+  ctx.imageSmoothingEnabled = false;
+  const part = (x0: number, x1: number, y0: number, y1: number, [dx, dy]: [number, number]) => {
+    if (x1 > x0 && y1 > y0) ctx.drawImage(src, x0, y0, x1 - x0, y1 - y0, PAD + x0 + dx, PAD_TOP + y0 + dy, x1 - x0, y1 - y0);
+  };
+  const walkKey = `hero_${hero}_walk_${walk}`;
+  if (walk !== undefined && textures.exists(walkKey)) {
+    // legs from the walk frame (a raised knee goes up under the body, which is drawn over it)
+    const wf = textures.get(walkKey).getSourceImage() as HTMLCanvasElement;
+    const y0 = PAD_TOP + legTop - 3;
+    ctx.drawImage(wf, 0, y0, wf.width, H - y0, PAD + Math.round((w - wf.width) / 2), y0, wf.width, H - y0);
+  } else {
+    // legs: the back one stays planted, the front one steps out
+    const mid = Math.round((bodyL + bodyR) / 2);
+    part(0, mid, legTop, h, [pose.legB, 0]);
+    part(mid, w, legTop, h, [pose.legF, 0]);
+  }
+  const armTop = Math.round(headEnd + (legTop - headEnd) * 0.4); // below any hair hanging past the chin
+  const arm = (x0: number, x1: number, [dx, dy]: [number, number], shoulder: number) => {
+    // an arm that moves away from the body is stretched: its shoulder column fills the space it left
+    const [bx, by] = pose.body;
+    if (kind === "atkp") for (let ox = Math.min(bx, dx) + 1; ox < Math.max(bx, dx); ox++) part(shoulder, shoulder + 1, armTop, legTop + 1, [ox, by + Math.round(((dy - by) * (ox - bx)) / (dx - bx))]);
+    part(x0, x1, headEnd - 1, legTop + 1, [dx, dy]);
+  };
+  part(Math.max(0, armL - 2), Math.min(w, armR + 2), headEnd - 1, legTop + 1, pose.body); // covers the seams
+  arm(0, armL, pose.back, armL - 1);
+  part(armL, armR, headEnd - 1, legTop + 1, pose.body);
+  part(0, w, 0, headEnd, pose.head);
+  arm(armR, w, pose.front, armR); // the striking arm in front of everything
+  textures.addCanvas(name, c);
+  return name;
+}
