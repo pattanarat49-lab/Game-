@@ -135,7 +135,6 @@ const VIDEO_CSS = `
 @keyframes intro-tap { 50% { opacity: .55 } }
 `;
 
-const VIDEO_SEEN = "uv-intro-video-2"; // bumped when the film changes, so everyone sees the new one once
 
 /**
  * The intro film (public/intro.mp4: the user's Claude Design animation rendered to video, with a suspense score made for it).
@@ -162,11 +161,6 @@ export function showIntroVideo(): Promise<void> {
     const finish = () => {
       if (done) return;
       done = true;
-      try {
-        localStorage.setItem(VIDEO_SEEN, "1");
-      } catch {
-        // seen again next time
-      }
       video.pause();
       holdMusic(false);
       root.classList.add("out");
@@ -198,19 +192,27 @@ export function showIntroVideo(): Promise<void> {
   });
 }
 
-/** Has this device watched the intro film yet? */
-function introVideoSeen(): boolean {
+const CHAPTER_SEEN = "uv-chapter1-seen";
+
+/** Has this device read Chapter I yet? */
+function chapterSeen(): boolean {
   try {
-    return localStorage.getItem(VIDEO_SEEN) === "1";
+    return localStorage.getItem(CHAPTER_SEEN) === "1";
   } catch {
     return false;
   }
 }
 
-/** Opening the game: the intro film the first time, then Chapter I. */
+/** Opening the game: the intro film every time, then Chapter I only the first time. */
 export async function showOpening(): Promise<void> {
-  if (!introVideoSeen()) await showIntroVideo();
+  await showIntroVideo();
+  if (chapterSeen()) return;
   await showIntro();
+  try {
+    localStorage.setItem(CHAPTER_SEEN, "1");
+  } catch {
+    // shown again next time
+  }
 }
 
 /** A still field of small stars, a few of them bright. */

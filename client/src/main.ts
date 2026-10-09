@@ -324,13 +324,13 @@ function startTutorial() {
 if (soloOnly) {
   // The solo build has no server to keep accounts on (nor the login screen's video).
   accountModal.remove();
-  // The opening story every time, then on a first visit the tutorial (every hero is open in the solo build).
+  // The intro film every time, Chapter I and the tutorial on a first visit (every hero is open in the solo build).
   playMusic("home");
   void showOpening().then(() => {
     if (!localStorageGet("uv-tutorial")) startTutorial();
   });
 } else {
-  void showOpening(); // the intro film (first time) and the opening story, over the login or home screen
+  void showOpening(); // the intro film every time and Chapter I the first time, over the login or home screen
   setupLoginScene();
   setSignupMode(false);
   drawAccount();
