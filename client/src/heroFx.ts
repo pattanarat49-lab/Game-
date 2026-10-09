@@ -100,8 +100,8 @@ function flash(scene: Phaser.Scene, key: string, x: number, y: number, tint: num
 /** A basic attack: a coloured flash at the hand, along the aim, and a couple of sparks. */
 export function playHeroAttackFx(scene: Phaser.Scene, heroId: string, x: number, y: number, aim: number) {
   const s = heroFxStyle(heroId);
-  const hx = x + Math.cos(aim) * 14;
-  const hy = y - 8 + Math.sin(aim) * 14;
+  const hx = x + Math.cos(aim) * 22; // out in front, clear of the hero's face
+  const hy = y - 6 + Math.sin(aim) * 22;
   const rot = s.attack === "fx_muzzle_02" ? aim + Math.PI / 2 : s.attack === "fx_slash_03" ? aim : Math.random() * Math.PI;
   flash(scene, s.attack, hx, hy, s.color, { scale: 0.5, to: 0.95, ms: 230, rot, alpha: 1, shadow: true });
   flash(scene, "fx_circle_05", hx, hy, s.core, { scale: 0.4, to: 0.8, ms: 170, alpha: 0.8, add: true });
