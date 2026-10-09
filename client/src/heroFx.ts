@@ -51,6 +51,7 @@ const OVERRIDES: Record<string, Partial<HeroFxStyle>> = {
   deku: { color: 0x5aff7a, core: 0xe8ffe8, bits: ["fx_spark_01", "fx_spark_05"] }, // green sparks of power
   killua: { color: 0x7ad8ff, core: 0xffffff }, // blue lightning
   gojo: { color: 0x4aa8ff, core: 0xe0f4ff }, // blue and purple void
+  piarre: { color: 0x3a9aff, core: 0xdff0ff, bits: ["fx_spark_01", "fx_star_06"], ring: "fx_circle_02" }, // blue punches (his "lightning-fast" jab read as yellow lightning)
   omni: { color: 0x5aff6a, core: 0xe8ffe8, bits: ["fx_spark_05", "fx_star_06"], ring: "fx_circle_02" },
 };
 
