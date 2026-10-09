@@ -81,7 +81,8 @@ import { accountData } from "../account";
 import { TutorialView } from "../tutorial";
 import { isTouchDevice } from "../touch";
 import { ABYSS, DUNGEON, GLITCH, HEAVEN, OPEN_WORLD } from "../../../shared/world";
-import { BLOCK } from "../../../shared/maps";
+import { BLOCK, MAP_W as CLASSIC_W, MAP_X as CLASSIC_X } from "../../../shared/maps";
+import { FOG_PUFFS } from "../fog.data";
 import { DRAGON_FRAMES, attackArtLayout, attackFrame, facingOf, frontOnly, hasHeroArt, heroArtLayout, SWING_TIME, WALK_FRAMES, WALK_FRAME_TIME, walksWithFeet, walkContact, walkOriginY } from "../heroArt";
 
 interface PlayerView {
@@ -365,6 +366,9 @@ export class GameScene extends Phaser.Scene {
   private zoneTexts = new Map<string, Phaser.GameObjects.Text>(); // countdowns over zones (the Trojan Horse)
   private wasTimeStopped = false;
   private classicGround?: Phaser.GameObjects.Image;
+  /** Thin drifting mist over the 3v3 and Battle Royale maps, and the area it wraps round in. */
+  private fog: { img: Phaser.GameObjects.Image; vx: number; base: number; phase: number }[] = [];
+  private fogArea?: { x: number; y: number; w: number; h: number };
   /** The Open World or the dungeon: its map, portals, chat and player profiles. */
   private world?: WorldView;
   /** The last phase seen, to note a match's result once (for the player's record). */
@@ -399,7 +403,11 @@ export class GameScene extends Phaser.Scene {
           this.add.image(cx * CH, cy * CH, key).setOrigin(0).setDepth(-10);
         }
       this.stormRing = this.add.graphics().setDepth(945);
-    } else if (!open) this.add.image(0, 0, `ground_${stage}`).setOrigin(0).setDepth(-10);
+    }
+    this.fog = [];
+    this.fogArea = undefined;
+    if (stage === "classic") this.makeFog(CLASSIC_X, MAP_Y, CLASSIC_W, MAP_H, 9, true);
+    else if (stage === "royale") this.makeFog(0, 0, ROYALE_MAP.cols * BLOCK, ROYALE_MAP.rows * BLOCK, 34); else if (!open) this.add.image(0, 0, `ground_${stage}`).setOrigin(0).setDepth(-10);
     if (stage === "dojo" || stage === "tutorial") {
       // Straw training dummies stand where the other stages have pillars.
       for (const rock of ROCKS) this.add.image(rock.x, rock.y + rock.r * 0.4, "dummy").setOrigin(0.5, 1).setScale(rock.r / 8).setDepth(rock.y);
@@ -632,6 +640,51 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
+  /** Mist: big soft puffs (Kenney smoke, CC0) spread over the map, faint enough to see everyone through. */
+  private makeFog(x: number, y: number, w: number, h: number, count: number, clip = false) {
+    FOG_PUFFS.forEach((p, i) => {
+      const key = `fogpuff_${i}`;
+      if (this.textures.exists(key)) return;
+      const c = document.createElement("canvas");
+      c.width = p.w;
+      c.height = p.h;
+      const ctx = c.getContext("2d")!;
+      const img = ctx.createImageData(p.w, p.h);
+      const raw = atob(p.d);
+      for (let j = 0; j < raw.length; j++) {
+        img.data[j * 4] = img.data[j * 4 + 1] = img.data[j * 4 + 2] = 255;
+        img.data[j * 4 + 3] = raw.charCodeAt(j);
+      }
+      ctx.putImageData(img, 0, 0);
+      this.textures.addCanvas(key, c);
+    });
+    this.fogArea = { x: x - 200, y, w: w + 400, h };
+    // On the 3v3 maps the mist stays over the arena, not the dark border round it.
+    const mask = clip ? this.make.graphics({}, false).fillStyle(0xffffff).fillRect(x, y, w, h).createGeometryMask() : undefined;
+    for (let i = 0; i < count; i++) {
+      const base = 0.1 + Math.random() * 0.1;
+      const img = this.add
+        .image(x - 200 + Math.random() * (w + 400), y + ((i + Math.random()) / count) * h, `fogpuff_${i % FOG_PUFFS.length}`)
+        .setScale(2.6 + Math.random() * 2.2, 1.6 + Math.random() * 1.2)
+        .setAlpha(base)
+        .setDepth(990);
+      if (mask) img.setMask(mask);
+      this.fog.push({ img, vx: (6 + Math.random() * 8) * (Math.random() < 0.5 ? -1 : 1), base, phase: Math.random() * Math.PI * 2 });
+    }
+  }
+
+  private driftFog(dt: number) {
+    const a = this.fogArea;
+    if (!a) return;
+    const t = this.time.now / 1000;
+    for (const f of this.fog) {
+      f.img.x += f.vx * dt;
+      if (f.img.x > a.x + a.w) f.img.x -= a.w;
+      else if (f.img.x < a.x) f.img.x += a.w;
+      f.img.setAlpha(f.base * (0.75 + 0.25 * Math.sin(t * 0.4 + f.phase)));
+    }
+  }
+
   /** Classic 3v3: the floor texture for a map (drawn once, then kept). */
   private classicTexture(map: number): string {
     const key = `ground_classic_${map}`;
@@ -655,6 +708,7 @@ export class GameScene extends Phaser.Scene {
       this.reconnectText.setVisible(room.reconnecting);
     }
     this.walkShadows?.clear();
+    this.driftFog(dt);
     if (this.classicGround) {
       // The map picked on the select screen.
       const key = this.classicTexture(state.map ?? 0);

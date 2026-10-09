@@ -17,6 +17,7 @@ import {
   T_WALL,
   T_WATER,
 } from "../../shared/maps";
+import { MAP_TEX } from "./mapTex.data";
 
 function seeded(seed: number) {
   let s = seed;
@@ -33,9 +34,9 @@ function shade(hex: string, f: number): string {
 }
 
 /** Draws the map's blocks onto `ctx` with its top-left corner at (ox, oy), `b` pixels per block. */
-export function paintMap(ctx: CanvasRenderingContext2D, m: ClassicMap, ox: number, oy: number, b: number, spawnRings = true) {
+export function paintMap(ctx: CanvasRenderingContext2D, m: ClassicMap, ox: number, oy: number, b: number, spawnRings = true, floorTex = "floor") {
   // In the game: textured stone, wood, grass and water. Small pictures (the lobby's map buttons) stay flat.
-  if (b >= 12) paintRich(ctx, m, ox, oy, b);
+  if (b >= 12) paintRich(ctx, m, ox, oy, b, floorTex);
   else paintFlat(ctx, m, ox, oy, b);
   paintSpawns(ctx, m, ox, oy, b, spawnRings);
 }
@@ -175,7 +176,7 @@ export function drawRoyaleGround(m: ClassicMap): HTMLCanvasElement {
   canvas.width = m.cols * BLOCK;
   canvas.height = m.rows * BLOCK;
   const ctx = canvas.getContext("2d")!;
-  paintMap(ctx, m, 0, 0, BLOCK, false);
+  paintMap(ctx, m, 0, 0, BLOCK, false, "meadow"); // the island is a grassy meadow, not paving
   // Sand along the shore: floor blocks next to the sea get a lighter, speckled edge.
   const at = (c: number, r: number) => (c < 0 || r < 0 || c >= m.cols || r >= m.rows ? T_WATER : m.tiles[r * m.cols + c]);
   const rand = seeded(5);
@@ -262,7 +263,60 @@ function noiseField(seed: number) {
   };
 }
 
-function paintRich(ctx: CanvasRenderingContext2D, m: ClassicMap, ox: number, oy: number, b: number) {
+// ---- Photo textures (CC0, ambientCG; see client/art/textures/SOURCES.md) shrunk to pixel size: only their light
+// and dark is kept, so each map still wears its own colours. 128 in a map = exactly the theme colour.
+
+interface Tex {
+  w: number;
+  h: number;
+  a: Uint8Array;
+}
+
+const texCache = new Map<string, Tex>();
+
+function tex(name: string): Tex {
+  let t = texCache.get(name);
+  if (!t) {
+    const src = MAP_TEX[name];
+    const raw = atob(src.d);
+    const a = new Uint8Array(raw.length);
+    for (let i = 0; i < raw.length; i++) a[i] = raw.charCodeAt(i);
+    texCache.set(name, (t = { w: src.w, h: src.h, a }));
+  }
+  return t;
+}
+
+/** The texture's brightness at (x, y), wrapping round: 1 = the plain colour. */
+function texAt(t: Tex, x: number, y: number): number {
+  const tx = ((Math.floor(x) % t.w) + t.w) % t.w;
+  const ty = ((Math.floor(y) % t.h) + t.h) % t.h;
+  return t.a[ty * t.w + tx] / 128;
+}
+
+/** Fills a rectangle with `color` shaded by a texture; `rowF` darkens or lightens each row (0 = the top row). */
+function texRect(ctx: CanvasRenderingContext2D, t: Tex, color: RGB, x: number, y: number, w: number, h: number, f = 1, rowF?: (iy: number) => number) {
+  x = Math.round(x);
+  y = Math.round(y);
+  w = Math.round(w);
+  h = Math.round(h);
+  if (w <= 0 || h <= 0) return;
+  const img = ctx.createImageData(w, h);
+  const d = img.data;
+  for (let iy = 0; iy < h; iy++) {
+    const fr = f * (rowF ? rowF(iy) : 1);
+    for (let ix = 0; ix < w; ix++) {
+      const k = texAt(t, x + ix, y + iy) * fr;
+      const i = (iy * w + ix) * 4;
+      d[i] = Math.min(255, color[0] * k);
+      d[i + 1] = Math.min(255, color[1] * k);
+      d[i + 2] = Math.min(255, color[2] * k);
+      d[i + 3] = 255;
+    }
+  }
+  ctx.putImageData(img, x, y);
+}
+
+function paintRich(ctx: CanvasRenderingContext2D, m: ClassicMap, ox: number, oy: number, b: number, floorTex: string) {
   const t = m.theme;
   const rand = seeded(91);
   const noise = noiseField(17);
@@ -271,56 +325,22 @@ function paintRich(ctx: CanvasRenderingContext2D, m: ClassicMap, ox: number, oy:
   const W = m.cols * b;
   const H = m.rows * b;
 
-  // 1. The floor: big flagstones in a running bond, each a little lighter or darker, with worn grain.
+  // 1. The floor: the photo texture (cobbles, or a grassy meadow on the island), with broad lighter and darker
+  // patches so it never looks like one stamp repeated.
   const floor = rgb(t.floor);
+  const floorT = tex(floorTex);
   const img = ctx.createImageData(W, H);
   const d = img.data;
-  const stoneH = b;
-  const stoneW = b * 2;
-  const tint = new Map<string, number>();
-  for (let y = 0; y < H; y++) {
-    const row = Math.floor(y / stoneH);
-    const shift = row % 2 ? stoneW / 2 : 0;
-    const iy = y - row * stoneH;
+  for (let y = 0; y < H; y++)
     for (let x = 0; x < W; x++) {
-      const col = Math.floor((x + shift) / stoneW);
-      const ix = x + shift - col * stoneW;
-      const key = `${col},${row}`;
-      let k = tint.get(key);
-      if (k === undefined) tint.set(key, (k = 0.93 + rand() * 0.12));
-      let f = k * (0.9 + noise(x, y, 6) * 0.2);
-      if (iy === 0 || ix === 0) f *= 0.72; // mortar
-      else if (iy === 1 || ix === 1) f *= 1.1; // the lit top and left edges of each stone
-      else if (iy === stoneH - 1 || ix === stoneW - 1) f *= 0.88;
+      const f = texAt(floorT, x, y) * (0.92 + noise(x, y, 40) * 0.16);
       const i = (y * W + x) * 4;
       d[i] = Math.min(255, floor[0] * f);
       d[i + 1] = Math.min(255, floor[1] * f);
       d[i + 2] = Math.min(255, floor[2] * f);
       d[i + 3] = 255;
     }
-  }
   ctx.putImageData(img, ox, oy);
-  // Cracks and pebbles here and there.
-  for (let i = 0; i < (m.cols * m.rows) / 6; i++) {
-    const x = ox + rand() * W;
-    const y = oy + rand() * H;
-    if (at(Math.floor((x - ox) / b), Math.floor((y - oy) / b)) !== 0) continue;
-    if (rand() < 0.5) {
-      ctx.strokeStyle = css(floor, 0.7, 0.8);
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.moveTo(Math.round(x) + 0.5, Math.round(y) + 0.5);
-      let cx = x;
-      let cy = y;
-      for (let s = 0; s < 3; s++) ctx.lineTo(Math.round((cx += (rand() - 0.5) * 8)) + 0.5, Math.round((cy += rand() * 5)) + 0.5);
-      ctx.stroke();
-    } else {
-      ctx.fillStyle = css(floor, 0.75);
-      ctx.fillRect(Math.round(x), Math.round(y) + 1, 3, 2);
-      ctx.fillStyle = css(floor, 1.25);
-      ctx.fillRect(Math.round(x), Math.round(y), 2, 1);
-    }
-  }
 
   // 2. Soft shadows that walls, crates and hedges throw down and to the right.
   ctx.fillStyle = "rgba(0,0,0,0.22)";
@@ -369,9 +389,8 @@ function paintRich(ctx: CanvasRenderingContext2D, m: ClassicMap, ox: number, oy:
       if (at(c, r) !== T_BUSH) continue;
       const x = ox + c * b;
       const y = oy + r * b;
-      ctx.fillStyle = css(bushDark, 0.9);
       const top = at(c, r - 1) === T_BUSH ? 0 : 3;
-      ctx.fillRect(x, y + top, b, b - top);
+      texRect(ctx, tex("grass"), bushDark, x, y + top, b, b - top, 0.9);
       for (let i = 0; i < 16; i++) {
         const bx = x + rand() * b;
         const by = y + b * 0.35 + rand() * b * 0.75;
@@ -404,31 +423,9 @@ function paintRich(ctx: CanvasRenderingContext2D, m: ClassicMap, ox: number, oy:
       if (tile === T_WALL) {
         const top = rgb(t.wallTop);
         const side = rgb(t.wall);
-        ctx.fillStyle = css(top, 0.95);
-        ctx.fillRect(x, y, b, topH);
-        // bricks on the top face, staggered, each its own shade
-        const bh = Math.max(4, Math.round(b / 3));
-        for (let by = 0; by < topH; by += bh) {
-          const off = ((r * 3 + by / bh) % 2) * (b / 4);
-          for (let bx = -off; bx < b; bx += b / 2) {
-            const x0 = Math.max(0, bx);
-            const x1 = Math.min(b, bx + b / 2);
-            ctx.fillStyle = css(top, 0.9 + rand() * 0.18);
-            ctx.fillRect(x + x0 + 1, y + by + 1, x1 - x0 - 1, Math.min(bh, topH - by) - 1);
-            ctx.fillStyle = css(top, 1.15);
-            ctx.fillRect(x + x0 + 1, y + by + 1, x1 - x0 - 1, 1);
-          }
-        }
-        if (faceH) {
-          const g = ctx.createLinearGradient(x, y + topH, x, y + b);
-          g.addColorStop(0, css(side, 0.85));
-          g.addColorStop(1, css(side, 0.55));
-          ctx.fillStyle = g;
-          ctx.fillRect(x, y + topH, b, faceH);
-          ctx.fillStyle = css(side, 0.45);
-          ctx.fillRect(x + Math.round(b / 3), y + topH, 1, faceH);
-          ctx.fillRect(x + Math.round((2 * b) / 3), y + topH, 1, faceH);
-        }
+        const brick = tex("brick");
+        texRect(ctx, brick, top, x, y, b, topH, 0.97);
+        if (faceH) texRect(ctx, brick, side, x, y + topH, b, faceH, 1, (iy) => 0.85 - (0.3 * iy) / faceH);
         if (at(c, r - 1) !== T_WALL) {
           ctx.fillStyle = css(top, 1.3);
           ctx.fillRect(x, y, b, 1);
@@ -439,25 +436,16 @@ function paintRich(ctx: CanvasRenderingContext2D, m: ClassicMap, ox: number, oy:
         const pad = 1;
         ctx.fillStyle = css(top, 0.55);
         ctx.fillRect(x + pad - 1, y + pad - 1, b - 2 * pad + 2, topH - pad + 1);
-        const planks = 3;
-        const ph = (topH - 2 * pad) / planks;
-        for (let i = 0; i < planks; i++) {
-          const py = y + pad + i * ph;
-          ctx.fillStyle = css(top, 0.92 + rand() * 0.14);
-          ctx.fillRect(x + pad, Math.round(py), b - 2 * pad, Math.round(ph) - 1);
-          ctx.fillStyle = css(top, 1.12);
-          ctx.fillRect(x + pad, Math.round(py), b - 2 * pad, 1);
-          ctx.fillStyle = css(top, 0.75);
-          for (let g = 0; g < 2; g++) ctx.fillRect(x + pad + 2 + Math.floor(rand() * (b - 10)), Math.round(py + ph / 2), 4 + Math.floor(rand() * 3), 1);
-        }
+        texRect(ctx, tex("plank"), top, x + pad, y + pad, b - 2 * pad, topH - 2 * pad);
+        ctx.fillStyle = css(top, 1.15);
+        ctx.fillRect(x + pad, y + pad, b - 2 * pad, 1);
         // iron corner plates and nails
         ctx.fillStyle = "#4a4a52";
         for (const [cx, cy] of [[x + pad, y + pad], [x + b - pad - 4, y + pad], [x + pad, y + topH - 4], [x + b - pad - 4, y + topH - 4]]) ctx.fillRect(cx, cy, 4, 4);
         ctx.fillStyle = "#b8b8c4";
         for (const [cx, cy] of [[x + pad + 1, y + pad + 1], [x + b - pad - 3, y + pad + 1], [x + pad + 1, y + topH - 3], [x + b - pad - 3, y + topH - 3]]) ctx.fillRect(cx, cy, 1, 1);
         if (faceH) {
-          ctx.fillStyle = css(side, 0.7);
-          ctx.fillRect(x, y + topH, b, faceH);
+          texRect(ctx, tex("plank"), side, x, y + topH, b, faceH, 0.7);
           ctx.fillStyle = css(side, 0.5);
           ctx.fillRect(x, y + topH, b, 1);
           ctx.fillRect(x + Math.round(b / 2), y + topH, 1, faceH);
@@ -466,8 +454,7 @@ function paintRich(ctx: CanvasRenderingContext2D, m: ClassicMap, ox: number, oy:
         // a trimmed hedge: leafy clumps over a darker body
         const top = rgb(t.fenceTop);
         const side = rgb(t.fence);
-        ctx.fillStyle = css(side, 0.75);
-        ctx.fillRect(x, y + 2, b, topH - 2);
+        texRect(ctx, tex("grass"), side, x, y + 2, b, topH - 2, 0.75);
         for (let i = 0; i < 9; i++) {
           const lx = x + 3 + rand() * (b - 6);
           const ly = y + 4 + rand() * (topH - 7);
@@ -480,8 +467,7 @@ function paintRich(ctx: CanvasRenderingContext2D, m: ClassicMap, ox: number, oy:
           ctx.fillRect(Math.round(lx - lr / 2), Math.round(ly - lr / 2), 2, 1);
         }
         if (faceH) {
-          ctx.fillStyle = css(side, 0.6);
-          ctx.fillRect(x, y + topH, b, faceH);
+          texRect(ctx, tex("grass"), side, x, y + topH, b, faceH, 0.6);
           ctx.fillStyle = css(side, 0.45);
           for (let i = 0; i < 4; i++) ctx.fillRect(x + 2 + i * (b / 4), y + topH + 1, 2, faceH - 2);
         }
