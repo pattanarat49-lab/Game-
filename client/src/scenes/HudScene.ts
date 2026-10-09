@@ -17,6 +17,16 @@ function realPlayers(state: any): number {
 
 export class HudScene extends Phaser.Scene {
   private bars!: Phaser.GameObjects.Graphics;
+  /** The skill slots (desktop): their drawing and their labels, one of each per slot. */
+  private slotG!: Phaser.GameObjects.Graphics;
+  private slotNums: Phaser.GameObjects.Text[] = [];
+  private slotNames: Phaser.GameObjects.Text[] = [];
+  private slotKeys: Phaser.GameObjects.Text[] = [];
+  private slotNotes: Phaser.GameObjects.Text[] = [];
+  private hpNum!: Phaser.GameObjects.Text;
+  /** The white strip that drains after the green one when hit, so a hit's size is easy to read. */
+  private hpTrail = 1;
+  private hpFlash = 0;
   private hpText!: Phaser.GameObjects.Text;
   private waveText!: Phaser.GameObjects.Text;
   private pingText!: Phaser.GameObjects.Text;
@@ -34,6 +44,19 @@ export class HudScene extends Phaser.Scene {
 
   create() {
     this.bars = this.add.graphics();
+    this.slotG = this.add.graphics();
+    this.slotNums = [];
+    this.slotNames = [];
+    this.slotKeys = [];
+    this.slotNotes = [];
+    this.hpTrail = 1;
+    for (let i = 0; i < 3; i++) {
+      this.slotNums.push(this.add.text(0, 0, "", { ...FONT, fontSize: "16px", stroke: "#000", strokeThickness: 4 }).setOrigin(0.5).setDepth(2));
+      this.slotNames.push(this.add.text(0, 0, "", { ...FONT, fontSize: "8px", stroke: "#000", strokeThickness: 3, align: "center" }).setOrigin(0.5, 0).setDepth(2));
+      this.slotKeys.push(this.add.text(0, 0, "", { ...FONT, fontSize: "7px", color: "#1a1018", backgroundColor: "#ffd23f", padding: { x: 2, y: 2 } }).setOrigin(0.5).setDepth(3));
+      this.slotNotes.push(this.add.text(0, 0, "", { ...FONT, fontSize: "8px", color: "#7af0ff", stroke: "#000", strokeThickness: 3 }).setOrigin(0.5, 1).setDepth(2));
+    }
+    this.hpNum = this.add.text(0, 0, "", { ...FONT, fontSize: "9px", stroke: "#000", strokeThickness: 3 }).setOrigin(0.5).setDepth(2);
     this.hpText = this.add.text(76, 18, "", FONT); // room for the BACK button in the corner
     this.skills = this.add.text(20, 64, "", { ...FONT, fontSize: "10px", lineSpacing: 6 });
     this.waveText = this.add.text(this.scale.width / 2, 16, "", { ...FONT, color: "#ffd23f" }).setOrigin(0.5, 0);
@@ -71,41 +94,40 @@ export class HudScene extends Phaser.Scene {
     const me = state.players.get(room!.sessionId);
 
     this.bars.clear();
+    this.slotG.clear();
+    for (const t of [...this.slotNums, ...this.slotNames, ...this.slotKeys, ...this.slotNotes]) t.setVisible(false);
     if (me) {
-      const w = 200;
-      this.bars.fillStyle(0x000000, 0.6).fillRect(16, 36, w + 8, 18);
-      this.bars.fillStyle(0x7a1f1f, 1).fillRect(20, 40, w, 10);
-      const invincible = !!heroOf(me.hero).invincible;
-      this.bars.fillStyle(invincible ? 0xf6f6f6 : 0x4cd964, 1).fillRect(20, 40, w * (invincible ? 1 : Math.max(0, me.hp / me.maxHp)), 10);
-      this.hpText.setText(`${me.name} (${heroOf(me.hero).name})  HP ${invincible ? "INFINITE" : `${Math.ceil(me.hp)}/${me.maxHp}`}`);
-      const dash = me.dashCooldown > 0 ? `${me.dashCooldown.toFixed(1)}s` : "READY";
       const hero = heroOf(me.hero);
+      const invincible = !!hero.invincible;
+      this.drawHpBar(me.hp, me.maxHp, invincible);
+      this.hpText.setText(`${me.name} (${hero.name})`);
       // Lasting effects count for the skill that made them (a latch can be the Giant Shifter's wire, a barrier the doves).
       const active1 = Math.max(me.titan, hero.skill.kind === "immortal" ? me.barrier : 0, me.revive, hero.skill.kind === "latch" ? me.latch : 0, hero.formOf ? 0 : me.buff ?? 0);
       const active2 = Math.max(me.beam, hero.skill2?.kind === "doves" ? me.barrier : 0, me.active2 ?? 0);
-      const skill = hero.skill.kind === "thunderdash" && me.mode === 1 ? "AGAIN! (chain)" : hero.skill.kind === "shadowstep" && me.mode === 1 ? "BACK! (shadow)" : hero.skill.kind === "empower" && me.mode === 1 ? "READY (next hit)" : hero.skill.kind === "swap" ? `NOW ${me.mode === 1 ? "GUN" : "KNIFE"}` : hero.skill.kind === "passive" ? "PASSIVE" : active1 > 0 ? `ACTIVE ${active1.toFixed(1)}s` : me.skillCooldown > 0 ? `${me.skillCooldown.toFixed(1)}s` : "READY";
-      const lines = [`DASH   ${dash}`, `${hero.skill.name.padEnd(6)} ${skill}`];
+      const note1 = hero.skill.kind === "thunderdash" && me.mode === 1 ? "AGAIN!" : hero.skill.kind === "shadowstep" && me.mode === 1 ? "BACK!" : hero.skill.kind === "empower" && me.mode === 1 ? "NEXT HIT" : hero.skill.kind === "swap" ? (me.mode === 1 ? "GUN" : "KNIFE") : hero.skill.kind === "passive" ? "PASSIVE" : "";
+      const note2 = hero.skill2?.kind === "yoyo" ? (me.mode === 1 ? "YOYO" : "BOLT") : "";
+      const lines: string[] = [];
       // ALIEN TRANSFORM: how long until the alien turns back into the kid.
-      const formLeft = hero.formOf ? `${hero.formOf === "kaido" ? "DRAGON" : "ALIEN"}  BACK IN ${(me.buff ?? 0).toFixed(1)}s` : "";
-      if (hero.formOf && hero.skill.kind === "passive") lines[1] = formLeft;
-      else if (hero.formOf) lines.push(formLeft);
-      const skill2Ready = hero.skill2 ? 1 - me.skill2Cooldown / hero.skill2.cooldown : 1;
-      if (hero.skill2) lines.push(`${hero.skill2.name.padEnd(6)} ${hero.skill2.kind === "yoyo" ? `NOW ${me.mode === 1 ? "YOYO" : "BOLT"}` : active2 > 0 ? `ACTIVE ${active2.toFixed(1)}s` : me.skill2Cooldown > 0 ? `${me.skill2Cooldown.toFixed(1)}s` : "READY"}`);
+      if (hero.formOf) lines.push(`${hero.formOf === "kaido" ? "DRAGON" : "ALIEN"} BACK IN ${(me.buff ?? 0).toFixed(1)}s`);
       if ((me.power ?? 1) > 1) lines.push(`DMG x${me.power}  (CRAFTED)`);
-      // Heroes that build stacks (BOOST, ARMOR, TREES) show them right under the cooldown bars.
+      // Heroes that build stacks (BOOST, ARMOR, TREES) show them as a row of pips.
       const stackRow = hero.stacks ? lines.length : -1;
       if (hero.stacks) lines.push(`${hero.stacks.label.padEnd(6)} ${hero.stacks.max ? `${me.mode}/${hero.stacks.max}` : `x${me.mode}`}`);
       this.skills.setText(lines.join("\n"));
-      const barX = Math.max(220, 20 + this.skills.width + 12);
-      this.drawCooldown(barX, 68, 1 - me.dashCooldown / DASH_COOLDOWN);
-      const formTime = hero.formOf ? heroOf(hero.formOf).skill.duration ?? 10 : 10;
-      if (hero.formOf && hero.skill.kind === "passive") this.drawCooldown(barX, 84, (me.buff ?? 0) / formTime);
-      else this.drawCooldown(barX, 84, 1 - me.skillCooldown / hero.skill.cooldown);
-      if (hero.formOf && hero.skill.kind !== "passive") this.drawCooldown(barX, 100, (me.buff ?? 0) / formTime);
-      if (hero.skill2) this.drawCooldown(barX, 100, skill2Ready);
-      if (hero.stacks && stackRow >= 0) this.drawStacks(barX, 68 + 16 * stackRow, me.mode ?? 0, hero.stacks.max);
+      if (hero.stacks && stackRow >= 0) this.drawStacks(Math.max(220, 20 + this.skills.width + 12), 68 + 16 * stackRow, me.mode ?? 0, hero.stacks.max);
+      const skill2Ready = hero.skill2 ? 1 - me.skill2Cooldown / hero.skill2.cooldown : 1;
+      if (!this.touch) {
+        // Big round skill slots along the bottom: a dark wedge and the seconds left while cooling, gold when ready.
+        const slots: { key: string; name: string; left: number; total: number; active: number; note: string }[] = [{ key: "SPACE", name: "DASH", left: me.dashCooldown, total: DASH_COOLDOWN, active: 0, note: "" }];
+        if (!hero.noSkills) {
+          if (hero.formOf && hero.skill.kind === "passive") slots.push({ key: "Q", name: "FORM", left: 0, total: 1, active: me.buff ?? 0, note: "" });
+          else slots.push({ key: "Q", name: hero.skill.name, left: me.skillCooldown, total: hero.skill.cooldown, active: active1, note: note1 });
+        }
+        if (hero.skill2) slots.push({ key: "E", name: hero.skill2.name, left: me.skill2Cooldown, total: hero.skill2.cooldown, active: active2, note: note2 });
+        slots.forEach((sl, i) => this.drawSlot(i, slots.length, sl));
+      }
       this.touch?.setLabels(hero.noSkills ? "" : hero.skill.kind === "passive" ? "ALIEN" : hero.skill.name, hero.skill2?.name ?? "");
-      this.touch?.draw(1 - me.skillCooldown / hero.skill.cooldown, 1 - me.dashCooldown / DASH_COOLDOWN, skill2Ready);
+      this.touch?.draw(1 - me.skillCooldown / hero.skill.cooldown, 1 - me.dashCooldown / DASH_COOLDOWN, skill2Ready, me.skillCooldown, me.skill2Cooldown);
     }
 
     const waveLabel = state.wave >= WAVE_COUNT ? "BOSS" : `${state.wave}/${WAVE_COUNT}`;
@@ -314,8 +336,66 @@ FIGHT! in ${Math.ceil(state.phaseTimer)}`;
     }
   }
 
-  private drawCooldown(x: number, y: number, ready: number) {
-    this.bars.fillStyle(0x000000, 0.6).fillRect(x, y, 60, 6);
-    this.bars.fillStyle(ready >= 1 ? 0xffd23f : 0x8a7a50, 1).fillRect(x, y, 60 * Math.min(1, ready), 6);
+  /** The player's own health: a thick bar with an outline, the numbers inside, a white strip that drains after a hit,
+   * and a red pulse when low. */
+  private drawHpBar(hp: number, maxHp: number, invincible: boolean) {
+    const x = 20;
+    const y = 40;
+    const w = 260;
+    const h = 16;
+    const frac = invincible ? 1 : Math.max(0, Math.min(1, hp / maxHp));
+    if (frac < this.hpTrail - 0.002) this.hpFlash = 1;
+    this.hpTrail = frac > this.hpTrail ? frac : Math.max(frac, this.hpTrail - 0.006);
+    this.hpFlash = Math.max(0, this.hpFlash - 0.06);
+    const g = this.bars;
+    g.fillStyle(0x000000, 0.75).fillRect(x - 4, y - 4, w + 8, h + 8);
+    g.fillStyle(0xffffff, 0.9).fillRect(x - 2, y - 2, w + 4, 2).fillRect(x - 2, y + h, w + 4, 2).fillRect(x - 2, y, 2, h).fillRect(x + w, y, 2, h);
+    g.fillStyle(0x3a0d12, 1).fillRect(x, y, w, h);
+    g.fillStyle(0xfff4d0, 1).fillRect(x, y, w * this.hpTrail, h);
+    const low = frac < 0.3 && !invincible;
+    const pulse = low ? 0.5 + 0.5 * Math.sin(this.time.now / 110) : 0;
+    const main = invincible ? 0xf6f6f6 : frac > 0.6 ? 0x3ce060 : frac > 0.3 ? 0xffc23a : 0xff3a3a;
+    g.fillStyle(main, 1).fillRect(x, y, w * frac, h);
+    g.fillStyle(0xffffff, 0.35).fillRect(x, y, w * frac, 4); // shine on top
+    g.fillStyle(0x000000, 0.25).fillRect(x, y + h - 3, w * frac, 3);
+    // a notch every 10% so the amount is easy to judge
+    g.fillStyle(0x000000, 0.35);
+    for (let i = 1; i < 10; i++) g.fillRect(x + Math.round((w * i) / 10), y + h - 5, 1, 5);
+    if (low) g.lineStyle(2, 0xff2a2a, pulse).strokeRect(x - 5, y - 5, w + 10, h + 10);
+    if (this.hpFlash > 0) g.fillStyle(0xffffff, this.hpFlash * 0.5).fillRect(x, y, w, h);
+    this.hpNum.setPosition(x + w / 2, y + h / 2 + 1).setText(invincible ? "INFINITE" : `${Math.ceil(hp)} / ${maxHp}`);
+  }
+
+  /** One round skill slot at the bottom of the screen (desktop). */
+  private drawSlot(i: number, count: number, sl: { key: string; name: string; left: number; total: number; active: number; note: string }) {
+    const r = 26;
+    const gap = 30;
+    const cx = this.scale.width / 2 + (i - (count - 1) / 2) * (2 * r + gap);
+    const cy = this.scale.height - 76;
+    const g = this.slotG;
+    const ready = sl.left <= 0.01 && sl.active <= 0;
+    const frac = sl.total > 0 ? Math.max(0, Math.min(1, sl.left / sl.total)) : 0;
+    g.fillStyle(0x000000, 0.55).fillCircle(cx + 2, cy + 3, r + 4);
+    g.fillStyle(ready ? 0x3a2a12 : 0x16121c, 0.92).fillCircle(cx, cy, r);
+    if (ready) {
+      const pulse = 0.6 + 0.4 * Math.sin(this.time.now / 180 + i);
+      g.fillStyle(0xffd23f, 0.1 + 0.08 * pulse).fillCircle(cx, cy, r);
+      g.lineStyle(4, 0xffd23f, 1).strokeCircle(cx, cy, r);
+      g.lineStyle(2, 0xfff2a0, 0.4 + 0.5 * pulse).strokeCircle(cx, cy, r + 4);
+    } else if (sl.active > 0) {
+      g.fillStyle(0x2ad0ff, 0.25).fillCircle(cx, cy, r);
+      g.lineStyle(4, 0x6af0ff, 1).strokeCircle(cx, cy, r);
+    } else {
+      // the dark wedge is the time still to wait; the gold arc round the rim is how far along it is
+      g.fillStyle(0x000000, 0.6).slice(cx, cy, r, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * frac, false).fillPath();
+      g.lineStyle(3, 0x5a5060, 1).strokeCircle(cx, cy, r);
+      g.lineStyle(4, 0xffd23f, 0.9).beginPath().arc(cx, cy, r, -Math.PI / 2 + Math.PI * 2 * frac, Math.PI * 1.5, false).strokePath();
+    }
+    const num = this.slotNums[i];
+    const big = sl.active > 0 ? sl.active : sl.left;
+    num.setVisible(true).setPosition(cx, cy + 1).setText(ready ? "" : big >= 10 ? `${Math.ceil(big)}` : big.toFixed(1)).setColor(sl.active > 0 ? "#7af0ff" : "#ffffff");
+    this.slotKeys[i].setVisible(true).setPosition(cx, cy - r - 2).setText(sl.key);
+    this.slotNames[i].setVisible(true).setPosition(cx, cy + r + 7).setText(sl.name.length > 12 ? sl.name.slice(0, 11) + "." : sl.name).setColor(ready ? "#ffe680" : "#c9b8c0");
+    this.slotNotes[i].setVisible(!!sl.note).setPosition(cx, cy - r - 12).setText(sl.note);
   }
 }

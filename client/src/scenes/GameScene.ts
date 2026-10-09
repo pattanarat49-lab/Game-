@@ -83,6 +83,7 @@ import { isTouchDevice } from "../touch";
 import { ABYSS, DUNGEON, GLITCH, HEAVEN, OPEN_WORLD } from "../../../shared/world";
 import { BLOCK, MAP_W as CLASSIC_W, MAP_X as CLASSIC_X } from "../../../shared/maps";
 import { FOG_PUFFS } from "../fog.data";
+import { playHeroAttackFx, playHeroCastFx, playHitFx } from "../heroFx";
 import { DRAGON_FRAMES, attackArtLayout, attackFrame, facingOf, frontOnly, hasHeroArt, heroArtLayout, SWING_TIME, WALK_FRAMES, WALK_FRAME_TIME, walksWithFeet, walkContact, walkOriginY } from "../heroArt";
 
 interface PlayerView {
@@ -96,6 +97,8 @@ interface PlayerView {
   tag?: Phaser.GameObjects.Text;
   bar: Phaser.GameObjects.Graphics;
   lastHp: number;
+  /** The white strip under the health bar that drains after a hit. */
+  hpTrail?: number;
   wasDead?: boolean;
   hurtFlash: number;
   attackSeq: number;
@@ -1382,6 +1385,7 @@ export class GameScene extends Phaser.Scene {
       if (p.hp < view.lastHp - 0.5) {
         view.hurtFlash = 0.15;
         const mine = id === this.room?.sessionId;
+        if (!hiddenNow) playHitFx(this, body.x, body.y - 10);
         if ((!p.owner || p.hp > 0) && !hiddenNow) this.popDamage(body.x, body.y - 20, view.lastHp - p.hp, mine ? "#ff5a5a" : "#ffffff");
         if (mine) this.cameras.main.shake(80, 0.004);
         if (!p.owner || mine) hurtSound(mine, mine ? 1 : this.nearness(body.x, body.y) * 0.7);
@@ -1419,8 +1423,7 @@ export class GameScene extends Phaser.Scene {
         }
         const team = state.stage === "classic" ? (disguised && !isMe ? disguised.team : p.owner ? state.players.get(p.owner)?.team : p.team) : 0;
         view.bar.fillStyle(team ? TEAM_MARKERS[team] : PLAYER_MARKERS[(disguised && !isMe ? disguised : p).color % 4], team ? 0.8 : 0.5).fillEllipse(body.x, body.y + 1, 14 * k, 5 * k);
-        view.bar.fillStyle(0x000000, 0.7).fillRect(body.x - 12, body.y + 3 + 2 * k, 24, 2);
-        view.bar.fillStyle(0x4cd964, 1).fillRect(body.x - 12, body.y + 3 + 2 * k, 24 * (p.hp / p.maxHp), 2);
+        this.drawHeroBar(view, body.x, body.y + 3 + 2 * k, p, isMe ? "me" : this.rivalOfMe(state, id) ? "foe" : "ally");
         if (state.stage === "classic" && !p.owner) this.drawLives(view.bar, body.x, view.label.y - 11, p.lives ?? 0, team ?? 1);
         if (p.big > 0) {
           // BIG LIGHT: a soft yellow glow while enlarged.
@@ -1717,6 +1720,7 @@ export class GameScene extends Phaser.Scene {
 
   private playAttack(p: any, x: number, y: number, aim: number) {
     const hero = heroOf(p.hero);
+    playHeroAttackFx(this, p.hero, x, y, aim);
     if (p.titan > 0) {
       this.effects.push({ kind: "smash", x, y: y + 5, aim, range: hero.skill.radius, arc: Math.PI * 2, age: 0, life: 0.35 });
       this.cameras.main.shake(150, 0.008);
@@ -1758,6 +1762,7 @@ export class GameScene extends Phaser.Scene {
 
   private playSkillEffect(skill: SkillDef, x: number, y: number, aim: number, view?: PlayerView) {
     const cam = this.cameras.main;
+    if (view) playHeroCastFx(this, view.heroId, x, y);
     switch (skill.kind) {
       case "combo": {
         this.sparks.explode(10, x, y);
@@ -3648,6 +3653,28 @@ export class GameScene extends Phaser.Scene {
       if (!p.dead && this.rivalOfMe(state, id) && !this.goneFromView(state, p, id)) consider(p.x, p.y);
     });
     if (angle !== undefined) touch.aimAngle = angle;
+  }
+
+  /** The health bar under a hero: outlined, green for us, blue for friends, red for rivals, with a white strip
+   * that drains after each hit so the size of a hit is easy to read. */
+  private drawHeroBar(view: PlayerView, x: number, y: number, p: any, side: "me" | "ally" | "foe") {
+    const w = p.owner ? 22 : 30;
+    const h = p.owner ? 3 : 4;
+    const frac = Math.max(0, Math.min(1, p.hp / p.maxHp));
+    const trail = (view.hpTrail = frac >= (view.hpTrail ?? 1) ? frac : Math.max(frac, (view.hpTrail ?? 1) - 0.008));
+    const color = side === "me" ? 0x3ce060 : side === "ally" ? 0x3aa8ff : 0xff3a4a;
+    const g = view.bar;
+    const x0 = Math.round(x - w / 2);
+    g.fillStyle(0x000000, 0.85).fillRect(x0 - 1, y - 1, w + 2, h + 2);
+    g.fillStyle(0x2a1418, 1).fillRect(x0, y, w, h);
+    g.fillStyle(0xfff4d0, 1).fillRect(x0, y, w * trail, h);
+    g.fillStyle(color, 1).fillRect(x0, y, w * frac, h);
+    g.fillStyle(0xffffff, 0.35).fillRect(x0, y, w * frac, 1);
+    if (!p.owner && p.maxHp > 0) {
+      // a notch every quarter
+      g.fillStyle(0x000000, 0.5);
+      for (let i = 1; i < 4; i++) g.fillRect(x0 + Math.round((w * i) / 4), y, 1, h);
+    }
   }
 
   /** Is this hero on the other side from us (as the server's isFoe sees it)? */

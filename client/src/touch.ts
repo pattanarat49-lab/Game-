@@ -87,6 +87,8 @@ export class TouchControls {
   private cancelLabel: Phaser.GameObjects.Text;
   private gfx: Phaser.GameObjects.Graphics;
   private labels: Phaser.GameObjects.Text[] = [];
+  /** The seconds left on each skill button while it cools down. */
+  private cdTexts: Phaser.GameObjects.Text[] = [];
 
   constructor(
     private scene: Phaser.Scene,
@@ -118,6 +120,11 @@ export class TouchControls {
           .setDepth(101),
       );
     }
+
+    for (let i = 0; i < 2; i++)
+      this.cdTexts.push(
+        scene.add.text(0, 0, "", { fontFamily: '"Press Start 2P", monospace', fontSize: "18px", color: "#ffffff", stroke: "#000000", strokeThickness: 5 }).setOrigin(0.5).setDepth(102).setVisible(false),
+      );
 
     scene.input.on("pointerdown", (p: Phaser.Input.Pointer) => this.onDown(p));
     scene.input.on("pointermove", (p: Phaser.Input.Pointer) => this.onMove(p));
@@ -301,7 +308,7 @@ export class TouchControls {
   }
 
   /** Redraw sticks and buttons. Buttons show their cooldown as a filling ring. */
-  draw(skillReady: number, dashReady: number, skill2Ready = 1) {
+  draw(skillReady: number, dashReady: number, skill2Ready = 1, skillLeft = 0, skill2Left = 0) {
     const g = this.gfx;
     g.clear();
     for (const stick of [this.move, this.aim]) {
@@ -325,11 +332,26 @@ export class TouchControls {
       g.fillStyle(held.overCancel ? 0xd83a3a : 0x2a2028, held.overCancel ? 0.9 : 0.6).fillCircle(c.x, c.y, c.r);
       g.lineStyle(2, held.overCancel ? 0xffffff : 0xd83a3a, 0.9).strokeCircle(c.x, c.y, c.r);
     }
-    const buttons: [Button, number][] = this.noSkill ? [] : [[this.skillButton, skillReady]];
-    if (this.skill2Button) buttons.push([this.skill2Button, skill2Ready]);
-    for (const [b, ready] of buttons) {
+    const buttons: [Button, number, number, number][] = this.noSkill ? [] : [[this.skillButton, skillReady, skillLeft, 0]];
+    if (this.skill2Button) buttons.push([this.skill2Button, skill2Ready, skill2Left, 1]);
+    this.cdTexts.forEach((t) => t.setVisible(false));
+    for (const [b, ready, left, slot] of buttons) {
       const pressed = b.pointerId !== null;
-      g.fillStyle(ready >= 1 ? 0xf07a22 : 0x5a4a50, pressed ? 0.9 : 0.55).fillCircle(b.x, b.y, b.r);
+      this.labels[this.buttons.indexOf(b)]?.setAlpha(ready >= 1 ? 1 : 0.35);
+      g.fillStyle(ready >= 1 ? 0xf07a22 : 0x2a2230, pressed ? 0.9 : ready >= 1 ? 0.6 : 0.8).fillCircle(b.x, b.y, b.r);
+      if (ready >= 1) {
+        // ready: a bright gold rim that breathes, so it is easy to see at a glance
+        const pulse = 0.6 + 0.4 * Math.sin(this.scene.time.now / 180 + slot);
+        g.lineStyle(4, 0xffd23f, 1).strokeCircle(b.x, b.y, b.r);
+        g.lineStyle(2, 0xfff2a0, 0.3 + 0.5 * pulse).strokeCircle(b.x, b.y, b.r + 5);
+      } else {
+        // cooling: a dark wedge for the time left and the seconds in big numbers over the name
+        g.fillStyle(0x000000, 0.55).slice(b.x, b.y, b.r, -Math.PI / 2 + Math.PI * 2 * Math.max(0, ready), Math.PI * 1.5, false).fillPath();
+        if (left > 0) {
+          const t = this.cdTexts[slot];
+          t.setVisible(true).setPosition(b.x, b.y).setText(left >= 10 ? `${Math.ceil(left)}` : left.toFixed(1));
+        }
+      }
       if (pressed) {
         // An aiming ring and a knob that follows the finger.
         g.lineStyle(2, 0xffffff, 0.4).strokeCircle(b.x, b.y, b.r + SKILL_DRAG - 20);

@@ -16,3 +16,9 @@ Rebuild: download the 1K-JPG colour maps, then
 `python3 scripts/mktex.py tex.json outdir src/mapTex.data.ts` (tex.json: name -> src, size, contrast) and
 `python3 scripts/mkfog.py "<smoke>/PNG/White puff" src/fog.data.ts preview.png`.
 Sizes used: floor 126, brick 84, plank 63, grass 96 (contrast 16), meadow 168; floor contrast 17, brick 24, plank 22, meadow 18.
+
+## Hero effects (all CC0)
+
+Kenney Particle Pack — https://kenney.nl/assets/particle-pack (CC0 1.0). 23 of its textures, made white (brightness kept
+as transparency) and shrunk: `art/props/fx_*.png`. `src/heroFx.ts` gives every hero a colour and a set of these for the
+flash of a basic attack, the burst when a skill is cast, and the star where a hit lands.
