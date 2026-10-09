@@ -1011,7 +1011,7 @@ const ROSTER = {
     null,
     { noSkills: true }),
   // 2026-10-09 (user's picture and kit): a boxer in a black suit whose punches reach very far.
-  piarre: hero("fighter", "Piarre", "Long-reach boxer", 115, punch(58, 0.45, 56, 0.7), "Heavy punches that reach very far.",
+  piarre: hero("fighter", "Piarre", "Champion of Lightweight", 115, punch(58, 0.45, 56, 0.7), "Heavy punches that reach very far.",
     REACH_JAB_SKILL,
     SHOULDER_ROLL_SKILL),
   // 2026-10-07 (user's picture): the Shinsengumi captain. Okita Souji is a historical figure.
