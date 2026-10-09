@@ -1,3 +1,4 @@
+import { audioLevels, holdMusic } from "./audio";
 /**
  * The opening story, shown every time the game is opened: a line in blue, the title, then the story
  * rising slowly into the stars like an old space-opera crawl. SKIP (or the end of the crawl) closes it.
@@ -117,6 +118,99 @@ export function showIntro(story: Chapter = OPENING): Promise<void> {
     });
     root.querySelector(".crawl")!.addEventListener("animationend", finish);
   });
+}
+
+const VIDEO_CSS = `
+#intro-video { position: fixed; inset: 0; z-index: 100001; background: #000; display: flex; align-items: center; justify-content: center;
+  transition: opacity .8s; font-family: "Press Start 2P", monospace; }
+#intro-video.out { opacity: 0; pointer-events: none; }
+#intro-video .frame { position: relative; width: min(100vw, calc(100vh * 16 / 9)); aspect-ratio: 16 / 9; }
+#intro-video video { position: absolute; inset: 0; width: 100%; height: 100%; display: block; background: #000; }
+#intro-video .skip { position: absolute; left: 87.4%; top: 2.8%; width: 10.8%; height: 7%; z-index: 2; background: transparent;
+  border: 0; border-radius: 4px; cursor: pointer; padding: 0; }
+#intro-video .skip:hover { box-shadow: 0 0 0 2px #ffe81f; }
+#intro-video .tap { position: absolute; inset: 0; z-index: 3; display: flex; align-items: center; justify-content: center; border: 0;
+  background: rgba(0, 0, 0, .72); color: #ffe81f; font: inherit; font-size: clamp(14px, 3vmin, 26px); letter-spacing: .12em; cursor: pointer; }
+#intro-video .tap span { padding: 1em 1.4em; border: 3px solid #ffe81f; border-radius: 6px; background: #000; animation: intro-tap 1.4s ease-in-out infinite; }
+@keyframes intro-tap { 50% { opacity: .55 } }
+`;
+
+const VIDEO_SEEN = "uv-intro-video";
+
+/**
+ * The intro film (public/intro.mp4: the user's animation with English subtitles and a suspense score made for it).
+ * The SKIP drawn in the film's corner is a real button. Browsers only start sound after a tap, so when the film
+ * cannot start by itself it waits behind TAP TO START. At the end it holds the last frame (TAP TO START) for a tap.
+ */
+export function showIntroVideo(): Promise<void> {
+  return new Promise((resolve) => {
+    if (!document.getElementById("intro-video-css")) {
+      const style = document.createElement("style");
+      style.id = "intro-video-css";
+      style.textContent = VIDEO_CSS;
+      document.head.append(style);
+    }
+    const root = document.createElement("div");
+    root.id = "intro-video";
+    root.innerHTML = `<div class="frame"><video playsinline preload="auto" src="intro.mp4"></video>
+      <button type="button" class="skip" aria-label="Skip the intro"></button></div>`;
+    document.body.append(root);
+    const video = root.querySelector("video")!;
+    video.volume = Math.min(1, audioLevels().music * 2);
+    holdMusic(true);
+    let done = false;
+    const finish = () => {
+      if (done) return;
+      done = true;
+      try {
+        localStorage.setItem(VIDEO_SEEN, "1");
+      } catch {
+        // seen again next time
+      }
+      video.pause();
+      holdMusic(false);
+      root.classList.add("out");
+      setTimeout(() => root.remove(), 850);
+      resolve();
+    };
+    const askTap = () => {
+      if (done || root.querySelector(".tap")) return;
+      const tap = document.createElement("button");
+      tap.type = "button";
+      tap.className = "tap";
+      tap.innerHTML = "<span>&#9654; TAP TO START</span>";
+      tap.addEventListener("click", (e) => {
+        e.stopPropagation();
+        tap.remove();
+        video.muted = false;
+        void video.play().catch(finish);
+      });
+      root.querySelector(".frame")!.append(tap);
+    };
+    root.querySelector(".skip")!.addEventListener("click", (e) => {
+      e.stopPropagation();
+      finish();
+    });
+    // the film's own last frame says TAP TO START
+    video.addEventListener("ended", () => root.addEventListener("click", finish));
+    video.addEventListener("error", finish);
+    void video.play().catch(askTap);
+  });
+}
+
+/** Has this device watched the intro film yet? */
+function introVideoSeen(): boolean {
+  try {
+    return localStorage.getItem(VIDEO_SEEN) === "1";
+  } catch {
+    return false;
+  }
+}
+
+/** Opening the game: the intro film the first time, then Chapter I. */
+export async function showOpening(): Promise<void> {
+  if (!introVideoSeen()) await showIntroVideo();
+  await showIntro();
 }
 
 /** A still field of small stars, a few of them bright. */

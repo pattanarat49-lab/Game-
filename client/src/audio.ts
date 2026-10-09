@@ -31,6 +31,15 @@ let musicBus: GainNode | undefined;
 let sfxBus: GainNode | undefined;
 let noise: AudioBuffer | undefined;
 
+/** True while a video with its own soundtrack plays (the intro): the music bus is silent. */
+let musicHeld = false;
+const musicLevel = () => (musicHeld ? 0 : levels.music * MUSIC_GAIN);
+
+export function holdMusic(hold: boolean) {
+  musicHeld = hold;
+  if (ctx && musicBus) musicBus.gain.setTargetAtTime(musicLevel(), ctx.currentTime, 0.3);
+}
+
 export function audioLevels(): Levels {
   return { ...levels };
 }
@@ -42,7 +51,7 @@ export function setAudioLevels(next: Partial<Levels>) {
   } catch {
     // kept until the page closes
   }
-  if (ctx && musicBus) musicBus.gain.setTargetAtTime(levels.music * MUSIC_GAIN, ctx.currentTime, 0.05);
+  if (ctx && musicBus) musicBus.gain.setTargetAtTime(musicLevel(), ctx.currentTime, 0.05);
   if (ctx && sfxBus) sfxBus.gain.setTargetAtTime(levels.sfx * SFX_GAIN, ctx.currentTime, 0.05);
 }
 
@@ -62,7 +71,7 @@ function unlock() {
     comp.ratio.value = 5;
     comp.connect(ctx.destination);
     musicBus = ctx.createGain();
-    musicBus.gain.value = levels.music * MUSIC_GAIN;
+    musicBus.gain.value = musicLevel();
     musicBus.connect(comp);
     sfxBus = ctx.createGain();
     sfxBus.gain.value = levels.sfx * SFX_GAIN;

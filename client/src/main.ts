@@ -10,7 +10,7 @@ import { accountLoaded, heroLocked, ownedHeroes, pickStarters, spinSlot, spinsLe
 import { showSlot, showStarterPicker } from "./unlocks";
 import { Home } from "./home";
 import { playMusic, uiClick } from "./audio";
-import { showCthulhuStory, showIntro } from "./intro";
+import { showCthulhuStory, showOpening } from "./intro";
 import { cthulhuUnlocked } from "./progress";
 import { onPartyGo, partyEntered, partySize, showParty } from "./party";
 // A soft click on every menu button.
@@ -326,11 +326,11 @@ if (soloOnly) {
   accountModal.remove();
   // The opening story every time, then on a first visit the tutorial (every hero is open in the solo build).
   playMusic("home");
-  void showIntro().then(() => {
+  void showOpening().then(() => {
     if (!localStorageGet("uv-tutorial")) startTutorial();
   });
 } else {
-  void showIntro(); // the opening story, over the login or home screen
+  void showOpening(); // the intro film (first time) and the opening story, over the login or home screen
   setupLoginScene();
   setSignupMode(false);
   drawAccount();
