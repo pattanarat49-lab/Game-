@@ -1711,6 +1711,7 @@ export class GameScene extends Phaser.Scene {
     }
     if (p.skillSeq !== view.skillSeq) {
       view.skillSeq = p.skillSeq;
+      if (hero.skill.kind === "jab") view.swing = SWING_TIME; // JAB / REACH JAB throw the same punch pose as a basic hit
       if (!(isMe && this.takePredicted(this.predictedSkills))) {
         this.playSkillEffect(hero.skill, x, y, aim, view);
         skillSound(p.hero, 1, isMe ? 1 : this.nearness(x, y) * 0.8);

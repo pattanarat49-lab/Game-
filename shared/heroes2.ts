@@ -108,10 +108,10 @@ const EATER_SKILL: SkillDef = { kind: "eater", name: "EATER", cooldown: 11, dama
 const MARKED_KUNAI_SKILL: SkillDef = { kind: "kunai", name: "MARKED KUNAI", cooldown: 8, damage: 20, radius: 250, width: 0.6, count: 3, desc: "throws three spread kunai that fly out, hurting every foe they pass through, and stick in where they stop (walls stop them); for 6s, press again to flash to the kunai a line points at (aim to pick it), up to 3 times. Then the cooldown starts." };
 
 /** Piarre's skills: a long jab that readies SHOULDER ROLL when it lands, and a guard that eats the next hit. */
-const REACH_JAB_SKILL: SkillDef = { kind: "jab", name: "REACH JAB", cooldown: 1, damage: 30, radius: 93, width: 18, duration: 0.5, resets2: true,
-  desc: "a lightning-fast straight jab that reaches 1.5x as far as Champ Rico's JAB and stuns for 0.5s; landing it makes SHOULDER ROLL ready again." };
+const REACH_JAB_SKILL: SkillDef = { kind: "jab", name: "REACH JAB", cooldown: 1, damage: 45, radius: 93, width: 18, duration: 0.5, resets2: true,
+  desc: "a lightning-fast straight jab that reaches 1.5x as far as Champ Rico's JAB, hits 50% harder and stuns for 0.5s; landing it makes SHOULDER ROLL ready again." };
 const SHOULDER_ROLL_SKILL: SkillDef = { kind: "shoulderroll", name: "SHOULDER ROLL", cooldown: 10, damage: 0, radius: 0,
-  desc: "rolls his shoulder up: the next hit he takes does no damage at all. It stays up until something hits him (it does not stack)." };
+  desc: "rolls his shoulder up: the next hit he takes does no damage at all and can't stun, root, slow or taunt him. It stays up until something hits him (it does not stack)." };
 
 const ROSTER = {
   // ---------------------------------------------------------------- sheet 1
@@ -1011,7 +1011,7 @@ const ROSTER = {
     null,
     { noSkills: true }),
   // 2026-10-09 (user's picture and kit): a boxer in a black suit whose punches reach very far.
-  piarre: hero("fighter", "Piarre", "Champion of Lightweight", 115, punch(58, 0.45, 56, 0.7), "Heavy punches that reach very far.",
+  piarre: hero("fighter", "Champ Piaare", "Champion of Lightweight", 115, punch(58, 0.45, 56, 0.7), "Heavy punches that reach very far.",
     REACH_JAB_SKILL,
     SHOULDER_ROLL_SKILL),
   // 2026-10-07 (user's picture): the Shinsengumi captain. Okita Souji is a historical figure.

@@ -410,7 +410,12 @@ export interface SimFactory<P, E, B, Z = SimZone> {
 }
 
 // Data that players do not need to see.
+/** SHOULDER ROLL: how long after the guard breaks that hit's stun, root, slow or taunt keeps slipping off. */
+const ROLL_CC_WINDOW = 0.3;
+
 interface PlayerBrain {
+  /** SHOULDER ROLL: seconds left in which the hit that broke the guard can't hold him either. */
+  rollCc?: number;
   input: PlayerInput;
   /** Who hit this hero lately (root player id -> sim clock), for assists. */
   hitBy?: Map<string, number>;
@@ -2841,6 +2846,22 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
     // ILLUSION: the Trickster looks like the hero he copied until it runs out (or that hero is gone).
     if (p.hero === "loki" && !p.owner && p.disguise && (p.buff <= 0 || !s.players.has(p.disguise))) p.disguise = "";
     if (hero.skill.kind !== "latch") p.latch = Math.max(0, p.latch - dt); // carried along by a push or an axe
+    if (hero.skill2?.kind === "shoulderroll") {
+      // SHOULDER ROLL: a stun, root or taunt with no damage also breaks the guard and slips off.
+      brain.rollCc = Math.max(0, (brain.rollCc ?? 0) - dt);
+      const held = p.stun > 0 || p.root > 0 || (p.taunt > 0 && !brain.possessedBy);
+      if (held && p.active2 > 0) {
+        p.active2 = 0;
+        brain.rollCc = ROLL_CC_WINDOW;
+        this.addZone("parry", p.x, p.y - 9, 12, 0.3, { owner: id, every: Infinity, damage: 0 });
+      }
+      if (brain.rollCc > 0) {
+        p.stun = 0;
+        p.root = 0;
+        p.slow = 0;
+        if (!brain.possessedBy) p.taunt = 0;
+      }
+    }
     if (fxBuffs(p).some((b) => b.ccImmune)) {
       // Sword dance: nothing holds him.
       p.stun = 0;
@@ -5105,8 +5126,9 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       brain.hurtTimer = HURT_IFRAMES;
     }
     if (p.active2 > 0 && s2?.kind === "shoulderroll" && amount > 0 && attacker && this.rootOf(attacker) !== id) {
-      // SHOULDER ROLL: this hit glances off, and the guard is spent.
+      // SHOULDER ROLL: this hit glances off (its stun, root, slow or taunt too), and the guard is spent.
       p.active2 = 0;
+      brain.rollCc = ROLL_CC_WINDOW;
       this.addZone("parry", p.x, p.y - 9, 12, 0.3, { owner: id, every: Infinity, damage: 0 });
       return;
     }
