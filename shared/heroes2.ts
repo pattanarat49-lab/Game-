@@ -107,6 +107,12 @@ const BLOOD_TRAP_SKILL: SkillDef = { kind: "bloodtrap", name: "BLOOD TRAP", cool
 const EATER_SKILL: SkillDef = { kind: "eater", name: "EATER", cooldown: 11, damage: 0, radius: 160, desc: "swallows the ally he aims at (within 160): inside him it takes no damage at all, for as long as it likes; it comes back out when it presses any button." };
 const MARKED_KUNAI_SKILL: SkillDef = { kind: "kunai", name: "MARKED KUNAI", cooldown: 8, damage: 20, radius: 250, width: 0.6, count: 3, desc: "throws three spread kunai that fly out, hurting every foe they pass through, and stick in where they stop (walls stop them); for 6s, press again to flash to the kunai a line points at (aim to pick it), up to 3 times. Then the cooldown starts." };
 
+/** Piarre's skills: a long jab that readies SHOULDER ROLL when it lands, and a guard that eats the next hit. */
+const REACH_JAB_SKILL: SkillDef = { kind: "jab", name: "REACH JAB", cooldown: 1, damage: 30, radius: 93, width: 18, duration: 0.5, resets2: true,
+  desc: "a lightning-fast straight jab that reaches 1.5x as far as Champ Rico's JAB and stuns for 0.5s; landing it makes SHOULDER ROLL ready again." };
+const SHOULDER_ROLL_SKILL: SkillDef = { kind: "shoulderroll", name: "SHOULDER ROLL", cooldown: 10, damage: 0, radius: 0,
+  desc: "rolls his shoulder up: the next hit he takes does no damage at all. It stays up until something hits him (it does not stack)." };
+
 const ROSTER = {
   // ---------------------------------------------------------------- sheet 1
   nagi: hero("carry", "Ball Prodigy", "Striker", 95, shoot("ball", 22, 0.55, 220), "Kicks footballs.",
@@ -1004,6 +1010,10 @@ const ROSTER = {
     NO_SKILL,
     null,
     { noSkills: true }),
+  // 2026-10-09 (user's picture and kit): a boxer in a black suit whose punches reach very far.
+  piarre: hero("fighter", "Piarre", "Long-reach boxer", 115, punch(58, 0.45, 56, 0.7), "Heavy punches that reach very far.",
+    REACH_JAB_SKILL,
+    SHOULDER_ROLL_SKILL),
   // 2026-10-07 (user's picture): the Shinsengumi captain. Okita Souji is a historical figure.
   souji: hero("assassin", "Okita Souji", "Shinsengumi first captain", 100, blade(28, 0.4, 34), "Quick katana cuts.",
     ["TRIPLE THRUST", 7, "three thrusts down the lane so fast they land almost as one; the third pierces armor and stuns 0.5s.", [
@@ -1031,6 +1041,7 @@ const ROSTER = {
 /** Tuning results (DAMAGE_BALANCE, win %, stars) per hero, filled in from the bot duels. */
 const TUNED: Record<string, [bal: number, win: number, stars: number]> = {
   penblade: [1, 55.6, 5],
+  piarre: [0.98, 58, 5], // same multiplier as Champ Rico so REACH JAB hits exactly like his JAB
   souji: [2.38, 47.4, 3], // 1.83 x1.3 (user buff)
   ripper: [2.48, 50.0, 4], // 1.91 x1.3 (user buff)
   poseidon: [2.28, 49.5, 3],

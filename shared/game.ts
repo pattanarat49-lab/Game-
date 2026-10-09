@@ -204,6 +204,7 @@ export type SkillKind =
   | "deathdoor" // DEATH'S DOOR: blink behind the nearest foe and cut, harder per soul (souls are used up)
   | "roots" // ROOT SNARE: roots burst out around him and tie every foe's legs
   | "gaia" // GAIA SHELL: moss armour that halves damage taken and heals over time
+  | "shoulderroll" // SHOULDER ROLL: the next hit he takes does nothing; held until a hit uses it up
   | "rage" // BLOOD RAGE: faster, harder blows for a while, but takes more damage
   | "axethrow" // AXE BOOMERANG: a spinning axe that flies out and comes back, cutting both ways
   | "jackbox" // JACK-IN-THE-BOX: a box trap that springs when a foe comes close
@@ -247,6 +248,7 @@ export interface SkillDef {
   pet2?: HeroId; // for "summon": a second, different helper that comes out with the first
   pet?: HeroId; // for "summon": which helper comes out (damage = its share of the summoner's max HP)
   max?: number; // for "summon": most of these helpers out at once (the oldest leaves); default `count`
+  resets2?: boolean; // for "jab": landing it makes the second skill (E) ready again
   chargeTime?: number; // for charged skills: seconds to a full charge (default CHARGE_FULL)
   /** Charged skills: the hero walks at this share of their speed while charging (default CHARGE_SLOW). */
   chargeSlow?: number;

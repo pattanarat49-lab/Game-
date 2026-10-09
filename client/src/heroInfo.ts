@@ -106,6 +106,7 @@ function skillNumbers(id: string, hero: HeroDef, sk: SkillDef): string {
     case "reap": return `${dmg} · Heals ${H(sk.width ?? 0.06)} per foe hit · Up to ${n ?? 5} souls`;
     case "deathdoor": return `${dmg} · +${num((sk.width ?? 0.4) * 100)}% per soul · x2 under 35% HP`;
     case "roots": case "whip": return `${dmg} · Root ${s(sk.duration, 2)}`;
+    case "shoulderroll": return "Next hit does 0 damage · Stays up until hit";
     case "gaia": return `Half damage taken · Heals ${H(sk.damage)} HP a second · Lasts ${s(sk.duration, 5)}`;
     case "rage": return `x${num(sk.damage)} damage, faster swings · Takes +15% damage · Lasts ${s(sk.duration, 6)}`;
     case "axethrow": return `Damage ${D(sk.damage)} going out and coming back`;

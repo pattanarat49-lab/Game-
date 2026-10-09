@@ -1513,6 +1513,13 @@ export class GameScene extends Phaser.Scene {
           view.bar.fillStyle(0xffb040, 0.08 + 0.08 * pulse).fillCircle(body.x, body.y - 9 * k, 13 * k);
           view.bar.lineStyle(2, 0xffb040, 0.6 + 0.4 * pulse).strokeCircle(body.x, body.y - 9 * k, 13 * k);
         }
+        if (p.active2 > 0 && skill2?.kind === "shoulderroll") {
+          // SHOULDER ROLL: a grey guard arc on his leading shoulder until a hit uses it up.
+          view.bar.lineStyle(3, 0xc8d0e0, 0.55 + 0.35 * pulse);
+          view.bar.beginPath();
+          view.bar.arc(body.x, body.y - 9 * k, 14 * k, aim - 0.8, aim + 0.8);
+          view.bar.strokePath();
+        }
         if (p.active2 > 0 && skill2?.kind === "gaia") {
           // GAIA SHELL: a mossy green shell around him.
           view.bar.fillStyle(0x3a9a3a, 0.2 + 0.1 * pulse).fillCircle(body.x, body.y - 9 * k, 16 * k);
@@ -1858,6 +1865,7 @@ export class GameScene extends Phaser.Scene {
         break;
       case "reflect":
       case "harden":
+      case "shoulderroll":
         this.effects.push({ kind: "ripple", x, y, aim, range: 26, arc: 0, age: 0, life: 0.3 });
         break;
       case "sprint":

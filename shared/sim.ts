@@ -2564,7 +2564,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       p.revive = Math.max(0, p.revive - dt);
       p.buff = Math.max(0, p.buff - dt);
       const auto = this.autoMove(id, p, brain, hero, dt); // ERROR / DRAGOON DIVE move him themselves
-      p.active2 = Math.max(0, p.active2 - dt);
+      if (hero.skill2?.kind !== "shoulderroll") p.active2 = Math.max(0, p.active2 - dt); // SHOULDER ROLL holds until a hit
       if (p.active2 > 0 && hero.skill2?.kind === "gaia") this.healBy(p, p.maxHp * hero.skill2.damage * dt);
       for (const b of fxBuffs(p)) if (b.regen) this.healBy(p, p.maxHp * b.regen * dt);
       if (brain.fxQueue?.length) this.runFxQueue(id, p, brain, dt);
@@ -3602,9 +3602,11 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
         this.spawnBullet("fireball", p.x, p.y, p.aim, speed, { owner: id, damage: skill.damage, pierce: 0, life: hero.range / speed, blast: skill.radius });
         break;
       }
-      case "jab": // a long straight jab that stuns whoever it hits
-        this.lineHit(id, p.x, p.y, p.aim, skill.radius, skill.width ?? 16, skill.damage, skill.duration ?? 0);
+      case "jab": { // a long straight jab that stuns whoever it hits
+        const hits = this.lineHit(id, p.x, p.y, p.aim, skill.radius, skill.width ?? 16, skill.damage, skill.duration ?? 0);
+        if (hits > 0 && skill.resets2) p.skill2Cooldown = 0; // REACH JAB: a landed jab readies SHOULDER ROLL
         break;
+      }
       case "onepunch": // whatever is in front of Saitama simply stops existing
         this.sweep(id, p.x, p.y, p.aim, hero.range, hero.arc, ONE_PUNCH_DAMAGE); // as far and as wide as his normal punch
         break;
@@ -4251,6 +4253,9 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
         this.zoneBrains.get(zid)!.stun = skill.duration ?? 2;
         break;
       }
+      case "shoulderroll":
+        p.active2 = 1; // up until the next hit
+        break;
       case "invis":
       case "bat":
       case "bike":
@@ -5098,6 +5103,12 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
     if (!ignoreIframes) {
       if (brain.hurtTimer > 0) return;
       brain.hurtTimer = HURT_IFRAMES;
+    }
+    if (p.active2 > 0 && s2?.kind === "shoulderroll" && amount > 0 && attacker && this.rootOf(attacker) !== id) {
+      // SHOULDER ROLL: this hit glances off, and the guard is spent.
+      p.active2 = 0;
+      this.addZone("parry", p.x, p.y - 9, 12, 0.3, { owner: id, every: Infinity, damage: 0 });
+      return;
     }
     this.leech(attacker, Math.min(p.hp, amount));
     this.noteHit(id, p, brain, attacker, Math.min(p.hp, amount));
@@ -6431,6 +6442,8 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
     const hpLeft = p.hp / p.maxHp;
     const reach = skill.radius * 0.95 + PLAYER_RADIUS;
     switch (skill.kind) {
+      case "shoulderroll":
+        return p.active2 <= 0 && dist < 160;
       case "passive":
       case "portal":
         return false;
