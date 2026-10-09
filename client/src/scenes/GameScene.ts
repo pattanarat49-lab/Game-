@@ -455,6 +455,7 @@ export class GameScene extends Phaser.Scene {
 
     this.cameraTarget = this.add.zone(CENTER_X, CENTER_Y, 1, 1);
     const cam = this.cameras.main;
+    calmShake(cam);
     if (stage === "classic") cam.setBounds(0, MAP_Y - 64, WORLD_W, MAP_H + 128); // room above and below for names and the HUD
     else if (stage === "royale") {
       cam.setBounds(-60, -60, ROYALE_MAP.cols * BLOCK + 120, ROYALE_MAP.rows * BLOCK + 120);
@@ -4706,4 +4707,29 @@ export class GameScene extends Phaser.Scene {
       if (tile.index >= 0) tile.index = (tile.x + tile.y + this.lavaFrame) % 2;
     });
   }
+}
+
+/**
+ * Every screen shake in the game goes through here: about a third as strong and shorter than asked, never
+ * stacking (a weaker shake while one runs is dropped), and none at all in low-effects mode. Many skills and
+ * hits shook the screen at once, which read as lag.
+ */
+function calmShake(cam: Phaser.Cameras.Scene2D.Camera) {
+  const c = cam as Phaser.Cameras.Scene2D.Camera & { calmed?: boolean };
+  if (c.calmed) return;
+  c.calmed = true;
+  const shake = cam.shake.bind(cam);
+  let until = 0;
+  let strength = 0;
+  cam.shake = ((duration = 100, intensity: number | Phaser.Math.Vector2 = 0.005) => {
+    if (fxQuality.low) return cam;
+    const asked = typeof intensity === "number" ? intensity : Math.max(intensity.x, intensity.y);
+    const soft = Math.min(asked * 0.3, 0.004);
+    const now = performance.now();
+    if (now < until && soft <= strength) return cam;
+    const ms = Math.min(duration * 0.6, 160);
+    until = now + ms;
+    strength = soft;
+    return shake(ms, soft, true);
+  }) as typeof cam.shake;
 }
