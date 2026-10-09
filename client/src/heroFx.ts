@@ -83,17 +83,40 @@ export function heroFxStyle(id: string): HeroFxStyle {
   return s;
 }
 
+/** Effect images on screen right now: past the cap new ones are skipped, so a big fight stays smooth. */
+const live = new Set<Phaser.GameObjects.Image>();
+/** Set by the game when the frame rate stays low: fewer effects from then on. */
+export const fxQuality = { low: false };
+const maxLive = () => (fxQuality.low ? 16 : 48);
+
 function flash(scene: Phaser.Scene, key: string, x: number, y: number, tint: number, opts: { scale: number; to: number; ms: number; rot?: number; alpha?: number; depth?: number; spin?: number; dx?: number; dy?: number; add?: boolean; shadow?: boolean }) {
-  if (!scene.textures.exists(key)) return;
+  if (live.size >= maxLive()) for (const img of live) if (!img.scene) live.delete(img); // gone with a finished game
+  if (live.size >= maxLive() || !scene.textures.exists(key)) return;
+  // nothing to draw for a fight off the screen
+  const view = scene.cameras.main.worldView;
+  if (x < view.x - 60 || x > view.right + 60 || y < view.y - 60 || y > view.bottom + 60) return;
   const depth = opts.depth ?? 958;
   const make = (t: number, a: number, d: number, blend: number, grow: number) => {
     const img = scene.add.image(x, y + (grow > 1 ? 1 : 0), key).setTint(t).setBlendMode(blend).setScale(opts.scale * grow).setRotation(opts.rot ?? 0).setAlpha(a).setDepth(d);
-    // the shape keeps its strength most of the way, then fades out at the end
-    scene.tweens.add({ targets: img, scale: opts.to * grow, x: x + (opts.dx ?? 0), y: y + (grow > 1 ? 1 : 0) + (opts.dy ?? 0), rotation: (opts.rot ?? 0) + (opts.spin ?? 0), duration: opts.ms, ease: "Cubic.easeOut", onComplete: () => img.destroy() });
-    scene.tweens.add({ targets: img, alpha: 0, duration: opts.ms, ease: "Quad.easeIn" });
+    live.add(img);
+    // one tween: the shape keeps its strength most of the way, then fades out at the end
+    scene.tweens.add({
+      targets: img,
+      scale: opts.to * grow,
+      x: x + (opts.dx ?? 0),
+      y: y + (grow > 1 ? 1 : 0) + (opts.dy ?? 0),
+      rotation: (opts.rot ?? 0) + (opts.spin ?? 0),
+      alpha: { value: 0, ease: "Quad.easeIn" },
+      duration: opts.ms,
+      ease: "Cubic.easeOut",
+      onComplete: () => {
+        live.delete(img);
+        img.destroy();
+      },
+    });
   };
-  // a dark copy underneath so the colour reads on bright floors too
-  if (opts.shadow) make(0x000000, 0.45 * (opts.alpha ?? 1), depth - 0.5, Phaser.BlendModes.NORMAL, 1.12);
+  // a dark copy underneath so the colour reads on bright floors too (only for the big shapes)
+  if (opts.shadow && opts.scale >= 0.35 && !fxQuality.low && live.size < maxLive() / 2) make(0x000000, 0.45 * (opts.alpha ?? 1), depth - 0.5, Phaser.BlendModes.NORMAL, 1.12);
   make(tint, opts.alpha ?? 1, depth, opts.add ? Phaser.BlendModes.ADD : Phaser.BlendModes.NORMAL, 1);
 }
 
@@ -108,7 +131,7 @@ export function playHeroAttackFx(scene: Phaser.Scene, heroId: string, x: number,
   for (let i = 0; i < 2; i++) {
     const a = aim + (Math.random() - 0.5) * 1.2;
     const d = 18 + Math.random() * 18;
-    flash(scene, s.bits[i % s.bits.length], hx, hy, s.color, { shadow: true, scale: 0.6, to: 0.2, ms: 360, dx: Math.cos(a) * d, dy: Math.sin(a) * d, spin: 2 });
+    flash(scene, s.bits[i % s.bits.length], hx, hy, s.color, { scale: 0.6, to: 0.2, ms: 360, dx: Math.cos(a) * d, dy: Math.sin(a) * d, spin: 2 });
   }
 }
 
@@ -118,11 +141,10 @@ export function playHeroCastFx(scene: Phaser.Scene, heroId: string, x: number, y
   flash(scene, s.ring, x, y + 2, s.color, { scale: 0.35, to: 0.95, ms: 600, spin: 1.5, alpha: 1, depth: y - 1, shadow: true });
   flash(scene, s.ring, x, y + 2, s.core, { scale: 0.3, to: 0.8, ms: 450, spin: -1, alpha: 0.6, depth: y - 1, add: true });
   flash(scene, "fx_light_02", x, y - 8, s.color, { scale: 0.2, to: 0.6, ms: 400, alpha: 0.7, add: true });
-  for (let i = 0; i < 8; i++) {
-    const a = (i / 8) * Math.PI * 2 + Math.random() * 0.4;
+  for (let i = 0; i < 5; i++) {
+    const a = (i / 5) * Math.PI * 2 + Math.random() * 0.4;
     const r = 10;
     flash(scene, s.bits[i % s.bits.length], x + Math.cos(a) * r, y + Math.sin(a) * r * 0.5, s.color, {
-      shadow: true,
       scale: 1,
       to: 0.3,
       ms: 560 + Math.random() * 220,
@@ -135,5 +157,5 @@ export function playHeroCastFx(scene: Phaser.Scene, heroId: string, x: number, y
 
 /** Getting hit: a quick white star where the hit landed. */
 export function playHitFx(scene: Phaser.Scene, x: number, y: number) {
-  flash(scene, "fx_star_08", x + (Math.random() - 0.5) * 8, y + (Math.random() - 0.5) * 8, 0xfff0c0, { scale: 0.5, to: 0.9, ms: 180, rot: Math.random() * Math.PI, alpha: 0.95, add: true, shadow: true });
+  flash(scene, "fx_star_08", x + (Math.random() - 0.5) * 8, y + (Math.random() - 0.5) * 8, 0xfff0c0, { scale: 0.5, to: 0.9, ms: 180, rot: Math.random() * Math.PI, alpha: 0.95, add: true });
 }

@@ -83,7 +83,7 @@ import { isTouchDevice } from "../touch";
 import { ABYSS, DUNGEON, GLITCH, HEAVEN, OPEN_WORLD } from "../../../shared/world";
 import { BLOCK, MAP_W as CLASSIC_W, MAP_X as CLASSIC_X } from "../../../shared/maps";
 import { FOG_PUFFS } from "../fog.data";
-import { heroFxStyle, playHeroAttackFx, playHeroCastFx, playHitFx } from "../heroFx";
+import { fxQuality, heroFxStyle, playHeroAttackFx, playHeroCastFx, playHitFx } from "../heroFx";
 
 /** Which close-range swing a hero's basic attack plays, if any (punchers, sword fighters, kickers). */
 function meleeKind(p: any): "punch" | "sword" | "kick" | undefined {
@@ -381,7 +381,7 @@ export class GameScene extends Phaser.Scene {
   private wasTimeStopped = false;
   private classicGround?: Phaser.GameObjects.Image;
   /** Thin drifting mist over the 3v3 and Battle Royale maps, and the area it wraps round in. */
-  private fog: { img: Phaser.GameObjects.Image; vx: number; base: number; phase: number }[] = [];
+  private fog: { img: Phaser.GameObjects.TileSprite; vx: number; base: number; phase: number; drift: number }[] = [];
   private fogArea?: { x: number; y: number; w: number; h: number };
   /** The Open World or the dungeon: its map, portals, chat and player profiles. */
   private world?: WorldView;
@@ -420,8 +420,8 @@ export class GameScene extends Phaser.Scene {
     }
     this.fog = [];
     this.fogArea = undefined;
-    if (stage === "classic") this.makeFog(CLASSIC_X, MAP_Y, CLASSIC_W, MAP_H, 9, true);
-    else if (stage === "royale") this.makeFog(0, 0, ROYALE_MAP.cols * BLOCK, ROYALE_MAP.rows * BLOCK, 34); else if (!open) this.add.image(0, 0, `ground_${stage}`).setOrigin(0).setDepth(-10);
+    if (stage === "classic") this.makeFog(CLASSIC_X, MAP_Y, CLASSIC_W, MAP_H);
+    else if (stage === "royale") this.makeFog(0, 0, ROYALE_MAP.cols * BLOCK, ROYALE_MAP.rows * BLOCK); else if (!open) this.add.image(0, 0, `ground_${stage}`).setOrigin(0).setDepth(-10);
     if (stage === "dojo" || stage === "tutorial") {
       // Straw training dummies stand where the other stages have pillars.
       for (const rock of ROCKS) this.add.image(rock.x, rock.y + rock.r * 0.4, "dummy").setOrigin(0.5, 1).setScale(rock.r / 8).setDepth(rock.y);
@@ -654,11 +654,12 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  /** Mist: big soft puffs (Kenney smoke, CC0) spread over the map, faint enough to see everyone through. */
-  private makeFog(x: number, y: number, w: number, h: number, count: number, clip = false) {
-    FOG_PUFFS.forEach((p, i) => {
-      const key = `fogpuff_${i}`;
-      if (this.textures.exists(key)) return;
+  /**
+   * Mist: soft puffs (Kenney smoke, CC0) baked once into a seamless tile, shown as two tiled layers that drift
+   * past each other over the map. Two quads, no mask: many big masked puffs halved the frame rate on phones.
+   */
+  private makeFog(x: number, y: number, w: number, h: number) {
+    const puffs = FOG_PUFFS.map((p) => {
       const c = document.createElement("canvas");
       c.width = p.w;
       c.height = p.h;
@@ -670,31 +671,59 @@ export class GameScene extends Phaser.Scene {
         img.data[j * 4 + 3] = raw.charCodeAt(j);
       }
       ctx.putImageData(img, 0, 0);
-      this.textures.addCanvas(key, c);
+      return c;
     });
-    this.fogArea = { x: x - 200, y, w: w + 400, h };
-    // On the 3v3 maps the mist stays over the arena, not the dark border round it.
-    const mask = clip ? this.make.graphics({}, false).fillStyle(0xffffff).fillRect(x, y, w, h).createGeometryMask() : undefined;
-    for (let i = 0; i < count; i++) {
-      const base = 0.1 + Math.random() * 0.1;
-      const img = this.add
-        .image(x - 200 + Math.random() * (w + 400), y + ((i + Math.random()) / count) * h, `fogpuff_${i % FOG_PUFFS.length}`)
-        .setScale(2.6 + Math.random() * 2.2, 1.6 + Math.random() * 1.2)
-        .setAlpha(base)
-        .setDepth(990);
-      if (mask) img.setMask(mask);
-      this.fog.push({ img, vx: (6 + Math.random() * 8) * (Math.random() < 0.5 ? -1 : 1), base, phase: Math.random() * Math.PI * 2 });
+    this.fogArea = { x, y, w, h };
+    for (let layer = 0; layer < 1; layer++) {
+      const key = `fogtile_${layer}`;
+      if (!this.textures.exists(key)) {
+        const TW = 512;
+        const TH = 384;
+        const c = document.createElement("canvas");
+        c.width = TW;
+        c.height = TH;
+        const ctx = c.getContext("2d")!;
+        for (let i = 0; i < 4; i++) {
+          const pw = 96 * (2.6 + Math.random() * 2.2);
+          const ph = 96 * (1.6 + Math.random() * 1.2);
+          const px = Math.random() * TW;
+          const py = ((i + Math.random()) / 4) * TH;
+          ctx.globalAlpha = 0.14 + Math.random() * 0.1;
+          // drawn again across each edge so the tile repeats without a seam
+          for (const ox of [-TW, 0, TW]) for (const oy of [-TH, 0, TH]) ctx.drawImage(puffs[(i + layer) % puffs.length], px + ox - pw / 2, py + oy - ph / 2, pw, ph);
+        }
+        this.textures.addCanvas(key, c);
+      }
+      const img = this.add.tileSprite(x, y, 16, 16, key).setOrigin(0).setDepth(990);
+      this.fog.push({ img, vx: layer ? -6 : 9, base: 1, phase: layer * 2, drift: Math.random() * 512 });
     }
+  }
+
+  /** Seconds the frame rate has been low; after a few the mist goes and effects are cut back. */
+  private slowFor = 0;
+  private watchFrameRate(dt: number) {
+    if (fxQuality.low) return;
+    const fps = this.game.loop.actualFps;
+    this.slowFor = fps < 40 ? this.slowFor + dt : Math.max(0, this.slowFor - dt);
+    if (this.slowFor > 3) fxQuality.low = true;
   }
 
   private driftFog(dt: number) {
     const a = this.fogArea;
     if (!a) return;
     const t = this.time.now / 1000;
+    // Only the part of the map on screen is drawn (one quad the size of the view at most).
+    const v = this.cameras.main.worldView;
+    const x0 = Math.max(a.x, Math.floor(v.x));
+    const y0 = Math.max(a.y, Math.floor(v.y));
+    const x1 = Math.min(a.x + a.w, Math.ceil(v.right));
+    const y1 = Math.min(a.y + a.h, Math.ceil(v.bottom));
     for (const f of this.fog) {
-      f.img.x += f.vx * dt;
-      if (f.img.x > a.x + a.w) f.img.x -= a.w;
-      else if (f.img.x < a.x) f.img.x += a.w;
+      f.drift += f.vx * dt;
+      f.img.setVisible(!fxQuality.low && x1 > x0 && y1 > y0);
+      if (!f.img.visible) continue;
+      f.img.setPosition(x0, y0).setSize(x1 - x0, y1 - y0);
+      f.img.setTilePosition(x0 - f.drift, y0);
       f.img.setAlpha(f.base * (0.75 + 0.25 * Math.sin(t * 0.4 + f.phase)));
     }
   }
@@ -722,6 +751,7 @@ export class GameScene extends Phaser.Scene {
       this.reconnectText.setVisible(room.reconnecting);
     }
     this.walkShadows?.clear();
+    this.watchFrameRate(dt);
     this.driftFog(dt);
     if (this.classicGround) {
       // The map picked on the select screen.
