@@ -135,10 +135,10 @@ const VIDEO_CSS = `
 @keyframes intro-tap { 50% { opacity: .55 } }
 `;
 
-const VIDEO_SEEN = "uv-intro-video";
+const VIDEO_SEEN = "uv-intro-video-2"; // bumped when the film changes, so everyone sees the new one once
 
 /**
- * The intro film (public/intro.mp4: the user's animation with English subtitles and a suspense score made for it).
+ * The intro film (public/intro.mp4: the user's Claude Design animation rendered to video, with a suspense score made for it).
  * The SKIP drawn in the film's corner is a real button. Browsers only start sound after a tap, so when the film
  * cannot start by itself it waits behind TAP TO START. At the end it holds the last frame (TAP TO START) for a tap.
  */

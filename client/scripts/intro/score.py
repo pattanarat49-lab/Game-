@@ -72,14 +72,14 @@ for i in range(20):
 tt = t_(0.5); add(np.sin(2 * np.pi * np.cumsum(220 * (1 - tt / 0.55)) / SR) * (1 - tt / 0.5) * 0.15, 11.5)
 
 # Act 2, 12-23.4 s: the glitch. Error beeps, stutter, then the drone of THE GLITCH and a heartbeat.
-for k, at in enumerate([12.4, 12.55, 13.0, 13.15, 14.0, 14.15, 15.0, 15.15, 15.6, 15.7]):
+for k, at in enumerate([12.5, 12.65, 13.6, 13.75, 14.8, 14.95, 15.3, 15.45, 15.7, 15.8]):
     add(blip(1320 if k % 2 == 0 else 990), at, pan=rng.uniform(-0.6, 0.6))
 for i in range(26):
     at = 12.2 + rng.uniform(0, 11)
     burst = rng.standard_normal(int(SR * rng.uniform(0.02, 0.09)))
     burst = np.round(burst * 4) / 4 * 0.12  # crushed
     add(burst, at, pan=rng.uniform(-0.8, 0.8))
-add(boom(2.5, 0.7), 16.0)
+add(boom(2.5, 0.8), 17.6); add(boom(1.2, 0.4), 18.6)
 dr = t_(7.6)
 drone = np.tanh((saw(55, 7.6) + saw(55.7, 7.6) + 0.6 * np.sin(2 * np.pi * 36.7 * dr)) * 1.8)
 add(lp(drone, 500) * np.linspace(0.05, 0.32, len(dr)), 16.0)
@@ -96,7 +96,8 @@ for i in range(40):
 w = t_(6.6); wind = lp(rng.standard_normal(len(w)), 700) * (0.5 + 0.5 * np.sin(2 * np.pi * 0.35 * w)) * 0.12
 add(wind * env(len(w), 1.0, 0, 1, 0.3), 23.6)
 add(pad([33, 40, 45], 6.6, 0.12, 400, 1.5, 0.3), 23.6)
-for at in [25.4, 26.9, 28.3]:
+for k in range(4): add(boom(1.0, 0.45), 26.45 + k * 0.3, pan=(-0.5 + k / 3))
+for at in [27.6, 28.6]:
     add(riser(0.6, 400, 1500, 0.35)[::-1] if False else riser(0.6, 1500, 300, 0.3), at, pan=rng.uniform(-0.5, 0.5))
 add(riser(2.0, 120, 3200, 0.6), 28.0)
 
@@ -120,12 +121,12 @@ while t < end - 0.01:
         stab = lp(saw(note(root), 0.35) + saw(note(root + 7), 0.35) + saw(note(root + 12), 0.35), 2600)
         add(stab * env(len(stab), 0.005, 0.2, 0.3, 0.1) * 0.11, t)
     t += s16; step += 1
-for at in [30.0, 34.5, 36.0, 39.6, 41.0, 47.0, 48.83, 49.7, 51.33, 51.67, 52.0]:
+for at in [30.0, 31.5, 32.9, 34.5, 36.0, 36.85, 37.75, 39.6, 41.0, 45.0, 47.0, 47.9, 48.8, 49.7, 50.6, 50.95, 51.3, 51.65]:
     add(boom(1.2, 0.55), at); add(snare(0.3), at, gain=0.5)
-add(riser(4.0, 200, 4000, 0.55), 50.0)
+add(riser(3.0, 200, 4000, 0.6), 51.0)
 
 # 54 s: the title. One huge hit, a dark held chord, crackles of THE GLITCH, a last chime under the line.
-add(boom(4.0, 1.2), 54.03)
+add(boom(4.0, 1.2), 54.0); add(boom(2.5, 0.8), 55.8)
 add(pad([33, 45, 48, 52, 57], 6.0, 0.12, 900, 0.05, 1.5), 54.03)
 for i in range(12):
     burst = np.round(rng.standard_normal(int(SR * rng.uniform(0.02, 0.06))) * 3) / 3 * 0.08
