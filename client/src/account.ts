@@ -102,6 +102,17 @@ export async function signIn(username: string, password: string) {
   signedIn(await call("/api/login", { username, password }));
 }
 
+/** The game owner's list of every account (the server refuses anyone else). */
+export async function listAccounts(): Promise<{ username: string; created: number }[]> {
+  if (!session) throw new Error("Signed out");
+  return (await call("/api/admin/accounts", undefined, session.token)).accounts;
+}
+
+/** Is this the owner's account (the one that may list every account)? */
+export function isOwner(): boolean {
+  return session?.username.toLowerCase() === "jedie";
+}
+
 export async function signOut() {
   const s = session;
   session = undefined;

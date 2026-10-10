@@ -28,6 +28,8 @@ interface Store {
   byToken(token: string): Promise<Account | undefined>;
   create(a: Account): Promise<boolean>; // false if the name is taken
   save(a: Account): Promise<void>;
+  /** Every account's name and when it was made (oldest first), for the owner's list. */
+  list(): Promise<{ username: string; created: number }[]>;
 }
 
 /** Accounts in a JSON file (local play, or a host without a database). */
@@ -59,6 +61,9 @@ class FileStore implements Store {
     this.put(a);
     this.flush();
     return true;
+  }
+  async list() {
+    return [...this.all.values()].map((a) => ({ username: a.username, created: a.created })).sort((x, y) => x.created - y.created);
   }
   async save(a: Account) {
     for (const [t, k] of this.tokens) if (k === a.key && !a.tokens.includes(t)) this.tokens.delete(t);
@@ -123,6 +128,11 @@ class PgStore implements Store {
       [a.key, a.username, a.salt, a.hash, a.data, JSON.stringify(a.tokens), a.created],
     );
     return r.rowCount === 1;
+  }
+  async list() {
+    await this.ready;
+    const r = await this.pool.query("SELECT username, created FROM accounts ORDER BY created");
+    return r.rows.map((x: any) => ({ username: x.username, created: Number(x.created) }));
   }
   async save(a: Account) {
     await this.ready;
@@ -222,6 +232,8 @@ type Data = Record<string, unknown> & Unlocks;
 const STARTER_OFFER = 10;
 /** Accounts (lower-case usernames) that play every hero, new ones included (user request 2026-10-06). */
 const ALL_HEROES_ACCOUNTS = ["jedie", "naju", "ptc_tong"];
+/** The game's owner (user request 2026-10-10: see the list of every account). */
+const OWNER_ACCOUNTS = ["jedie"];
 const STARTER_PICKS = 3;
 const WIN_GAP_MS = 40_000; // a game takes longer than this, so one spin per real win
 
@@ -415,6 +427,19 @@ export function accountRoutes(app: Express) {
   });
 
   unlockRoutes(app);
+
+  // The game's owner (only) can see every account name and when it was made: names only, never passwords or data.
+  app.get("/api/admin/accounts", async (req, res) => {
+    const a = await accountForToken(bearer(req));
+    if (!a) return void res.status(401).json({ error: "Signed out" });
+    if (!OWNER_ACCOUNTS.includes(a.key)) return void res.status(403).json({ error: "Owner only" });
+    try {
+      res.json({ accounts: await store.list() });
+    } catch (e) {
+      console.error("account list failed", e);
+      res.status(500).json({ error: "Server error" });
+    }
+  });
 
   app.post("/api/logout", async (req, res) => {
     const token = bearer(req);

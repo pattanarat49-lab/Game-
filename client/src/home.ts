@@ -7,6 +7,7 @@ import { HEROES, HERO_CLASSES, HERO_IDS, HeroId, RANKED_CODE, StageId, heroClass
 import { heroPortrait, paintPortrait } from "./heroArt";
 import { showHeroInfo } from "./heroInfo";
 import { AttackMode, attackMode, setAttackMode } from "./settings";
+import { isOwner, listAccounts } from "./account";
 import { audioLevels, setAudioLevels, uiClick } from "./audio";
 import { heroMastery, loadProfile, masteryColor, wearTitle } from "./profile";
 
@@ -437,7 +438,30 @@ export class Home {
       sound.append(row);
     }
     box.append(sound);
+    if (isOwner()) box.append(this.accountList());
     el.append(box);
+  }
+
+  /** SETTING, owner only: every account on the server, oldest first. */
+  private accountList(): HTMLElement {
+    const sec = document.createElement("div");
+    sec.innerHTML = `<h3>ALL ACCOUNTS</h3><p>Loading...</p>`;
+    sec.style.cssText = "display:flex;flex-direction:column;gap:6px";
+    const text = sec.querySelector("p")!;
+    listAccounts()
+      .then((list) => {
+        text.textContent = `${list.length} accounts`;
+        const ol = document.createElement("ol");
+        ol.style.cssText = "margin:0;padding-left:2.2em;max-height:40vh;overflow-y:auto;line-height:1.7;user-select:text";
+        for (const a of list) {
+          const li = document.createElement("li");
+          li.textContent = `${a.username}  (${new Date(a.created).toLocaleDateString()})`;
+          ol.append(li);
+        }
+        sec.append(ol);
+      })
+      .catch((e) => (text.textContent = `Could not load: ${(e as Error).message}`));
+    return sec;
   }
 
   /** TITLE: the titles earned so far; tap one to wear it (shown over the hero here and in the Open World). */
