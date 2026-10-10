@@ -2289,12 +2289,31 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       if (s.phaseTimer <= 0) this.startIntermission(0);
     }
 
+    // Rooted heroes stay exactly where they are: no dash, blink, lunge or pull moves them until the root wears off.
+    const pinned: [string, number, number][] = [];
+    s.players.forEach((p, id) => {
+      if (p.root > 0 && !p.dead) pinned.push([id, p.x, p.y]);
+    });
     this.updatePlayers(dt);
     this.afterPlayers();
     this.updateEnemies(dt);
     this.updateBullets(dt);
     this.updateZones(dt);
+    for (const [id, x, y] of pinned) this.holdRooted(id, x, y);
     this.recordHistory(dt);
+  }
+
+  /** Put a rooted hero back where the tick found him, and end any dash he was in. */
+  private holdRooted(id: string, x: number, y: number) {
+    const p = this.state.players.get(id);
+    if (!p || p.dead || !(p.root > 0)) return; // fell, or the root ran out (or a new round put him in his corner)
+    p.x = x;
+    p.y = y;
+    if (p.dashing) {
+      p.dashing = false;
+      const brain = this.brains.get(id);
+      if (brain) brain.dashTimer = 0;
+    }
   }
 
   /** Keep a couple of seconds of snapshots for the TIME MACHINE (only while someone could use it). */
