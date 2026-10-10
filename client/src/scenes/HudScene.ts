@@ -105,7 +105,7 @@ export class HudScene extends Phaser.Scene {
       const active1 = Math.max(me.titan, hero.skill.kind === "immortal" ? me.barrier : 0, me.revive, hero.skill.kind === "latch" ? me.latch : 0, hero.formOf ? 0 : me.buff ?? 0);
       const active2 = Math.max(me.beam, hero.skill2?.kind === "doves" ? me.barrier : 0, hero.skill2?.kind === "shoulderroll" ? 0 : me.active2 ?? 0);
       const note1 = hero.skill.kind === "thunderdash" && me.mode === 1 ? "AGAIN!" : hero.skill.kind === "shadowstep" && me.mode === 1 ? "BACK!" : hero.skill.kind === "empower" && me.mode === 1 ? "NEXT HIT" : hero.skill.kind === "swap" ? (me.mode === 1 ? "GUN" : "KNIFE") : hero.skill.kind === "passive" ? "PASSIVE" : "";
-      const note2 = hero.skill2?.kind === "yoyo" ? (me.mode === 1 ? "YOYO" : "BOLT") : hero.skill2?.kind === "shoulderroll" && me.active2 > 0 ? "GUARD" : "";
+      const note2 = hero.skill2?.kind === "yoyo" ? (me.mode === 1 ? "YOYO" : "BOLT") : hero.skill2?.kind === "shoulderroll" && me.active2 > 0 ? "GUARD" : hero.skill2?.kind === "grapple" && me.titan > 0 ? "NO GEAR" : "";
       const lines: string[] = [];
       // ALIEN TRANSFORM: how long until the alien turns back into the kid.
       if (hero.formOf) lines.push(`${hero.formOf === "kaido" ? "DRAGON" : "ALIEN"} BACK IN ${(me.buff ?? 0).toFixed(1)}s`);

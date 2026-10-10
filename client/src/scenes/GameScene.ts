@@ -1767,7 +1767,7 @@ export class GameScene extends Phaser.Scene {
       this.playSkillEffect(hero.skill, x, y, this.aim, this.players.get(room.sessionId));
       skillSound(me.hero, 1);
     }
-    if (hero.skill2 && input.skill2 && me.skill2Cooldown <= 0 && this.localSkill2Lock <= 0 && !unready(hero.skill2)) {
+    if (hero.skill2 && input.skill2 && me.skill2Cooldown <= 0 && this.localSkill2Lock <= 0 && !unready(hero.skill2) && !(me.titan > 0 && hero.skill2.kind === "grapple")) {
       this.localSkill2Lock = lock;
       this.predictedSkills2.push(performance.now());
       this.playSkillEffect(hero.skill2, x, y, this.aim, this.players.get(room.sessionId));

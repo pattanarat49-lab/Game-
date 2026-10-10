@@ -3018,6 +3018,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
   private skillLocked(p: P, sk: SkillDef): boolean {
     const hero = heroOf(p.hero);
     if (p.domain > 0 && hero.skill.kind === "domainx" && sk === hero.skill2) return true;
+    if (p.titan > 0 && sk.kind === "grapple") return true; // the giant has no grapple gear
     return false;
   }
 

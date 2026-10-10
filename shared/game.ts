@@ -675,7 +675,7 @@ const BASE_HEROES: Record<BaseHeroId, HeroDef> = {
   titan: {
     name: "Giant Shifter",
     role: "Shifter",
-    blurb: "Very weak hits as a human. GIANT FORM turns him into a 50m giant for 10s: every hit smashes everything around him. GRAPPLE HOOK (E, 0.5s): fire a wire into the wall ahead and zip along it.",
+    blurb: "Very weak hits as a human. GIANT FORM turns him into a 50m giant for 10s: every hit smashes everything around him. GRAPPLE HOOK (E, 0.5s): fire a wire into the wall ahead and zip along it (not while he is a giant).",
     stars: 4,
     maxHp: 165,
     speed: 105,
