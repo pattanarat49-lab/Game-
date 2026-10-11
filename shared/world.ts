@@ -23,7 +23,7 @@ export const L_FARM = 10; // tilled soil with crops
 export const L_FLOWERS = 11;
 export const L_CLIFF = 12; // the rock face at the foot of the mountains
 
-export type PropKind = "tree" | "blossom" | "pine" | "house" | "well" | "lamp" | "rock" | "bush" | "sign" | "stall" | "crop" | "boat" | "log";
+export type PropKind = "tree" | "blossom" | "pine" | "house" | "well" | "lamp" | "rock" | "bush" | "sign" | "stall" | "crop" | "boat" | "log" | "windmill";
 
 export interface WorldProp {
   kind: PropKind;
@@ -199,6 +199,9 @@ function buildWorld(): OpenMap {
       }
     }
   path(29, farm.r0 - 1, village.c, 84, 0);
+  // A windmill beside the fields (2026-10-11, the user's building sheet).
+  props.push({ kind: "windmill", x: px(44), y: (89 + 1) * BLOCK, v: 0 });
+  for (let r = 87; r <= 89; r++) for (let c = 43; c <= 45; c++) set(c, r, at(c, r), T_WALL);
   // A market stall and a well in the square, lamps around it.
   props.push({ kind: "well", x: px(village.c - 6), y: px(village.r + 2), v: 0 });
   set(village.c - 6, village.r + 2, L_PLAZA, T_WALL);

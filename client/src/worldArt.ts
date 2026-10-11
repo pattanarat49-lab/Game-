@@ -1013,6 +1013,7 @@ function sheetSprite(kind: PropKind, v: number): string | undefined {
     case "lamp": return "lamp0";
     case "well": return "well0";
     case "log": return "log0";
+    case "windmill": return "windmill0";
   }
   return undefined;
 }
@@ -1046,6 +1047,8 @@ export function propCanvas(kind: PropKind, v: number): HTMLCanvasElement {
     case "boat":
       return boat();
     case "log":
+      return log();
+    case "windmill":
       return log();
   }
 }
