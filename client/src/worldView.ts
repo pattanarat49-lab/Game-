@@ -202,7 +202,7 @@ export class WorldView {
     if (this.stage === "world") {
       this.drawNight(me ? this.bodyOf(myId) ?? me : undefined);
       const { x, y } = OPEN_WORLD.portal;
-      this.ow?.update(now, this.scene.game.loop.delta);
+      this.ow?.update(now, this.scene.game.loop.delta, nightAmount());
       // The cave mouth glows: the way down to the dungeon.
       const pulse = 0.5 + 0.5 * Math.sin(now / 400);
       floor.fillStyle(0x3ac8ff, 0.1 + 0.08 * pulse).fillEllipse(x, y - 4, 70, 30);

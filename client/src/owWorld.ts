@@ -5,7 +5,7 @@
 
 import Phaser from "phaser";
 import { BLOCK } from "../../shared/maps";
-import { L_DEEP, L_FALL, L_WATER, OPEN_WORLD } from "../../shared/world";
+import { L_BRIDGE, L_DEEP, L_FALL, L_PATH, L_WATER, OPEN_WORLD } from "../../shared/world";
 import { ART, CHUNK_BLOCKS, CHUNK_PX, TILE, hash, owPixels } from "./owGround";
 
 const m = OPEN_WORLD;
@@ -112,6 +112,31 @@ function cloudTexture(scene: Phaser.Scene) {
   scene.textures.get("ow_clouds").setFilter(Phaser.Textures.FilterMode.LINEAR); // soft, not blocky
 }
 
+/** A soft, flat puff of mist (white in the middle, fading out), drawn smooth. */
+function fogTexture(scene: Phaser.Scene) {
+  if (scene.textures.exists("ow_fog")) return;
+  const W = 128;
+  const H = 64;
+  const can = document.createElement("canvas");
+  can.width = W;
+  can.height = H;
+  const g = can.getContext("2d")!;
+  // a few overlapping round puffs make a lumpy bank of mist
+  for (let i = 0; i < 6; i++) {
+    // kept well inside the picture, so no puff is cut off square at its edge
+    const x = W * (0.36 + hash(i, 0, 600) * 0.28);
+    const y = H * (0.45 + hash(i, 1, 600) * 0.1);
+    const r = H * (0.22 + hash(i, 2, 600) * 0.1);
+    const grad = g.createRadialGradient(x, y, 0, x, y, r);
+    grad.addColorStop(0, "rgba(205,218,236,0.5)");
+    grad.addColorStop(1, "rgba(200,215,235,0)");
+    g.fillStyle = grad;
+    g.fillRect(0, 0, W, H);
+  }
+  scene.textures.addCanvas("ow_fog", can);
+  scene.textures.get("ow_fog").setFilter(Phaser.Textures.FilterMode.LINEAR);
+}
+
 /** Light points of the lanterns (for the night), from the bottom of each lantern picture, in art pixels. */
 const LAMP_HEAD: Record<string, [number, number]> = { lantern: [17, -26], lampbanner: [9, -18] };
 
@@ -127,6 +152,8 @@ export class OwWorld {
   private sheep: Sheep[] = [];
   private sails: Phaser.GameObjects.Image[] = [];
   private clouds?: Phaser.GameObjects.TileSprite;
+  /** Night mist lying along the roads (2026-10-11, user request): soft puffs that drift and breathe. */
+  private fog: { img: Phaser.GameObjects.Image; x: number; y: number; ph: number }[] = [];
   private nextRipple = 0;
   /** Where the lanterns glow at night (world pixels). */
   lamps: { x: number; y: number }[] = [];
@@ -184,6 +211,18 @@ export class OwWorld {
     // Cloud shadows drifting over everything (2026-10-11, user request).
     cloudTexture(scene);
     this.clouds = scene.add.tileSprite(0, 0, w, h, "ow_clouds").setOrigin(0).setTileScale(5).setDepth(3990).setAlpha(0.3);
+    // Mist along the roads, seen only at night: a puff on every few road blocks.
+    fogTexture(scene);
+    for (let r = 0; r < m.rows; r++)
+      for (let c = 0; c < m.cols; c++) {
+        const l = m.look[r * m.cols + c];
+        if ((l !== L_PATH && l !== L_BRIDGE) || hash(c, r, 500) > 0.22) continue;
+        const x = (c + hash(c, r, 501)) * BLOCK;
+        const y = (r + hash(c, r, 502)) * BLOCK;
+        const img = scene.add.image(x, y, "ow_fog").setDepth(4002).setAlpha(0).setVisible(false);
+        img.setScale(1.6 + hash(c, r, 503) * 1.4, 0.9 + hash(c, r, 504) * 0.5);
+        this.fog.push({ img, x, y, ph: hash(c, r, 505) * 6.28 });
+      }
     this.update(0, 16);
   }
 
@@ -320,7 +359,7 @@ export class OwWorld {
   }
 
   /** Make the ground squares near the camera, move the water, the waterfall, the sheep and the ripples. */
-  update(now: number, dt: number) {
+  update(now: number, dt: number, night = 0) {
     const scene = this.scene;
     const view = scene.cameras.main.worldView;
     const span = CHUNK_BLOCKS * BLOCK;
@@ -346,6 +385,16 @@ export class OwWorld {
     for (const f of this.falls) f.setTexture(`owfall_${Math.floor(now / 90) % 6}`);
     for (const sl of this.sails) sl.setRotation(t * 0.6);
     this.clouds?.setTilePosition(-t * 1.6, -t * 0.6); // a slow breeze from the west
+    this.clouds?.setAlpha(0.3 * (1 - night)); // no cloud shadows in the dark
+    // The night mist: drifts east and back, swelling and thinning, only where the camera is.
+    for (const f of this.fog) {
+      const on = night > 0.02 && f.x > view.x - 90 && f.x < view.right + 90 && f.y > view.y - 60 && f.y < view.bottom + 60;
+      f.img.setVisible(on);
+      if (!on) continue;
+      const breathe = 0.5 + 0.5 * Math.sin(t * 0.35 + f.ph);
+      f.img.setPosition(f.x + Math.sin(t * 0.12 + f.ph) * 14, f.y + Math.cos(t * 0.09 + f.ph) * 4);
+      f.img.setAlpha(night * (0.08 + 0.12 * breathe));
+    }
     // Sheep wander about their spot in the pasture, stopping to graze.
     for (const s of this.sheep) {
       if (s.wait > 0) {
