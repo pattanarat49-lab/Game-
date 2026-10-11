@@ -55,6 +55,7 @@ export class WorldView {
   /** The night: a dark sheet over the view with the lamps' light cut out of it, and their warm glow on top. */
   private dark?: Phaser.GameObjects.RenderTexture;
   private glows: Phaser.GameObjects.Image[] = [];
+  private portalImg?: Phaser.GameObjects.Image;
   private lamps: { x: number; y: number }[] = [];
   private wasNight = false;
   ui?: WorldUi;
@@ -108,6 +109,8 @@ export class WorldView {
       this.lamps = OPEN_WORLD.props.filter((p) => p.kind === "lamp").map((p) => ({ x: p.x, y: p.y - lampTall + 12 })); // the lamp head
       for (const l of this.lamps) this.glows.push(scene.add.image(l.x, l.y, "lamp_glow").setBlendMode(Phaser.BlendModes.ADD).setDepth(4001).setAlpha(0));
       this.wasNight = nightAmount() > 0.5;
+      // The dungeon portal: the user's 16-frame stone well with a blue swirl (client/art/props/portal_N.png).
+      this.portalImg = scene.add.image(OPEN_WORLD.portal.x, OPEN_WORLD.portal.y, "portal_0").setOrigin(0.5, 0.63).setScale(1.1).setDepth(-3.5);
     }
     this.floorFx = scene.add.graphics().setDepth(-3);
     this.fx = scene.add.graphics().setDepth(stage === "world" ? OPEN_WORLD.portal.y + 1 : 900);
@@ -206,22 +209,8 @@ export class WorldView {
 
     if (this.stage === "world") {
       this.drawNight(me ? this.bodyOf(myId) ?? me : undefined);
-      // The dungeon portal: a stone ring with a blue swirl.
       const { x, y } = OPEN_WORLD.portal;
-      floor.fillStyle(0x6a6a72, 1).fillEllipse(x, y + 4, PORTAL_RADIUS * 2 + 8, PORTAL_RADIUS + 6);
-      floor.fillStyle(0x8a8a94, 1).fillEllipse(x, y + 2, PORTAL_RADIUS * 2, PORTAL_RADIUS);
-      floor.fillStyle(0x1a2a6a, 1).fillEllipse(x, y + 2, PORTAL_RADIUS * 1.6, PORTAL_RADIUS * 0.8);
-      for (let i = 0; i < 5; i++) {
-        const a = now / 400 + (i * Math.PI * 2) / 5;
-        const r = PORTAL_RADIUS * (0.25 + 0.12 * i);
-        floor.lineStyle(2, i % 2 ? 0x5a9aff : 0x9ad8ff, 0.8).strokeEllipse(x + Math.cos(a) * 3, y + 2 + Math.sin(a) * 1.5, r * 1.6, r * 0.8);
-      }
-      // Its light, rising.
-      for (let i = 0; i < 8; i++) {
-        const t = ((now / 1200 + i / 8) % 1);
-        const a = i * 2.4;
-        g.fillStyle(0x9ad8ff, 1 - t).fillRect(x + Math.cos(a) * PORTAL_RADIUS * 0.6, y - t * 50, 2, 2);
-      }
+      this.portalImg?.setTexture(`portal_${Math.floor(now / 100) % 16}`);
       // Heroes who pressed READY at the portal get a green tick.
       state.players.forEach((p: any, id: string) => {
         if (!p.ready || p.owner) return;

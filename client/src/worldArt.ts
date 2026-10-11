@@ -255,6 +255,11 @@ const NAT_WATER = 1;
 const NAT_SAND = 2;
 const NAT_DIRT = 3;
 const NAT_GRASS = 4;
+const NAT_STONE = 5; // the village square's cobbles
+const NAT_BRIDGE = 6; // wooden planks over the river (kept to its blocks, no rounding)
+const NAT_ROCK = 7; // the mountain tops: grey boulders
+const NAT_SNOW = 8; // snowy peaks
+const NAT_CLIFF = 9; // the rock face at the mountains' foot
 
 /** Which natural ground a map block is (0: not natural ground: plaza, bridge, farm, mountain). */
 function naturalOf(l: number): number {
@@ -262,6 +267,11 @@ function naturalOf(l: number): number {
   if (l === L_SAND) return NAT_SAND;
   if (l === L_PATH) return NAT_DIRT;
   if (l === L_GRASS || l === L_GRASS2 || l === L_FLOWERS) return NAT_GRASS;
+  if (l === L_PLAZA) return NAT_STONE;
+  if (l === L_BRIDGE) return NAT_BRIDGE;
+  if (l === L_MOUNTAIN || l === -1) return NAT_ROCK;
+  if (l === L_SNOW) return NAT_SNOW;
+  if (l === L_CLIFF) return NAT_CLIFF;
   return 0;
 }
 
@@ -294,7 +304,75 @@ const NAT = {
   water: rgb(0x0a80ec),
   deep: rgb(0x0870d8),
   glint: rgb(0x6cc8f8),
+  stone: rgb(0xd8d0c2),
+  stone2: rgb(0xcac1b1),
+  mortar: rgb(0xa39a8b),
+  stoneRim: rgb(0x7d7568),
+  // The village square: round cobbles like the user's stone tiles.
+  cob: rgb(0xc8c2c8),
+  cobLight: rgb(0xe2dde0),
+  cobDark: rgb(0xa8a0aa),
+  cobGap: rgb(0x6e6672),
+  // Bridge planks.
+  plank: rgb(0xc08048),
+  plankLight: rgb(0xd89a5c),
+  plankDark: rgb(0x9a6234),
+  plankGap: rgb(0x5a3418),
+  rail: rgb(0x7a4a22),
+  railLight: rgb(0xb07a44),
+  // Mountain boulders, cliffs and snow (the purple-grey rock of the user's cliff tiles).
+  rock: rgb(0x8e8498),
+  rockLight: rgb(0xaea6b8),
+  rockDark: rgb(0x6e6478),
+  rockGap: rgb(0x463e50),
+  moss: rgb(0x6aa044),
+  cliff: rgb(0x7a6c84),
+  cliffLight: rgb(0x9a8ca4),
+  cliffDark: rgb(0x564a60),
+  cliffGap: rgb(0x2e2636),
+  snow: rgb(0xf2f6fc),
+  snowLight: rgb(0xffffff),
+  snowDark: rgb(0xccd8ee),
+  snowGap: rgb(0xb0c0dc),
 };
+
+/** Round stones on a jittered grid (art pixels): which stone a pixel is on, how near its edge, and where in it. */
+function stones(ax: number, ay: number, sx: number, sy: number, k: number, laid = true): { id: number; edge: number; dx: number; dy: number } {
+  const gx = Math.floor(ax / sx);
+  const gy = Math.floor(ay / sy);
+  let d1 = 1e9;
+  let d2 = 1e9;
+  let id = 0;
+  let dx = 0;
+  let dy = 0;
+  for (let j = gy - 1; j <= gy + 1; j++)
+    for (let i = gx - 1; i <= gx + 1; i++) {
+      const ox = laid ? ((j & 1) * sx) / 2 : 0; // rows offset like laid stones
+      const spread = laid ? 0.5 : 0.8; // wild boulders wander further
+      const cx = i * sx + ox + sx * ((1 - spread) / 2 + spread * hash(i, j, k));
+      const cy = j * sy + sy * ((1 - spread) / 2 + spread * hash(i, j, k + 1));
+      const ex = (ax + 0.5 - cx) / sx;
+      const ey = (ay + 0.5 - cy) / sy;
+      const d = ex * ex + ey * ey;
+      if (d < d1) {
+        d2 = d1;
+        d1 = d;
+        id = i * 7919 + j;
+        dx = ex;
+        dy = ey;
+      } else if (d < d2) d2 = d;
+    }
+  return { id, edge: Math.sqrt(d2) - Math.sqrt(d1), dx, dy };
+}
+
+/** A stone's colour: dark gap at the edge, lit on the top left, shaded on the bottom right. */
+function stonePix(st: { id: number; edge: number; dx: number; dy: number }, gap: [number, number, number], base: [number, number, number], light: [number, number, number], dark: [number, number, number], gapW = 0.16): [number, number, number] {
+  if (st.edge < gapW) return gap;
+  const lit = st.dx * 0.7 + st.dy;
+  if (st.edge < gapW + 0.14 && lit > 0.05) return dark; // the stone's lower rim
+  if (lit < -0.32 && st.edge > gapW + 0.1) return light;
+  return hash(st.id, 0, 41) < 0.3 ? dark : base;
+}
 
 /** The spots (in blocks, round an art pixel) that vote on its kind of ground. */
 const RING: [number, number][] = [[0, 0], ...Array.from({ length: 8 }, (_, i): [number, number] => [0.62 * Math.cos((i * Math.PI) / 4), 0.62 * Math.sin((i * Math.PI) / 4)])];
@@ -319,14 +397,19 @@ function paintNatural(ctx: CanvasRenderingContext2D, cx: number, cy: number) {
       const or = Math.floor(ay / PER_BLOCK);
       const own = naturalOf(lookAt(oc, or));
       if (!own) continue;
+      if (own === NAT_BRIDGE) {
+        kind[j * W + i] = own;
+        continue;
+      }
       // Rounded edges: the kind most of a small ring of nearby spots agree on (moved about by the wobble).
       const fx = (ax + 0.5) / PER_BLOCK + wobble(ax / PER_BLOCK, ay / PER_BLOCK, 1) + (hash(ax, ay, 7) - 0.5) * 0.18;
       const fy = (ay + 0.5) / PER_BLOCK + wobble(ay / PER_BLOCK, ax / PER_BLOCK, 4) + (hash(ax, ay, 8) - 0.5) * 0.18;
-      const votes = [0, 0, 0, 0, 0];
+      const votes = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
       let deepVotes = 0;
       for (const [ox, oy] of RING) {
         const l = lookAt(Math.floor(fx + ox), Math.floor(fy + oy));
-        const k = naturalOf(l) || own;
+        let k = naturalOf(l) || own;
+        if (k === NAT_BRIDGE) k = own;
         votes[k] += ox === 0 && oy === 0 ? 1.5 : 1;
         if (l === L_DEEP) deepVotes++;
       }
@@ -386,6 +469,59 @@ function paintNatural(ctx: CanvasRenderingContext2D, cx: number, cy: number) {
             if (t < 5 && ay % 6 === (t === 0 || t === 4 ? 1 : 0)) c = NAT.glint; // a shallow arc, ends down
           }
         }
+      } else if (k === NAT_STONE) {
+        // Round cobbles, a dark kerb round the edge.
+        if (distOut(i, j, NAT_STONE, 1) === 1) c = NAT.stoneRim;
+        else c = stonePix(stones(ax, ay, 6, 5, 30), NAT.cobGap, NAT.cob, NAT.cobLight, NAT.cobDark);
+      } else if (k === NAT_BRIDGE) {
+        // Planks laid across the way, rails along the water side.
+        const bc = Math.floor(ax / PER_BLOCK);
+        const br = Math.floor(ay / PER_BLOCK);
+        const wet = (l: number) => l === L_WATER || l === L_DEEP;
+        const across = wet(lookAt(bc, br - 1)) || wet(lookAt(bc, br + 1)) || (!wet(lookAt(bc - 1, br)) && !wet(lookAt(bc + 1, br)));
+        const u = across ? ax : ay; // along the way
+        const v = across ? ay : ax; // across it
+        const board = Math.floor(u / 3);
+        const t = u % 3;
+        c = t === 2 ? NAT.plankGap : t === 0 ? NAT.plankLight : hash(board, 0, 9) < 0.3 ? NAT.plankDark : NAT.plank;
+        if (t === 1 && hash(board, Math.floor(v / 7), 13) < 0.25 && v % 7 === 3) c = NAT.plankGap; // a knot
+        // Rails along both long edges: an outline, a lit top, the beam, posts every 7 pixels, a shadow inside.
+        const gone = (d: number) => (across ? kAt(i, j - d) : kAt(i - d, j)) !== NAT_BRIDGE;
+        const gone2 = (d: number) => (across ? kAt(i, j + d) : kAt(i + d, j)) !== NAT_BRIDGE;
+        let e = 0;
+        for (let d = 1; d <= 4 && !e; d++) if (gone(d) || gone2(d)) e = d;
+        if (e) {
+          const post = u % 7 === 0;
+          if (e === 1) c = NAT.plankGap;
+          else if (e === 2) c = post ? NAT.rail : NAT.railLight;
+          else if (e === 3) c = post ? NAT.plankGap : NAT.rail;
+          else c = NAT.plankGap;
+        }
+      } else if (k === NAT_ROCK || k === NAT_SNOW) {
+        // Boulders, snow-capped up high, with a few mossy spots on the rock.
+        const st = stones(ax, ay, k === NAT_ROCK ? 9 : 12, k === NAT_ROCK ? 7 : 9, k === NAT_ROCK ? 50 : 60, false);
+        if (k === NAT_SNOW) {
+          // Soft drifts: blue shade on their lower sides, no hard cracks, a sparkle here and there.
+          const lit = st.dx * 0.7 + st.dy;
+          c = st.edge < 0.08 ? NAT.snowGap : st.edge < 0.2 && lit > 0 ? NAT.snowDark : NAT.snow;
+          if (c === NAT.snow && lit < -0.45 && st.edge > 0.25) c = NAT.snowLight;
+          if (c === NAT.snow && h < 0.012) c = NAT.snowDark;
+        } else {
+          c = stonePix(st, NAT.rockGap, NAT.rock, NAT.rockLight, NAT.rockDark);
+          if (c !== NAT.rockGap && st.dy < -0.2 && hash(st.id, 1, 43) < 0.18) c = NAT.moss;
+        }
+      } else if (k === NAT_CLIFF) {
+        // The rock face: tall columns, lit on the left, a grassy lip on top and a dark foot.
+        const up = distOut(i, j, NAT_CLIFF, 1) === 1 && kAt(i, j - 1) !== NAT_CLIFF;
+        const foot = kAt(i, j + 1) !== NAT_CLIFF;
+        const col = Math.floor((ax + Math.floor(hash(0, Math.floor(ay / 5), 3) * 2)) / 4);
+        const t = (ax + Math.floor(hash(0, Math.floor(ay / 5), 3) * 2)) % 4;
+        if (up) c = kAt(i, j - 1) === NAT_GRASS ? NAT.grassRim : NAT.rockGap;
+        else if (foot) c = NAT.cliffGap;
+        else if (t === 3) c = NAT.cliffGap;
+        else if (t === 0) c = NAT.cliffLight;
+        else c = hash(col, Math.floor(ay / 9), 17) < 0.35 ? NAT.cliffDark : NAT.cliff;
+        if (!up && !foot && t !== 3 && hash(ax, ay, 19) < 0.04) c = NAT.moss;
       } else if (k === NAT_GRASS) {
         const d = distOut(i, j, NAT_GRASS, 2);
         const below = kAt(i, j + 1) !== NAT_GRASS || kAt(i, j + 2) !== NAT_GRASS;
@@ -403,7 +539,7 @@ function paintNatural(ctx: CanvasRenderingContext2D, cx: number, cy: number) {
             const ty = tr * 4 + 1;
             if ((ay === ty && (ax === tx - 1 || ax === tx + 1)) || (ay === ty + 1 && ax === tx)) c = th < 0.08 ? NAT.tuft : NAT.tuft2;
           }
-          if (look === L_FLOWERS && h < 0.07) c = h < 0.025 ? [255, 255, 255] : h < 0.045 ? [255, 214, 74] : [255, 138, 200];
+          if (look === L_FLOWERS && h < 0.035) c = h < 0.012 ? [255, 255, 255] : h < 0.024 ? [255, 214, 74] : [255, 138, 200];
         }
       } else {
         // Sand and dirt: a shadow under the grass lip, then the water's wet ring, then grit.

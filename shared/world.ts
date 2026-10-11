@@ -142,6 +142,28 @@ function buildWorld(): OpenMap {
   path(village.c, village.r, village.c, 22); // north, up to the mountain trail
   path(village.c, 30, 80, 24); // the trail along the foot of the mountains
   path(108, 50, 112, 80); // east bank down to the lake
+  // Bridges as straight decks (2026-10-11): a slanted path leaves a stair-stepped bridge, so each one is
+  // squared off to the box round it, over the water only.
+  {
+    const seen = new Set<number>();
+    for (let r = 0; r < R; r++)
+      for (let c = 0; c < C; c++) {
+        if (at(c, r) !== L_BRIDGE || seen.has(idx(c, r))) continue;
+        const todo = [[c, r]];
+        let c0 = c, c1 = c, r0 = r, r1 = r;
+        seen.add(idx(c, r));
+        while (todo.length) {
+          const [x, y] = todo.pop()!;
+          c0 = Math.min(c0, x); c1 = Math.max(c1, x); r0 = Math.min(r0, y); r1 = Math.max(r1, y);
+          for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+            const k = idx(x + dx, y + dy);
+            if (at(x + dx, y + dy) === L_BRIDGE && !seen.has(k)) { seen.add(k); todo.push([x + dx, y + dy]); }
+          }
+        }
+        for (let y = r0; y <= r1; y++)
+          for (let x = c0; x <= c1; x++) if (at(x, y) === L_WATER || at(x, y) === L_DEEP) set(x, y, L_BRIDGE, T_FLOOR);
+      }
+  }
   // The square.
   for (let r = village.r - 8; r <= village.r + 8; r++)
     for (let c = village.c - 10; c <= village.c + 10; c++) {

@@ -65,6 +65,18 @@ def cut(src, box, cell=3.0, colors=14, outline=True, tol=46):
         res = big
     return Image.fromarray(res, "RGBA")
 
+def outline(img, dark=(30, 26, 34)):
+    """A one-pixel dark outline all round the sprite (the canvas grows by one pixel each side)."""
+    a = np.asarray(img.convert("RGBA"))
+    big = np.zeros((a.shape[0] + 2, a.shape[1] + 2, 4), np.uint8)
+    big[1:-1, 1:-1] = a
+    al = big[..., 3] > 0
+    p = np.pad(al, 1)
+    ring = (~al) & (p[:-2, 1:-1] | p[2:, 1:-1] | p[1:-1, :-2] | p[1:-1, 2:])
+    big[ring, :3] = dark
+    big[ring, 3] = 255
+    return Image.fromarray(big, "RGBA")
+
 if __name__ == "__main__":
     src, boxes, outdir, prefix = sys.argv[1], json.loads(sys.argv[2]), sys.argv[3], sys.argv[4]
     cell = float(sys.argv[5]) if len(sys.argv) > 5 else 3.0
