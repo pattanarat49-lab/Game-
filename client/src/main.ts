@@ -55,13 +55,14 @@ const home = new Home(menu, {
       }
     }, 300);
   },
-  openWorld: () => void startGame("world", soloOnly, ""),
+  dungeon: () => void startGame("dungeon", soloOnly, ""),
+  abyssOpen: () => cthulhuUnlocked(),
   heaven: () => void startGame("heaven", soloOnly, ""),
   glitch: () => void startGame("glitch", soloOnly, ""),
   party: () => showParty(currentAccount()?.username ?? soloName, () => home.setParty(partySize())),
   abyss: () => {
     if (cthulhuUnlocked()) void startGame("abyss", soloOnly, "");
-    else home.note("The door is sealed... Defeat the Ancient Knight in the Open World dungeon to find the stone tablet that opens it.");
+    else home.note("The door is sealed... Defeat the Ancient Knight in the Ancient Ruins to find the stone tablet that opens it.");
   },
   play: (stage, solo, code) => void startGame(stage, solo, code),
   rank: () => (currentAccount() ? { r1: accountData().rank?.r1 ?? 0, r3: accountData().rank?.r3 ?? 0 } : undefined),

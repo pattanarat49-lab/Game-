@@ -1,5 +1,5 @@
 // The home screen (2026-10-06): the user's picture (stained-glass hall since 2026-10-08) with the favourite hero on a pedestal,
-// the profile box, and OPEN WORLD / START GAME / CHARACTER. START GAME opens the mode list (every mode
+// the profile box, and DUNGEON (the Open World until 2026-10-11) / START GAME / CHARACTER. START GAME opens the mode list (every mode
 // then picks heroes on the PvP-style select screen); CHARACTER opens the hero gallery by class, where
 // one hero can be made the favourite.
 
@@ -20,12 +20,15 @@ export interface HomeActions {
   owned(): number; // heroes the player has (all of them when nothing is locked)
   spins(): number;
   openSlot(): void;
-  openWorld(): void;
-  /** Cthulhu's head in the stained glass: into the Sunken Temple. */
+  /** DUNGEON (2026-10-11, replaces the Open World): the Ancient Knight's dungeon. */
+  dungeon(): void;
+  /** Into the Sunken Temple (Cthulhu), once the stone tablet has been found. */
   abyss(): void;
-  /** The God Knight's head in the right-hand window: into the Celestial Sanctum. */
+  /** Is the Sunken Temple open yet? */
+  abyssOpen(): boolean;
+  /** Into the Celestial Sanctum (the God Knight). */
   heaven(): void;
-  /** The dark figure's head in the middle window: into The Rift. */
+  /** Into The Rift (the Glitch). */
   glitch(): void;
   /** Online: open the PARTY window. */
   party?(): void;
@@ -213,9 +216,6 @@ export class Home {
     stage.id = "home-stage";
     stage.innerHTML = `
       <img class="bg" src="home-bg.jpg" alt="" />
-      <button type="button" class="hm-hit" id="hm-cthulhu" aria-label="Sunken Temple"></button>
-      <button type="button" class="hm-hit" id="hm-godknight" aria-label="Celestial Sanctum"></button>
-      <button type="button" class="hm-hit" id="hm-glitch" aria-label="The Rift"></button>
       <div id="hm-ped"></div>
       <div id="hm-hero"></div>
       <div id="hm-title"></div>
@@ -231,7 +231,7 @@ export class Home {
         <button type="button" id="hm-titles" class="hm-fr">\u2726 TITLE \u2726</button>
         <div id="hm-drop"></div>
       </div>
-      <button type="button" class="hm-main hm-fr" id="hm-world" style="left:390px;top:612px;width:290px;height:104px"><span class="tx">OPEN WORLD</span></button>
+      <button type="button" class="hm-main hm-fr" id="hm-world" style="left:390px;top:612px;width:290px;height:104px"><span class="tx">DUNGEON</span></button>
       <button type="button" class="hm-main hm-fr" id="hm-start" aria-label="Start game" style="left:692px;top:586px;width:472px;height:142px"><span class="tx">\u2726 START GAME \u2726</span></button>
       <button type="button" class="hm-main hm-fr" id="hm-char" style="left:1172px;top:612px;width:292px;height:104px"><span class="tx">CHARACTER</span></button>
       <div id="home-error"></div>
@@ -270,10 +270,7 @@ export class Home {
     this.drop = stage.querySelector("#hm-drop")!;
     this.error = stage.querySelector("#home-error")!;
 
-    stage.querySelector("#hm-world")!.addEventListener("click", () => act.openWorld());
-    stage.querySelector("#hm-cthulhu")!.addEventListener("click", () => act.abyss());
-    stage.querySelector("#hm-godknight")!.addEventListener("click", () => act.heaven());
-    stage.querySelector("#hm-glitch")!.addEventListener("click", () => act.glitch());
+    stage.querySelector("#hm-world")!.addEventListener("click", () => this.showDungeons());
     stage.querySelector("#hm-start")!.addEventListener("click", () => this.showModes());
     stage.querySelector("#hm-char")!.addEventListener("click", () => this.showCharacters());
     this.spinBtn.addEventListener("click", () => act.openSlot());
@@ -493,6 +490,42 @@ export class Home {
     };
     draw();
     el.append(list);
+  }
+
+  /** DUNGEON (user request 2026-10-11, in place of the Open World): every boss room in one list. */
+  showDungeons() {
+    const { el, close } = this.screen("DUNGEON");
+    const rooms: { title: string; tag: string; text: string; go: () => void; locked?: string }[] = [
+      { title: "ANCIENT RUINS", tag: "BOSS · ANCIENT KNIGHT", text: "Rooms and corridors full of monsters that wake when they see you. The Ancient Knight waits at the end.", go: () => this.act.dungeon() },
+      {
+        title: "SUNKEN TEMPLE",
+        tag: "BOSS · CTHULHU",
+        text: "A drowned temple deep under the sea, where Cthulhu sleeps.",
+        go: () => this.act.abyss(),
+        locked: this.act.abyssOpen() ? undefined : "Defeat the Ancient Knight in the Ancient Ruins to find the stone tablet that opens it.",
+      },
+      { title: "CELESTIAL SANCTUM", tag: "BOSS · GOD KNIGHT", text: "A hall above the clouds, guarded by the God Knight.", go: () => this.act.heaven() },
+      { title: "THE RIFT", tag: "BOSS · THE GLITCH", text: "Where the world breaks apart. Something is waiting inside.", go: () => this.act.glitch() },
+    ];
+    const grid = document.createElement("div");
+    grid.className = "hm-modes";
+    for (const r of rooms) {
+      const card = document.createElement("div");
+      card.className = "hm-mode";
+      card.innerHTML = `<h3>${r.title}</h3><div class="tag">${r.tag}</div><p>${r.locked ?? r.text}</p><div class="btns"></div>`;
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "solo";
+      b.textContent = r.locked ? "LOCKED" : "ENTER";
+      b.disabled = !!r.locked;
+      b.addEventListener("click", () => {
+        close();
+        r.go();
+      });
+      card.querySelector(".btns")!.append(b);
+      grid.append(card);
+    }
+    el.append(grid);
   }
 
   /** START GAME: pick a mode (then heroes are picked on the select screen in the game). */

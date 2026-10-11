@@ -783,7 +783,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       if (p.owner || p.dead || this.leaving.has(id)) return;
       if (Math.hypot(p.x - DUNGEON.exit.x, p.y - DUNGEON.exit.y) <= PORTAL_RADIUS) {
         this.leaving.add(id);
-        this.warps.push({ ids: [id], stage: "world", code: "" });
+        this.warps.push({ ids: [id], stage: "home", code: "" }); // the Open World is gone (2026-10-11): straight home
       }
     });
   }
