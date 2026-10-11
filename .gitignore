@@ -4,3 +4,4 @@ dist/
 *.log
 dist-solo/
 server/data/
+__pycache__/
