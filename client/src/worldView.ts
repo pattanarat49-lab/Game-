@@ -116,7 +116,7 @@ export class WorldView {
       lightTexture(scene, "night_hole", LAMP_LIGHT, "rgba(255,255,255,1)");
       lightTexture(scene, "night_own", OWN_LIGHT, "rgba(255,255,255,0.8)");
       lightTexture(scene, "lamp_glow", 40, "rgba(255,200,110,0.55)");
-      this.lamps = OPEN_WORLD.props.filter((p) => p.kind === "lamp").map((p) => ({ x: p.x, y: p.y + 2 - 11 * 3 })); // the lantern
+      this.lamps = OPEN_WORLD.props.filter((p) => p.kind === "lamp").map((p) => ({ x: p.x, y: p.y + 2 - 16 * 3 })); // the lantern
       for (const l of this.lamps) this.glows.push(scene.add.image(l.x, l.y, "lamp_glow").setBlendMode(Phaser.BlendModes.ADD).setDepth(4001).setAlpha(0));
       this.wasNight = nightAmount() > 0.5;
       // The dungeon portal: the user's 16-frame stone well with a blue swirl (client/art/props/portal_N.png).
