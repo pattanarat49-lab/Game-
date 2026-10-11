@@ -56,6 +56,7 @@ export class WorldView {
   private dark?: Phaser.GameObjects.RenderTexture;
   private glows: Phaser.GameObjects.Image[] = [];
   private portalImg?: Phaser.GameObjects.Image;
+  private windmills: Phaser.GameObjects.Image[] = [];
   private lamps: { x: number; y: number }[] = [];
   private wasNight = false;
   ui?: WorldUi;
@@ -96,6 +97,11 @@ export class WorldView {
     if (stage === "world") {
       // Trees, houses and the rest stand in front of or behind heroes by how far down the map they are.
       for (const p of OPEN_WORLD.props) {
+        if (p.kind === "windmill") {
+          // Windmills turn their sails (client/art/props/windmill_N.png, drawn by scripts/worldprops/windmill.py).
+          this.windmills.push(scene.add.image(p.x, p.y + 3, "windmill_0").setOrigin(0.5, 1).setScale(3).setDepth(p.y));
+          continue;
+        }
         const key = `prop_${p.kind}_${p.v}`;
         if (!scene.textures.exists(key)) scene.textures.addCanvas(key, propCanvas(p.kind, p.v));
         const flat = p.kind === "crop" || p.kind === "boat";
@@ -211,6 +217,7 @@ export class WorldView {
       this.drawNight(me ? this.bodyOf(myId) ?? me : undefined);
       const { x, y } = OPEN_WORLD.portal;
       this.portalImg?.setTexture(`portal_${Math.floor(now / 100) % 16}`);
+      for (const w of this.windmills) w.setTexture(`windmill_${Math.floor(now / 140) % 12}`);
       // Heroes who pressed READY at the portal get a green tick.
       state.players.forEach((p: any, id: string) => {
         if (!p.ready || p.owner) return;

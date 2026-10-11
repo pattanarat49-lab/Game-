@@ -202,6 +202,28 @@ function buildWorld(): OpenMap {
   // A windmill beside the fields (2026-10-11, the user's building sheet).
   props.push({ kind: "windmill", x: px(44), y: (89 + 1) * BLOCK, v: 0 });
   for (let r = 87; r <= 89; r++) for (let c = 43; c <= 45; c++) set(c, r, at(c, r), T_WALL);
+  // And one on the grass near where heroes start (2026-10-11): the nearest clear 3x3 patch outside the square.
+  {
+    let best: [number, number] | undefined;
+    let bestD = Infinity;
+    for (let r = village.r - 16; r <= village.r + 22; r++)
+      for (let c = village.c - 22; c <= village.c + 22; c++) {
+        const d = Math.hypot(c - village.c, r - (village.r + 4));
+        if (d < 12 || d >= bestD) continue;
+        let ok = true;
+        for (let dr = -4; dr <= 1 && ok; dr++)
+          for (let dc = -2; dc <= 2 && ok; dc++) {
+            const l = at(c + dc, r + dr);
+            if ((l !== L_GRASS && l !== L_GRASS2 && l !== L_FLOWERS) || tiles[idx(c + dc, r + dr)] !== T_FLOOR) ok = false;
+          }
+        if (ok) { best = [c, r]; bestD = d; }
+      }
+    if (best) {
+      const [c, r] = best;
+      props.push({ kind: "windmill", x: px(c), y: (r + 1) * BLOCK, v: 1 });
+      for (let dr = -2; dr <= 0; dr++) for (let dc = -1; dc <= 1; dc++) set(c + dc, r + dr, at(c + dc, r + dr), T_WALL);
+    }
+  }
   // A market stall and a well in the square, lamps around it.
   props.push({ kind: "well", x: px(village.c - 6), y: px(village.r + 2), v: 0 });
   set(village.c - 6, village.r + 2, L_PLAZA, T_WALL);
