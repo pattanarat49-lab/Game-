@@ -164,6 +164,10 @@ export class OwWorld {
     // Flat things (bridges, flowers, tufts) lie under everyone.
     const FLAT = /^(bridge|woodbridge|flower|flowers|grass_|clover|reeds|twigs|branch|mushroom)/;
     for (const p of m.props) {
+      if (p.kind === "stonebridge") {
+        this.stoneBridge(p.x, p.y, Math.floor(p.v / 100), p.v % 100);
+        continue;
+      }
       const key = `ow_${p.kind}`;
       if (!scene.textures.exists(key)) continue;
       const img = scene.add.image(p.x, p.y, key).setOrigin(0.5, 1).setScale(PROP_SCALE);
@@ -181,6 +185,115 @@ export class OwWorld {
     cloudTexture(scene);
     this.clouds = scene.add.tileSprite(0, 0, w, h, "ow_clouds").setOrigin(0).setTileScale(5).setDepth(3990).setAlpha(0.3);
     this.update(0, 16);
+  }
+
+  /**
+   * The stone bridge over the river (2026-10-11, drawn in code: the sheet's bridge was a side view cut off at
+   * the top). Seen from above like the rest of the map: a paved deck along the road from bank to bank, a low
+   * wall on each side (the far one behind heroes, the near one in front), and under the near wall the face of
+   * the bridge with its arches over the water.
+   */
+  private stoneBridge(c0: number, r0: number, cols: number, rows: number) {
+    const scene = this.scene;
+    const key = `ow_stonebridge_${c0}_${r0}`;
+    const W = (cols + 2) * TILE; // a block onto each bank
+    const D = rows * TILE; // the deck
+    const WALL = 10; // how tall a side wall stands
+    const FACE = 22; // the face with the arches, below the near wall
+    const H = WALL + D + WALL + FACE;
+    if (!scene.textures.exists(key)) {
+      const can = document.createElement("canvas");
+      can.width = W;
+      can.height = H;
+      const g = can.getContext("2d")!;
+      const STONE = ["#8d8f86", "#9a9b90", "#7f8279", "#a4a597", "#878a80"];
+      const pick = (x: number, y: number) => STONE[Math.floor(hash(x, y, 300) * STONE.length)];
+      // Courses of cut stone: rows of blocks `bh` tall, offset every other row, dark mortar between.
+      const masonry = (x0: number, y0: number, w: number, h: number, bw: number, bh: number, dark = 1) => {
+        g.fillStyle = "#3e3f3c";
+        g.fillRect(x0, y0, w, h);
+        for (let row = 0; row * bh < h; row++)
+          for (let x = -((row % 2) * bw) / 2; x < w; x += bw) {
+            const bx = Math.max(0, x);
+            const ww = Math.min(w, x + bw) - bx - 1;
+            const hh = Math.min(bh, h - row * bh) - 1;
+            if (ww <= 0 || hh <= 0) continue;
+            g.globalAlpha = 1;
+            g.fillStyle = pick(x0 + bx, y0 + row * bh);
+            g.fillRect(x0 + bx, y0 + row * bh, ww, hh);
+            g.fillStyle = "rgba(255,255,255,0.18)"; // lit top edge
+            g.fillRect(x0 + bx, y0 + row * bh, ww, 1);
+            g.fillStyle = `rgba(0,0,0,${0.18 * dark})`; // shaded bottom edge
+            g.fillRect(x0 + bx, y0 + row * bh + hh - 1, ww, 1);
+          }
+      };
+      // The face and its arches: one arch per two blocks of river, dark water showing through.
+      const fy = WALL + D + WALL;
+      masonry(0, fy, W, FACE, 10, 6, 1.6);
+      g.fillStyle = "rgba(0,0,0,0.25)";
+      g.fillRect(0, fy, W, FACE);
+      const arches = Math.max(1, Math.round(cols / 1.6));
+      const span = (cols * TILE) / arches;
+      for (let i = 0; i < arches; i++) {
+        const cx = TILE + span * (i + 0.5);
+        const rx = span * 0.36;
+        g.fillStyle = "#0b2a3a";
+        g.beginPath();
+        g.moveTo(cx - rx, fy + FACE);
+        g.lineTo(cx - rx, fy + FACE - 8);
+        g.arc(cx, fy + FACE - 8, rx, Math.PI, 0);
+        g.lineTo(cx + rx, fy + FACE);
+        g.closePath();
+        g.fill();
+        // the water's sparkle in the shadow, and the arch stones round it
+        g.fillStyle = "rgba(120,220,230,0.5)";
+        g.fillRect(Math.round(cx - rx + 3), fy + FACE - 2, Math.round(rx * 2 - 6), 1);
+        g.strokeStyle = "#b4b5a8";
+        g.lineWidth = 2;
+        g.beginPath();
+        g.arc(cx, fy + FACE - 8, rx + 1, Math.PI, 0);
+        g.stroke();
+      }
+      // The deck: big paving slabs, worn darker down the middle where people walk.
+      masonry(0, WALL, W, D, 16, 11, 0.6);
+      g.fillStyle = "rgba(60,48,36,0.12)";
+      g.fillRect(0, WALL + D * 0.3, W, D * 0.4);
+      // The two side walls: a capstone on top, the side below it.
+      for (const wy of [0, WALL + D]) {
+        masonry(0, wy, W, WALL, 8, 5);
+        g.fillStyle = "#c2c3b5";
+        g.fillRect(0, wy, W, 2);
+        g.fillStyle = "#2a2b29";
+        g.fillRect(0, wy + WALL - 1, W, 1);
+      }
+      // Posts at the ends of each wall.
+      for (const px of [0, W - 8])
+        for (const wy of [0, WALL + D]) {
+          g.fillStyle = "#2a2b29";
+          g.fillRect(px, wy - 4, 8, WALL + 4);
+          g.fillStyle = "#a7a89b";
+          g.fillRect(px + 1, wy - 3, 6, WALL + 2);
+          g.fillStyle = "#c9cabd";
+          g.fillRect(px + 1, wy - 3, 6, 2);
+        }
+      // Outline round the ends.
+      g.fillStyle = "#2a2b29";
+      g.fillRect(0, 0, 1, H);
+      g.fillRect(W - 1, 0, 1, H);
+      scene.textures.addCanvas(key, can);
+      // the near wall as its own picture, so it can stand in front of heroes on the deck
+      const near = document.createElement("canvas");
+      near.width = W;
+      near.height = WALL + 4;
+      near.getContext("2d")!.drawImage(can, 0, WALL + D - 4, W, WALL + 4, 0, 0, W, WALL + 4);
+      scene.textures.addCanvas(`${key}_near`, near);
+    }
+    // The deck's top sits WALL art pixels above the road's first row; the near wall right under its last row.
+    const x = (c0 - 1) * BLOCK;
+    const y = r0 * BLOCK - WALL * ART;
+    scene.add.image(x, y, key).setOrigin(0).setScale(ART).setDepth(-8);
+    const nearY = (r0 + rows) * BLOCK;
+    scene.add.image(x, nearY - 4 * ART, `${key}_near`).setOrigin(0).setScale(ART).setDepth(nearY + WALL * ART);
   }
 
   /** A square of ground is painted: put it on the map. */

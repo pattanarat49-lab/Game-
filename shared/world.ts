@@ -210,7 +210,8 @@ function buildWorld(): OpenMap {
     if (across) {
       // Its railings: solid along the top and bottom edges past the deck.
       for (let c = b.c0; c <= b.c1; c++) for (const r of [b.r0 - 1, b.r1 + 1]) if (wet(at(c, r))) set(c, r, at(c, r), T_WALL);
-      props.push({ kind: "bridge", x: ((b.c0 + b.c1 + 1) / 2) * BLOCK, y: (b.r1 + 1) * BLOCK + 10, v: 1 });
+      // Drawn in code by the client (owWorld.stoneBridge): x, y = its first deck block, v = width * 100 + rows.
+      props.push({ kind: "stonebridge", x: b.c0, y: b.r0, v: (b.c1 - b.c0 + 1) * 100 + (b.r1 - b.r0 + 1) });
     } else props.push({ kind: "woodbridge", x: ((b.c0 + b.c1 + 1) / 2) * BLOCK, y: (b.r1 + 1) * BLOCK + 8, v: 1 });
   }
 
