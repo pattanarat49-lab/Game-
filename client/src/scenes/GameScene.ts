@@ -419,6 +419,8 @@ export class GameScene extends Phaser.Scene {
           this.add.image(cx * CH, cy * CH, key).setOrigin(0).setDepth(-10);
         }
       this.stormRing = this.add.graphics().setDepth(945);
+      // Heal pads: the user's ancient healing shrine on each one.
+      if (this.textures.exists("healshrine")) for (const h of ROYALE_MAP.heals) this.add.image(h.x, h.y, "healshrine").setScale(1.5).setDepth(-2.5);
     }
     this.fog = [];
     this.fogArea = undefined;
@@ -1048,6 +1050,13 @@ export class GameScene extends Phaser.Scene {
     for (const h of ROYALE_MAP.heals) {
       pads.fillStyle(0x4cff7a, 0.12 + 0.12 * beat).fillCircle(h.x, h.y, ROYALE_HEAL_RADIUS);
       pads.lineStyle(2, 0x8affa8, 0.5 + 0.4 * beat).strokeCircle(h.x, h.y, ROYALE_HEAL_RADIUS);
+      // a soft beam of green light rising off the altar, with a few sparks
+      pads.fillStyle(0x7affb0, 0.1 + 0.15 * beat).fillRect(h.x - 6, h.y - 46, 12, 46);
+      pads.fillStyle(0xc8ffd8, 0.2 + 0.25 * beat).fillRect(h.x - 2, h.y - 40, 4, 40);
+      for (let i = 0; i < 3; i++) {
+        const t = ((this.time.now / 1400 + i / 3) % 1);
+        pads.fillStyle(0xaaffc8, 1 - t).fillRect(h.x - 12 + i * 11, h.y - 6 - t * 40, 3, 3);
+      }
     }
     const edge = (this.stormEdge ??= this.add.graphics().setDepth(946));
     edge.clear();
