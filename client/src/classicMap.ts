@@ -18,6 +18,7 @@ import {
   T_WATER,
 } from "../../shared/maps";
 import { MAP_TEX } from "./mapTex.data";
+import { GRASS16 } from "./grass16.data";
 
 function seeded(seed: number) {
   let s = seed;
@@ -316,6 +317,76 @@ function texRect(ctx: CanvasRenderingContext2D, t: Tex, color: RGB, x: number, y
   ctx.putImageData(img, x, y);
 }
 
+/** The island's grass: the user's 16x16 grass tiles (no flowers), drawn 3 screen px per art pixel. A tile's plain
+ * green is replaced by one shared green, and only its blades and specks are stamped at loose, overlapping spots, so
+ * no tile grid shows. */
+function paintGrass16(d: Uint8ClampedArray, W: number, H: number) {
+  const P = 3;
+  const raw = atob(GRASS16.d);
+  const bytes = new Uint8Array(raw.length);
+  for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
+  // Each tile's own plain green (the middle value of its pixels), then what differs from it.
+  const decals: { x: number; y: number; dr: number; dg: number; db: number }[][] = [];
+  let base = [0, 0, 0];
+  for (let n = 0; n < GRASS16.n; n++) {
+    const px = (i: number, k: number) => bytes[n * 768 + i * 3 + k];
+    const med = [0, 1, 2].map((k) => {
+      const v = Array.from({ length: 256 }, (_, i) => px(i, k)).sort((a, b) => a - b);
+      return v[128];
+    });
+    base = base.map((v, k) => v + med[k] / GRASS16.n);
+    const list: (typeof decals)[number] = [];
+    for (let y = 2; y < 14; y++)
+      for (let x = 2; x < 14; x++) {
+        const i = y * 16 + x;
+        const dr = px(i, 0) - med[0];
+        const dg = px(i, 1) - med[1];
+        const db = px(i, 2) - med[2];
+        if (Math.abs(dr) + Math.abs(dg) + Math.abs(db) > 24) list.push({ x, y, dr, dg, db });
+      }
+    decals.push(list);
+  }
+  const noise = noiseField(23);
+  for (let y = 0; y < H; y++)
+    for (let x = 0; x < W; x++) {
+      const i = (y * W + x) * 4;
+      const ax = Math.floor(x / P);
+      const ay = Math.floor(y / P);
+      const f = 0.95 + noise(ax, ay, 14) * 0.1;
+      d[i] = base[0] * f;
+      d[i + 1] = base[1] * f;
+      d[i + 2] = base[2] * f;
+    }
+  // Few big tufts, many soft specks: tiles with lots of changed pixels are the tufts.
+  const tufts = decals.filter((l) => l.length > 40);
+  const soft = decals.filter((l) => l.length <= 40);
+  const rand = seeded(161);
+  const AW = Math.ceil(W / P);
+  const AH = Math.ceil(H / P);
+  for (let gy = -8; gy < AH; gy += 11)
+    for (let gx = -8; gx < AW; gx += 11) {
+      const pool = rand() < 0.22 && tufts.length ? tufts : soft;
+      const list = pool[Math.floor(rand() * pool.length)];
+      const ox = gx + Math.floor(rand() * 8);
+      const oy = gy + Math.floor(rand() * 8);
+      for (const q of list) {
+        const ax = ox + q.x;
+        const ay = oy + q.y;
+        if (ax < 0 || ay < 0 || ax >= AW || ay >= AH) continue;
+        for (let sy = 0; sy < P; sy++)
+          for (let sx = 0; sx < P; sx++) {
+            const x = ax * P + sx;
+            const y = ay * P + sy;
+            if (x >= W || y >= H) continue;
+            const i = (y * W + x) * 4;
+            d[i] = base[0] + q.dr;
+            d[i + 1] = base[1] + q.dg;
+            d[i + 2] = base[2] + q.db;
+          }
+      }
+    }
+}
+
 function paintRich(ctx: CanvasRenderingContext2D, m: ClassicMap, ox: number, oy: number, b: number, floorTex: string) {
   const t = m.theme;
   const rand = seeded(91);
@@ -340,6 +411,7 @@ function paintRich(ctx: CanvasRenderingContext2D, m: ClassicMap, ox: number, oy:
       d[i + 2] = Math.min(255, floor[2] * f);
       d[i + 3] = 255;
     }
+  if (floorTex === "meadow") paintGrass16(d, W, H);
   ctx.putImageData(img, ox, oy);
 
   // 2. Soft shadows that walls, crates and hedges throw down and to the right.
