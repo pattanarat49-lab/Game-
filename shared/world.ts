@@ -246,9 +246,9 @@ function buildWorld(): OpenMap {
   for (let tries = 0; tries < 9000; tries++) {
     const c = 2 + Math.floor(rand() * (C - 4));
     const r = 2 + Math.floor(rand() * (R - 4));
-    if (!free(c, r, 1)) continue;
+    if (!free(c, r, 2)) continue; // more room between trees (2026-10-11, user: too crowded)
     const edgeForest = c > C - 16 || r > R - 10 || c < leftEdge(r) + 9 || r < mountainEdge(c) + 7 || (c > 120 && r < 70);
-    const p = nearVillage(c, r) ? 0.05 : edgeForest ? 0.9 : 0.12;
+    const p = nearVillage(c, r) ? 0.03 : edgeForest ? 0.55 : 0.06;
     if (rand() > p) continue;
     const kind: PropKind = r < mountainEdge(c) + 9 || c > 132 ? "pine" : nearVillage(c, r) || rand() < 0.22 ? "blossom" : "tree";
     set(c, r, at(c, r), T_WALL);
@@ -279,11 +279,11 @@ function buildWorld(): OpenMap {
         const fr = r + Math.floor(rand() * 3) - 1;
         if ((at(fc, fr) === L_GRASS || at(fc, fr) === L_GRASS2) && tiles[idx(Math.max(0, Math.min(C - 1, fc)), Math.max(0, Math.min(R - 1, fr)))] === T_FLOOR) look[idx(fc, fr)] = L_FLOWERS;
       }
-    } else if (roll < 0.9) props.push({ kind: "bush", x: px(c), y: (r + 1) * BLOCK - 4, v: Math.floor(rand() * 2) });
-    else if (roll < 0.97) {
+    } else if (roll < 0.8) props.push({ kind: "bush", x: px(c), y: (r + 1) * BLOCK - 4, v: Math.floor(rand() * 2) });
+    else if (roll < 0.86) {
       props.push({ kind: "rock", x: px(c), y: (r + 1) * BLOCK - 4, v: Math.floor(rand() * 2) });
       tiles[idx(c, r)] = T_WALL;
-    } else props.push({ kind: "log", x: px(c), y: (r + 1) * BLOCK - 4, v: 0 });
+    } else if (roll < 0.88) props.push({ kind: "log", x: px(c), y: (r + 1) * BLOCK - 4, v: 0 });
   }
   // Keep the square, the portal and the paths clear.
   props.splice(0, props.length, ...props.filter((p) => p.kind === "house" || p.kind === "lamp" || p.kind === "well" || p.kind === "stall" || p.kind === "sign" || Math.hypot(p.x - portal.x, p.y - portal.y) > 60));

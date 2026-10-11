@@ -13,15 +13,15 @@ T = "art/worldprops-trees.png"  # the user's oak / cherry / pine / willow sheet 
 SPRITES = {
     # name: (sheet or None for the first sheet, rough box, sheet pixels per sprite pixel, colours, roof hue or None).
     # Every prop is drawn 3 screen px per pixel, the same as the ground, so the whole scene shares one pixel size.
-    "tree0": (T, [878, 100, 990, 225], 4.4, 9, None), "tree1": (T, [1300, 95, 1410, 225], 4.4, 9, None), "tree2": (T, [878, 840, 995, 968], 4.4, 9, None),
-    "blossom0": (T, [878, 345, 990, 478], 4.4, 9, None),
-    "pine0": (T, [882, 585, 982, 725], 5.2, 7, None), "pine1": (T, [1022, 590, 1120, 725], 5.2, 7, None),
+    "tree0": (T, [878, 100, 990, 225], 6, 9, None), "tree1": (T, [1300, 95, 1410, 225], 6, 9, None), "tree2": (T, [878, 840, 995, 968], 6, 9, None),
+    "blossom0": (T, [878, 345, 990, 478], 6, 9, None),
+    "pine0": (T, [882, 585, 982, 725], 7, 7, None), "pine1": (T, [1022, 590, 1120, 725], 7, 7, None),
     "bush0": (None, [32, 509, 75, 548], 3, 6, None), "bush1": (None, [86, 508, 128, 548], 3, 6, None), "bush2": (None, [268, 509, 312, 550], 3, 8, None), "bush3": (None, [319, 506, 362, 550], 3, 8, None),
     "rock0": (None, [34, 606, 74, 643], 3, 5, None), "rock1": (None, [91, 609, 130, 644], 3, 5, None),
-    "house0": (B, [120, 28, 320, 214], 3.3, 22, None), "house1": (B, [120, 28, 320, 214], 3.3, 22, 218),
-    "house2": (B, [120, 28, 320, 214], 3.3, 22, 112), "house3": (B, [120, 28, 320, 214], 3.3, 22, 38),
-    "stall0": (B, [112, 822, 325, 965], 4.6, 20, None),
-    "windmill0": (B, [150, 278, 310, 482], 3.6, 20, None),
+    "house0": (B, [120, 28, 320, 214], 4.6, 20, None), "house1": (B, [120, 28, 320, 214], 4.6, 20, 218),
+    "house2": (B, [120, 28, 320, 214], 4.6, 20, 112), "house3": (B, [120, 28, 320, 214], 4.6, 20, 38),
+    "stall0": (B, [112, 822, 325, 965], 6.2, 16, None),
+    "windmill0": (B, [150, 278, 310, 482], 5, 16, None),
     "lamp0": (None, [357, 904, 381, 987], 4.2, 7, None),
     "well0": (None, [1397, 636, 1446, 700], 3, 10, None),
     "log0": (None, [1191, 431, 1254, 477], 3, 7, None),
