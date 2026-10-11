@@ -1621,12 +1621,12 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
   private grabSlam(id: string, p: P, skill: SkillDef, brain: PlayerBrain) {
     const t = this.findTarget(id, p, skill.radius);
     if (!t) {
-      const end = this.move(p.x, p.y, Math.cos(p.aim) * skill.radius * 0.5, Math.sin(p.aim) * skill.radius * 0.5, PLAYER_RADIUS);
+      const end = this.passThrough(p.x, p.y, p.aim, skill.radius * 0.5);
       [p.x, p.y] = [end.x, end.y];
     } else {
       const d = Math.hypot(t.x - p.x, t.y - p.y) || 1;
       const gap = Math.max(0, d - 16);
-      const end = this.move(p.x, p.y, ((t.x - p.x) / d) * gap, ((t.y - p.y) / d) * gap, PLAYER_RADIUS);
+      const end = this.passThrough(p.x, p.y, Math.atan2(t.y - p.y, t.x - p.x), gap);
       [p.x, p.y] = [end.x, end.y];
       const stun = skill.duration ?? 2;
       if (t.key.startsWith("p:")) {
@@ -1807,7 +1807,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
     const s = this.state;
     switch (st.do) {
       case "dash": {
-        const end = this.move(p.x, p.y, Math.cos(aim) * st.len, Math.sin(aim) * st.len, PLAYER_RADIUS);
+        const end = this.passThrough(p.x, p.y, aim, st.len);
         const len = Math.hypot(end.x - p.x, end.y - p.y);
         const w = st.width ?? 26;
         this.fxArea(id, this.laneTest(p.x, p.y, aim, len, w), st, { x: p.x, y: p.y }, aim);
@@ -1838,7 +1838,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
             brain.fxAim = p.aim; // the rest of the combo turns to face the foe
           }
         } else if (st.to === "start") to = { x: sx, y: sy };
-        to ??= this.move(p.x, p.y, Math.cos(aim) * st.range, Math.sin(aim) * st.range, PLAYER_RADIUS);
+        to ??= this.passThrough(p.x, p.y, aim, st.range);
         this.addZone(`fx:puff:${st.color}`, p.x, p.y, 16, 0.4, { owner: id, every: Infinity, damage: 0 });
         [p.x, p.y] = [to.x, to.y];
         this.addZone(`fx:puff:${st.color}`, p.x, p.y, 16, 0.4, { owner: id, every: Infinity, damage: 0 });
@@ -2129,7 +2129,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
     const t = Math.random() < 0.5 ? this.findTarget(id, p, s2.radius * 1.5, true) : undefined;
     const a = t ? Math.atan2(t.y - p.y, t.x - p.x) + (Math.random() - 0.5) * 0.5 : Math.random() * Math.PI * 2;
     const len = t ? Math.min(s2.radius, Math.hypot(t.x - p.x, t.y - p.y) + 40) : s2.radius * (0.5 + Math.random() * 0.5);
-    const end = this.move(p.x, p.y, Math.cos(a) * len, Math.sin(a) * len, PLAYER_RADIUS);
+    const end = this.passThrough(p.x, p.y, a, len);
     const d = Math.hypot(end.x - p.x, end.y - p.y);
     if (d > 1) this.lineHit(id, p.x, p.y, Math.atan2(end.y - p.y, end.x - p.x), d, 26, s2.damage);
     [p.x, p.y] = [end.x, end.y];
@@ -3709,8 +3709,8 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
         brain.attackTimer = 0;
         break;
       case "rush": {
-        // Dash straight ahead (rocks stop you), cutting through everything on the way.
-        const end = this.move(p.x, p.y, Math.cos(p.aim) * skill.radius, Math.sin(p.aim) * skill.radius, PLAYER_RADIUS);
+        // Dash straight ahead (through walls and rocks, user request 2026-10-11), cutting through everything on the way.
+        const end = this.passThrough(p.x, p.y, p.aim, skill.radius);
         const len = Math.hypot(end.x - p.x, end.y - p.y);
         this.lineHit(id, p.x, p.y, p.aim, len, skill.width ?? 24, skill.damage);
         p.x = end.x;
@@ -3745,7 +3745,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
         // SEVENTH FORM: a huge lightning dash cutting a wide lane, which keeps crackling for a while.
         const sx = p.x;
         const sy = p.y;
-        const end = this.move(p.x, p.y, Math.cos(p.aim) * skill.radius, Math.sin(p.aim) * skill.radius, PLAYER_RADIUS);
+        const end = this.passThrough(p.x, p.y, p.aim, skill.radius);
         const len = Math.hypot(end.x - p.x, end.y - p.y);
         const width = skill.width ?? 70;
         this.lineHit(id, sx, sy, p.aim, len, width, skill.damage);
@@ -3807,7 +3807,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
         // Dash ahead cutting the lane; a shadow stays where he started.
         const zone = this.addZone("shadow", p.x, p.y, 10, (skill.duration ?? 3) + 0.1, { owner: id, every: Infinity, damage: 0 });
         brain.shadow = { x: p.x, y: p.y, zone, left: skill.duration ?? 3 };
-        const end = this.move(p.x, p.y, Math.cos(p.aim) * skill.radius, Math.sin(p.aim) * skill.radius, PLAYER_RADIUS);
+        const end = this.passThrough(p.x, p.y, p.aim, skill.radius);
         this.lineHit(id, p.x, p.y, p.aim, Math.hypot(end.x - p.x, end.y - p.y), skill.width ?? 24, skill.damage);
         p.x = end.x;
         p.y = end.y;
@@ -3867,9 +3867,9 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
         brain.attackTimer = 0;
         break;
       case "leap": {
-        // SKY LEAP: up and over onto the aimed spot (rocks stop the jump short), then a crushing landing.
+        // SKY LEAP: up and over onto the aimed spot (over walls and rocks), then a crushing landing.
         const w = skill.width ?? 170;
-        const end = this.move(p.x, p.y, Math.cos(p.aim) * w, Math.sin(p.aim) * w, PLAYER_RADIUS);
+        const end = this.passThrough(p.x, p.y, p.aim, w);
         p.x = end.x;
         p.y = end.y;
         p.warp = (p.warp + 1) % 256;
@@ -4091,7 +4091,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       }
       case "flamedash": {
         // FLAME DASH: through the foes, and the way behind him burns.
-        const end = this.move(p.x, p.y, Math.cos(p.aim) * skill.radius, Math.sin(p.aim) * skill.radius, PLAYER_RADIUS);
+        const end = this.passThrough(p.x, p.y, p.aim, skill.radius);
         const len = Math.hypot(end.x - p.x, end.y - p.y);
         const w = skill.width ?? 28;
         this.lineHit(id, p.x, p.y, p.aim, len, w, skill.damage);
@@ -4124,7 +4124,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       }
       case "lancecharge": {
         // PIERCING CHARGE: spear first down a lane; everything in it is thrown far back.
-        const end = this.move(p.x, p.y, Math.cos(p.aim) * skill.radius, Math.sin(p.aim) * skill.radius, PLAYER_RADIUS);
+        const end = this.passThrough(p.x, p.y, p.aim, skill.radius);
         const len = Math.hypot(end.x - p.x, end.y - p.y);
         this.lineHit(id, p.x, p.y, p.aim, len, skill.width ?? 30, skill.damage, 0, 2.5);
         this.addZone("lancetrail", (p.x + end.x) / 2, (p.y + end.y) / 2, len / 2, 0.35, { owner: id, every: Infinity, damage: 0 });
@@ -4167,7 +4167,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       }
       case "godrush": {
         // LIGHTNING DASH: the Sword God's lunge, cutting the whole lane, then a full spin where he lands.
-        const end = this.move(p.x, p.y, Math.cos(p.aim) * skill.radius, Math.sin(p.aim) * skill.radius, PLAYER_RADIUS);
+        const end = this.passThrough(p.x, p.y, p.aim, skill.radius);
         const len = Math.hypot(end.x - p.x, end.y - p.y);
         this.lineHit(id, p.x, p.y, p.aim, len, skill.width ?? 26, skill.damage);
         p.x = end.x;
@@ -4264,11 +4264,11 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
           const d = Math.hypot(t.x - p.x, t.y - p.y) || 1;
           [ux, uy] = [(t.x - p.x) / d, (t.y - p.y) / d];
           const gap = Math.max(0, d - 18);
-          const end = this.move(p.x, p.y, ux * gap, uy * gap, PLAYER_RADIUS);
+          const end = this.passThrough(p.x, p.y, Math.atan2(uy, ux), gap);
           [p.x, p.y] = [end.x, end.y];
           [bx, by] = [t.x, t.y];
         } else {
-          const end = this.move(p.x, p.y, ux * skill.radius * 0.5, uy * skill.radius * 0.5, PLAYER_RADIUS);
+          const end = this.passThrough(p.x, p.y, Math.atan2(uy, ux), skill.radius * 0.5);
           [p.x, p.y] = [end.x, end.y];
           [bx, by] = [p.x + ux * 14, p.y + uy * 14];
         }
@@ -4428,7 +4428,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
         break;
       case "kick": {
         // RIDER KICK: leap along the aim, kicking through everything and stunning it.
-        const end = this.move(p.x, p.y, Math.cos(p.aim) * skill.radius, Math.sin(p.aim) * skill.radius, PLAYER_RADIUS);
+        const end = this.passThrough(p.x, p.y, p.aim, skill.radius);
         const len = Math.hypot(end.x - p.x, end.y - p.y);
         this.lineHit(id, p.x, p.y, p.aim, len, skill.width ?? 30, skill.damage, skill.duration ?? 2);
         p.x = end.x;
@@ -4459,7 +4459,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
     const tx = t?.x ?? 0;
     const ty = t?.y ?? 0;
     if (!pick) {
-      const end = this.move(p.x, p.y, Math.cos(p.aim) * skill.radius * 0.6, Math.sin(p.aim) * skill.radius * 0.6, PLAYER_RADIUS);
+      const end = this.passThrough(p.x, p.y, p.aim, skill.radius * 0.6);
       p.x = end.x;
       p.y = end.y;
       p.warp = (p.warp + 1) % 256;

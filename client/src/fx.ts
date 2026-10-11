@@ -565,7 +565,7 @@ export function fxGuide(
   aim: number,
   x: number,
   y: number,
-  lane: (len: number, width: number) => void,
+  lane: (len: number, width: number, pierce?: boolean) => void,
   area: (cx: number, cy: number, r: number) => void,
   cone: (range: number, arc: number) => void,
   rays?: (n: number, spread: number, range: number) => void,
@@ -573,13 +573,13 @@ export function fxGuide(
 ) {
   for (const st of skill.steps ?? []) {
     switch (st.do) {
-      case "dash":
-        return lane(st.len, st.width ?? 26);
+      case "dash": // dashes, blinks and lanes go through walls and rocks; shots stop at them
+        return lane(st.len, st.width ?? 26, true);
       case "blink":
-        if (st.to === "aim") return lane(st.range, 3);
+        if (st.to === "aim") return lane(st.range, 3, true);
         return area(x, y, st.range);
       case "lane":
-        return lane(st.len, st.width);
+        return lane(st.len, st.width, true);
       case "ring":
         return area(x, y, st.radius);
       case "cone":
@@ -588,7 +588,7 @@ export function fxGuide(
         if (st.spread >= Math.PI * 2 - 0.01) return area(x, y, st.range);
         if (rays && st.n > 1 && st.spread > 0.01) return rays(st.n, st.spread, st.range); // one line per shot
         if (st.spread > 0.3) return cone(st.range, st.spread);
-        return lane(st.range, Math.max(8, (st.size ?? 3) * 2));
+        return lane(st.range, Math.max(8, (st.size ?? 3) * 2), false);
       case "drop":
       case "field":
         if (st.at === "self") return area(x, y, st.radius);

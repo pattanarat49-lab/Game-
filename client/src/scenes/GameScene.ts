@@ -65,7 +65,7 @@ import type { HudScene } from "./HudScene";
 import { LocalRoom } from "../localRoom";
 import { drawFxAura, drawFxZone, fxBuffStep, fxGuide, fxShotTexture } from "../fx";
 import { Lobby } from "../lobby";
-import { drawClassicGround, drawRoyaleGround } from "../classicMap";
+import { drawClassicGround, drawRoyaleGround, drawRoyaleWaterGlints } from "../classicMap";
 import { SongId, attackSound, dashSound, hurtSound, koSound, playJingle, playMusic, skillSound } from "../audio";
 import { ROYALE_HEAL_RADIUS, ROYALE_MAP } from "../../../shared/royale";
 import { MAP_H, MAP_Y, classicMap, inBush, mapBlocksShot, seesInto } from "../../../shared/maps";
@@ -208,6 +208,8 @@ const CLASSIC_ZOOM = 1.4;
 const WORLD_ZOOM = 1.2; // the Open World: a wider view, heroes small against the map
 /** Classic 3v3: Red and Blue. */
 const TEAM_MARKERS: Record<number, number> = { 1: 0xff3a4a, 2: 0x3a8aff };
+/** Skills whose lane goes through walls and rocks (they hit everything in it, or dash through): the aim guide says so. */
+const PIERCE_KINDS = new Set<string>(["line", "jab", "rush", "purple", "thunderdash", "seventh", "bluelaser", "shadowstep", "leap", "charge", "godrush", "flamedash", "lancecharge", "cross", "kick", "wave", "barrage", "gatling", "eyebeam", "onepunch"]);
 
 interface EnemyView {
   sprite: Phaser.GameObjects.Image;
@@ -419,6 +421,23 @@ export class GameScene extends Phaser.Scene {
           this.add.image(cx * CH, cy * CH, key).setOrigin(0).setDepth(-10);
         }
       this.stormRing = this.add.graphics().setDepth(945);
+      // The water moves: two layers of light glints fade into each other and sway a little.
+      this.waterGlints = [0, 1].map((n) => {
+        const layer = this.add.container(0, 0).setDepth(-9.5);
+        const glints = this.textures.exists(`glints_${n}_0_0`) ? undefined : drawRoyaleWaterGlints(ROYALE_MAP, 41 + n * 12);
+        for (let cy = 0; cy * CH < ROYALE_MAP.rows * BLOCK; cy++)
+          for (let cx = 0; cx * CH < ROYALE_MAP.cols * BLOCK; cx++) {
+            const key = `glints_${n}_${cx}_${cy}`;
+            if (glints && !this.textures.exists(key)) {
+              const c = document.createElement("canvas");
+              c.width = c.height = CH;
+              c.getContext("2d")!.drawImage(glints, -cx * CH, -cy * CH);
+              this.textures.addCanvas(key, c);
+            }
+            layer.add(this.add.image(cx * CH, cy * CH, key).setOrigin(0));
+          }
+        return layer;
+      });
       // Heal pads: the user's ancient healing shrine on each one.
       if (this.textures.exists("healshrine")) for (const h of ROYALE_MAP.heals) this.add.image(h.x, h.y, "healshrine").setScale(1.5).setDepth(-2.5);
     }
@@ -1037,12 +1056,19 @@ export class GameScene extends Phaser.Scene {
   private stormEdge?: Phaser.GameObjects.Graphics;
   private stormDrawn = -1;
   private healPads?: Phaser.GameObjects.Graphics;
+  private waterGlints?: Phaser.GameObjects.Container[];
 
   /** Battle Royale: everything outside the safe circle is storm (dark purple), with a glowing edge. */
   private drawStorm(state: any) {
     const g = this.stormRing;
     if (!g) return;
     const { x, y } = ROYALE_MAP.center;
+    if (this.waterGlints) {
+      const t = this.time.now / 1000;
+      const mix = 0.5 + 0.5 * Math.sin(t * 1.6);
+      this.waterGlints[0].setAlpha(mix).setPosition(Math.sin(t * 0.9) * 3, Math.cos(t * 0.7) * 1.5);
+      this.waterGlints[1].setAlpha(1 - mix).setPosition(-Math.sin(t * 0.8) * 3, -Math.cos(t * 0.6) * 1.5);
+    }
     // Heal pads: a soft green pulse on each one.
     const pads = (this.healPads ??= this.add.graphics().setDepth(-2));
     pads.clear();
@@ -2536,6 +2562,7 @@ export class GameScene extends Phaser.Scene {
 
   private drawAimGuide(state: any) {
     this.chargeLabel?.setVisible(false);
+    this.pierceLabel?.setVisible(false);
     const g = this.aimGuide;
     g.clear();
     this.mimicGlow ??= this.add.graphics().setDepth(900);
@@ -2654,6 +2681,18 @@ export class GameScene extends Phaser.Scene {
   }
 
   private chargeLabel?: Phaser.GameObjects.Text;
+  private pierceLabel?: Phaser.GameObjects.Text;
+
+  /** "THROUGH WALLS" at the end of a skill's guide when it goes through walls and rocks (user request 2026-10-11). */
+  private showPierce(x: number, y: number) {
+    this.pierceLabel ??= this.add
+      .text(0, 0, "THROUGH WALLS", { fontFamily: "monospace", fontSize: "16px", color: "#7ae8ff", stroke: "#0a1a24", strokeThickness: 4 })
+      .setOrigin(0.5, 1)
+      .setResolution(2)
+      .setDepth(10000);
+    const pulse = 0.75 + 0.25 * Math.sin(this.time.now / 140);
+    this.pierceLabel.setScale(0.85 * this.guidePx()).setPosition(x, y - 8 * this.guidePx()).setAlpha(pulse).setVisible(true);
+  }
   private mimicGlow?: Phaser.GameObjects.Graphics;
   private seenParry = new Set<string>();
   private enemyHp = new Map<string, number>();
@@ -2930,8 +2969,8 @@ export class GameScene extends Phaser.Scene {
   }
 
   /** One shot's path: a line (dashes marching outward when `march`) ending in an arrow, cut short by walls. */
-  private guideRay(g: Phaser.GameObjects.Graphics, x: number, y: number, angle: number, len: number, color: number, alpha: number, march = true) {
-    const reach = this.guideReach(x, y, angle, len);
+  private guideRay(g: Phaser.GameObjects.Graphics, x: number, y: number, angle: number, len: number, color: number, alpha: number, march = true, pierce = false) {
+    const reach = pierce ? { len, wall: false } : this.guideReach(x, y, angle, len);
     const c = Math.cos(angle);
     const s = Math.sin(angle);
     const px = this.guidePx();
@@ -2959,8 +2998,10 @@ export class GameScene extends Phaser.Scene {
     const sin = Math.sin(this.aim);
     const GOLD = 0xffd23f;
     // A straight skill: the lane it sweeps, bright edges, dashes marching the way it goes and an arrow at the end.
-    const lane = (len: number, width: number) => {
-      const reach = this.guideReach(x, y, this.aim, len);
+    // One that goes through walls and rocks (`pierce`) runs its full length in ice blue, labelled THROUGH WALLS.
+    const lane = (len: number, width: number, pierce = PIERCE_KINDS.has(skill.kind)) => {
+      const reach = pierce ? { len, wall: false } : this.guideReach(x, y, this.aim, len);
+      const GOLD = pierce ? 0x5ad8ff : 0xffd23f;
       const l = reach.len;
       const w = Math.max(width, 3) / 2;
       const pts = [
@@ -2975,8 +3016,9 @@ export class GameScene extends Phaser.Scene {
         g.lineStyle(4 * px, 0x1a0f14, 0.35).strokePoints(pts, true);
         g.lineStyle(2 * px, GOLD, 1).strokePoints(pts, true);
       }
-      this.guideRay(g, x, y, this.aim, l, 0xffe14a, 1);
+      this.guideRay(g, x, y, this.aim, l, pierce ? 0xaaf0ff : 0xffe14a, 1, true, pierce);
       if (reach.wall) this.guideWallMark(g, x + cos * l, y + sin * l);
+      if (pierce) this.showPierce(x + cos * l, y + sin * l - Math.max(width, 3) / 2);
     };
     // A spot it lands on: a ring with a cross-hair in the middle and a line out to it.
     const area = (cx: number, cy: number, r: number) => {

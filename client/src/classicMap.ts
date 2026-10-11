@@ -224,6 +224,45 @@ export function drawMapThumb(m: ClassicMap, b = 3): HTMLCanvasElement {
 }
 
 /** Battle Royale: the whole island at full size (the sea round it is part of the map). */
+/**
+ * Battle Royale water in motion (user request 2026-10-11): just the light glints on the sea and ponds, on a clear
+ * canvas. GameScene lays two of these (different seeds) over the island and fades between them, so the water shimmers.
+ */
+export function drawRoyaleWaterGlints(m: ClassicMap, seed: number): HTMLCanvasElement {
+  const canvas = document.createElement("canvas");
+  const W = (canvas.width = m.cols * BLOCK);
+  const H = (canvas.height = m.rows * BLOCK);
+  const ctx = canvas.getContext("2d")!;
+  const field = tileField(WATER16, W, H, seed, 0.3, 40);
+  const lum = (i: number) => field[i] * 0.3 + field[i + 1] * 0.55 + field[i + 2] * 0.15;
+  // the plain water's brightness: the middle of a sample of the field
+  const sample: number[] = [];
+  for (let i = 0; i < field.length; i += 4 * 97) sample.push(lum(i));
+  sample.sort((a, b) => a - b);
+  const base = sample[sample.length >> 1];
+  const water = (x: number, y: number) => {
+    const c = Math.floor(x / BLOCK);
+    const r = Math.floor(y / BLOCK);
+    return c >= 0 && r >= 0 && c < m.cols && r < m.rows && m.tiles[r * m.cols + c] === T_WATER;
+  };
+  const img = ctx.createImageData(W, H);
+  const d = img.data;
+  for (let y = 0; y < H; y++)
+    for (let x = 0; x < W; x++) {
+      const i = (y * W + x) * 4;
+      const up = lum(i) - base;
+      if (up < 18) continue;
+      // keep clear of the banks: the layer sways a few pixels
+      if (!water(x, y) || !water(x - 6, y) || !water(x + 6, y) || !water(x, y - 6) || !water(x, y + 6)) continue;
+      d[i] = 220;
+      d[i + 1] = 248;
+      d[i + 2] = 255;
+      d[i + 3] = Math.min(230, up * 3.2);
+    }
+  ctx.putImageData(img, 0, 0);
+  return canvas;
+}
+
 export function drawRoyaleGround(m: ClassicMap): HTMLCanvasElement {
   const canvas = document.createElement("canvas");
   canvas.width = m.cols * BLOCK;
