@@ -154,6 +154,8 @@ interface Effect {
  * the grip point in the picture (ox, oy), how many art pixels above the feet the hands are, and the size
  * (2/3 = one weapon pixel per art pixel).
  */
+/** How much bigger heroes are drawn in the Open World (2026-10-11, user request). */
+const WORLD_HERO_SCALE = 1.5;
 const AUTO_AIM_RANGE = 300; // DEFAULT attack mode: how far (world px) the sword button looks for a foe
 
 const HELD_WITH_ART: Record<string, { ox: number; oy: number; hands: number; scale: number } | undefined> = {
@@ -1218,7 +1220,8 @@ export class GameScene extends Phaser.Scene {
       body.setFlipX(Math.cos(aim) < 0);
       const bob = Math.sin(this.time.now / 90) * 0.6;
       // Heroes are drawn HERO_SCALE times their sprite; BIG LIGHT makes them bigger still.
-      const k = HERO_SCALE * (p.big > 0 && !p.dead ? BIG_SCALE : 1);
+      // In the Open World heroes stand bigger beside the houses and trees (2026-10-11, user request).
+      const k = HERO_SCALE * (world ? WORLD_HERO_SCALE : 1) * (p.big > 0 && !p.dead ? BIG_SCALE : 1);
       body.setDepth(body.y);
       const out = p.dead && (state.stage === "classic" || state.stage === "royale") && !(p.lives > 0); // Classic: out of lives, gone from the map
       body.setAlpha(out ? 0 : p.dead ? 0.25 : p.dashing ? 0.6 : 1);
