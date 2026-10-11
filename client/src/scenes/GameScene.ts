@@ -3736,6 +3736,14 @@ export class GameScene extends Phaser.Scene {
       g.fillStyle(0x000000, 0.5);
       for (let i = 1; i < 4; i++) g.fillRect(x0 + Math.round((w * i) / 4), y, 1, h);
     }
+    if (side === "me") {
+      // our dash cooldown, a thin blue strip under the health (2026-10-11, user request)
+      const left = Math.max(this.dashCooldown, p.dashCooldown ?? 0);
+      const dash = 1 - Math.max(0, Math.min(1, left / DASH_COOLDOWN));
+      g.fillStyle(0x000000, 0.85).fillRect(x0 - 1, y + h + 1, w + 2, 4);
+      g.fillStyle(0x0c1a33, 1).fillRect(x0, y + h + 2, w, 2);
+      g.fillStyle(dash >= 1 ? 0x4ac8ff : 0x2a78d8, 1).fillRect(x0, y + h + 2, w * dash, 2);
+    }
   }
 
   /**

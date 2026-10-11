@@ -100,6 +100,7 @@ export class HudScene extends Phaser.Scene {
       const hero = heroOf(me.hero);
       const invincible = !!hero.invincible;
       this.drawHpBar(me.hp, me.maxHp, invincible);
+      this.drawDashBar(me.dashCooldown);
       this.hpText.setText(`${me.name} (${hero.name})`);
       // Lasting effects count for the skill that made them (a latch can be the Giant Shifter's wire, a barrier the doves).
       const active1 = Math.max(me.titan, hero.skill.kind === "immortal" ? me.barrier : 0, me.revive, hero.skill.kind === "latch" ? me.latch : 0, hero.formOf ? 0 : me.buff ?? 0);
@@ -364,6 +365,21 @@ FIGHT! in ${Math.ceil(state.phaseTimer)}`;
     if (low) g.lineStyle(2, 0xff2a2a, pulse).strokeRect(x - 5, y - 5, w + 10, h + 10);
     if (this.hpFlash > 0) g.fillStyle(0xffffff, this.hpFlash * 0.5).fillRect(x, y, w, h);
     this.hpNum.setPosition(x + w / 2, y + h / 2 + 1).setText(invincible ? "INFINITE" : `${Math.ceil(hp)} / ${maxHp}`);
+  }
+
+  /** The dash cooldown under the health bar (2026-10-11, user request): a blue strip that fills back up, bright when ready. */
+  private drawDashBar(left: number) {
+    const x = 20;
+    const y = 64;
+    const w = 260;
+    const h = 6;
+    const frac = 1 - Math.max(0, Math.min(1, left / DASH_COOLDOWN));
+    const ready = frac >= 1;
+    const g = this.bars;
+    g.fillStyle(0x000000, 0.75).fillRect(x - 2, y - 2, w + 4, h + 4);
+    g.fillStyle(0x0c1a33, 1).fillRect(x, y, w, h);
+    g.fillStyle(ready ? 0x4ac8ff : 0x2a78d8, 1).fillRect(x, y, w * frac, h);
+    g.fillStyle(0xffffff, ready ? 0.45 : 0.25).fillRect(x, y, w * frac, 2);
   }
 
   /** One round skill slot at the bottom of the screen (desktop). */
