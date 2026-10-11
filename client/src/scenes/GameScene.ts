@@ -163,7 +163,7 @@ const WALL_CUT_FX = new Set<Effect["kind"]>(["jab", "line", "gatling", "bluelase
  * (2/3 = one weapon pixel per art pixel).
  */
 /** How much bigger heroes are drawn in the Open World (2026-10-11, user request). */
-const WORLD_HERO_SCALE = 1.5;
+const WORLD_HERO_SCALE = 0.95; // the new Open World (2026-10-11): a hero stands 1.5 tiles tall
 const AUTO_AIM_RANGE = 300; // DEFAULT attack mode: how far (world px) the sword button looks for a foe
 
 const HELD_WITH_ART: Record<string, { ox: number; oy: number; hands: number; scale: number } | undefined> = {
@@ -213,7 +213,7 @@ const SUMMON_SCALE: Record<string, number> = { flamedragon: 1.4, quad: 1.25, ech
 const PLAYER_MARKERS = [0x3b7dd8, 0xd84b3b, 0x3bd87a, 0xc93bd8];
 /** Classic 3v3: the camera pulls back so heroes see more of the map. */
 const CLASSIC_ZOOM = 1.4;
-const WORLD_ZOOM = 1.2; // the Open World: a wider view, heroes small against the map
+const WORLD_ZOOM = 2; // the Open World: close in on the 32x32 tiles (about 25 across)
 /** Classic 3v3: Red and Blue. */
 const TEAM_MARKERS: Record<number, number> = { 1: 0xff3a4a, 2: 0x3a8aff };
 /** Dash skills: they go through walls and rocks (everything fired stops at walls): the aim guide says so. */

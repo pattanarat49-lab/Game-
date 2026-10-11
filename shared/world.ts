@@ -5,8 +5,8 @@
 
 import { BLOCK, ClassicMap, MapTheme, T_FENCE, T_FLOOR, T_WALL, T_WATER } from "./maps";
 
-export const WORLD_COLS = 150;
-export const WORLD_ROWS = 110;
+export const WORLD_COLS = 100;
+export const WORLD_ROWS = 76;
 
 // What each block looks like (the collision is in `tiles`).
 export const L_GRASS = 0;
@@ -21,12 +21,16 @@ export const L_MOUNTAIN = 8;
 export const L_SNOW = 9;
 export const L_FARM = 10; // tilled soil with crops
 export const L_FLOWERS = 11;
-export const L_CLIFF = 12; // the rock face at the foot of the mountains
+export const L_CLIFF = 12; // the rock face at the foot of the mountains (in the new world: the cliff, two blocks tall)
+export const L_RUIN = 13; // old stone flags (the ruins in front of the cave)
+export const L_FALL = 14; // the waterfall down the cliff
+export const L_MEADOW = L_GRASS2; // the lighter, yellower grass
 
 export type PropKind = "tree" | "blossom" | "pine" | "house" | "well" | "lamp" | "rock" | "bush" | "sign" | "stall" | "crop" | "boat" | "log" | "windmill";
 
 export interface WorldProp {
-  kind: PropKind;
+  /** The new world: the name of the user's picture (client/art/props/ow_<kind>.png). */
+  kind: string;
   x: number; // world pixels: the bottom centre (where it stands)
   y: number;
   v: number; // a variant (colour, size)
@@ -57,13 +61,19 @@ function rng(seed: number) {
   };
 }
 
+/**
+ * The Open World, second edition (2026-10-11, user request: a new map from their own 32x32 tileset, a hero
+ * 1.5 tiles tall). One block is one of their tiles. A grassy valley under a cliff: the dungeon cave in the
+ * cliff behind old ruins, a cobbled square with a well, a river from a waterfall under a stone bridge,
+ * a lake with a sandy beach and a stream with a wooden bridge, a fenced sheep pasture, and woods all round.
+ */
 function buildWorld(): OpenMap {
   const C = WORLD_COLS;
   const R = WORLD_ROWS;
   const tiles = new Uint8Array(C * R).fill(T_FLOOR);
   const look = new Uint8Array(C * R).fill(L_GRASS);
   const props: WorldProp[] = [];
-  const rand = rng(20261006);
+  const rand = rng(20261011);
   const idx = (c: number, r: number) => r * C + c;
   const inside = (c: number, r: number) => c >= 0 && r >= 0 && c < C && r < R;
   const set = (c: number, r: number, l: number, t: number) => {
@@ -72,244 +82,296 @@ function buildWorld(): OpenMap {
     tiles[idx(c, r)] = t;
   };
   const at = (c: number, r: number) => (inside(c, r) ? look[idx(c, r)] : L_MOUNTAIN);
+  const tileAt = (c: number, r: number) => (inside(c, r) ? tiles[idx(c, r)] : T_WALL);
   const px = (c: number) => (c + 0.5) * BLOCK;
+  const wet = (l: number) => l === L_WATER || l === L_DEEP;
+  /** A prop standing with its bottom centre on the bottom of block (c, r); `solid` blocks round its foot. */
+  const place = (kind: string, c: number, r: number, solid: [number, number] = [0, 0], dx = 0) => {
+    props.push({ kind, x: px(c) + dx, y: (r + 1) * BLOCK - 1, v: 0 });
+    const [w, h] = solid;
+    for (let dr = 0; dr < h; dr++) for (let dc = 0; dc < w; dc++) if (inside(c - Math.floor((w - 1) / 2) + dc, r - dr)) tiles[idx(c - Math.floor((w - 1) / 2) + dc, r - dr)] = T_WALL;
+  };
+  /** Nothing here yet: plain ground (of these looks) with nothing solid round it. */
+  const clear = (c: number, r: number, pad: number, ok: (l: number) => boolean = (l) => l === L_GRASS || l === L_MEADOW) => {
+    for (let dr = -pad; dr <= pad; dr++)
+      for (let dc = -pad; dc <= pad; dc++) if (!ok(at(c + dc, r + dr)) || tileAt(c + dc, r + dr) !== T_FLOOR || used.has(idx(c + dc, r + dr))) return false;
+    return true;
+  };
+  const used = new Set<number>(); // blocks with a prop on them (kept clear of the next one)
+  const claim = (c: number, r: number) => used.add(idx(c, r));
 
-  // Meadow: two shades of grass in soft patches.
+  // Meadow: the lighter, yellower grass in soft patches, most of all round the sheep pasture in the east.
   for (let r = 0; r < R; r++)
     for (let c = 0; c < C; c++) {
-      const n = Math.sin(c * 0.21 + Math.sin(r * 0.13) * 2) + Math.sin(r * 0.17 - c * 0.07) + Math.sin((c + r) * 0.05);
-      if (n > 1.1) look[idx(c, r)] = L_GRASS2;
+      const n = Math.sin(c * 0.19 + Math.sin(r * 0.15) * 2) + Math.sin(r * 0.21 - c * 0.08) + (c - 60) / 22;
+      if (n > 1.2) look[idx(c, r)] = L_MEADOW;
     }
 
-  // Mountains along the top and down the left side, with snowy peaks and a cliff at their foot.
-  const mountainEdge = (c: number) => Math.round(13 + 3 * Math.sin(c / 9) + 2 * Math.sin(c / 4.3 + 1) + 1.5 * Math.sin(c / 2.1));
-  const leftEdge = (r: number) => Math.round(7 + 2.5 * Math.sin(r / 7) + 1.5 * Math.sin(r / 3.1 + 2));
-  for (let c = 0; c < C; c++) {
-    const edge = mountainEdge(c);
-    for (let r = 0; r < edge; r++) set(c, r, r < edge - 7 + Math.round(2 * Math.sin(c / 3)) ? L_SNOW : r === edge - 1 ? L_CLIFF : L_MOUNTAIN, T_WALL);
+  // The cliff along the top: a high wooded plateau, its rock face two blocks tall, flat in short runs.
+  const CAVE = 50;
+  const edge: number[] = [];
+  {
+    let e = 11;
+    for (let c = 0; c < C; ) {
+      const run = 3 + Math.floor(rand() * 5);
+      for (let k = 0; k < run && c < C; k++, c++) edge[c] = Math.abs(c - CAVE) <= 7 ? 12 : e;
+      e = Math.max(9, Math.min(13, e + (rand() < 0.5 ? -1 : 1)));
+    }
   }
+  for (let c = 0; c < C; c++) for (let r = 0; r < edge[c]; r++) set(c, r, r >= edge[c] - 2 ? L_CLIFF : L_MOUNTAIN, T_WALL);
+
+  // The river: off the plateau in a waterfall, winding south under the stone bridge and off the map.
+  const FALL = 76;
+  const riverX = (r: number) => FALL + 3.2 * Math.sin((r - edge[FALL]) / 8) + 1.6 * Math.sin(r / 3.9);
+  const riverHalf = (r: number) => 1.9 + 0.35 * Math.sin(r / 6);
   for (let r = 0; r < R; r++) {
-    const edge = leftEdge(r);
-    for (let c = 0; c < edge; c++) if (at(c, r) !== L_SNOW) set(c, r, c === edge - 1 ? L_CLIFF : L_MOUNTAIN, T_WALL);
-  }
-
-  // The river: from a waterfall under the mountains, winding down to the lake in the bottom right.
-  const lake = { c: 118, r: 96, rc: 24, rr: 10 };
-  const riverX = (r: number) => 96 + 9 * Math.sin(r / 13) + 3.5 * Math.sin(r / 5.2 + 1);
-  for (let r = mountainEdge(96) - 1; r < lake.r; r++) {
-    const cx = riverX(r);
-    const half = 2.4 + 0.6 * Math.sin(r / 7);
-    for (let c = Math.floor(cx - half - 1); c <= Math.ceil(cx + half + 1); c++) {
+    const cx = r < edge[FALL] ? FALL + 0.5 : riverX(r);
+    const half = r < edge[FALL] ? 1.4 : riverHalf(r);
+    for (let c = Math.floor(cx - half - 1); c <= Math.ceil(cx + half); c++) {
       const d = Math.abs(c + 0.5 - cx);
-      if (d <= half) set(c, r, d < half - 1.2 ? L_DEEP : L_WATER, T_WATER);
-      else if (d <= half + 1 && at(c, r) !== L_WATER && at(c, r) !== L_DEEP && at(c, r) < L_MOUNTAIN) set(c, r, L_SAND, T_FLOOR);
+      if (d > half) continue;
+      if (r >= edge[FALL] - 2 && r < edge[FALL]) set(c, r, L_FALL, T_WALL); // the waterfall down the cliff
+      else set(c, r, r >= edge[FALL] && d < half - 1.1 ? L_DEEP : L_WATER, T_WATER);
     }
   }
-  for (let r = lake.r - lake.rr - 2; r <= lake.r + lake.rr + 2; r++)
-    for (let c = lake.c - lake.rc - 2; c <= lake.c + lake.rc + 2; c++) {
-      const d = Math.hypot((c - lake.c) / lake.rc, (r - lake.r) / lake.rr) + 0.08 * Math.sin(c * 0.7) * Math.cos(r * 0.9);
-      if (d <= 0.72) set(c, r, L_DEEP, T_WATER);
-      else if (d <= 1) set(c, r, L_WATER, T_WATER);
-      else if (d <= 1.14 && at(c, r) !== L_WATER && at(c, r) !== L_DEEP) set(c, r, L_SAND, T_FLOOR);
-    }
-  // A small pond west of the village.
-  for (let r = 66; r <= 76; r++)
-    for (let c = 16; c <= 30; c++) {
-      const d = Math.hypot((c - 23) / 6.5, (r - 71) / 4.2);
-      if (d <= 1) set(c, r, d < 0.6 ? L_DEEP : L_WATER, T_WATER);
-      else if (d <= 1.25 && at(c, r) < L_WATER) set(c, r, L_SAND, T_FLOOR);
-    }
 
-  // Paths (drawn before the village so the houses sit on grass beside them).
-  const path = (c0: number, r0: number, c1: number, r1: number, w = 1) => {
-    const n = Math.max(Math.abs(c1 - c0), Math.abs(r1 - r0));
-    for (let i = 0; i <= n; i++) {
-      const c = Math.round(c0 + ((c1 - c0) * i) / n);
-      const r = Math.round(r0 + ((r1 - r0) * i) / n);
-      for (let dr = -w; dr <= w; dr++)
-        for (let dc = -w; dc <= w; dc++) {
-          const l = at(c + dc, r + dr);
-          if (l === L_WATER || l === L_DEEP) set(c + dc, r + dr, L_BRIDGE, T_FLOOR);
-          else if (l < L_MOUNTAIN && l !== L_BRIDGE && l !== L_PLAZA) set(c + dc, r + dr, L_PATH, T_FLOOR);
-        }
+  // The lake in the west, with a sandy beach, and its stream east to the river.
+  const lake = { c: 17, r: 44, rc: 10.5, rr: 7.5 };
+  const lakeD = (c: number, r: number) => Math.hypot((c + 0.5 - lake.c) / lake.rc, (r + 0.5 - lake.r) / lake.rr) + 0.09 * Math.sin(c * 0.8) * Math.cos(r * 0.7);
+  for (let r = lake.r - 12; r <= lake.r + 12; r++)
+    for (let c = lake.c - 15; c <= lake.c + 15; c++) {
+      const d = lakeD(c, r);
+      if (d <= 0.62) set(c, r, L_DEEP, T_WATER);
+      else if (d <= 1) set(c, r, L_WATER, T_WATER);
+      else if (d <= 1.3 && !wet(at(c, r)) && at(c, r) < L_MOUNTAIN) set(c, r, L_SAND, T_FLOOR);
+    }
+  const streamY = (c: number) => 50 + (c - 25) * 0.17 + 1.3 * Math.sin(c / 4.5);
+  for (let c = 24; c < FALL; c++) {
+    const y = streamY(c);
+    for (let r = Math.floor(y - 1); r <= Math.ceil(y + 1); r++) if (Math.abs(r + 0.5 - y) <= 1.05 && at(c, r) < L_MOUNTAIN) set(c, r, L_WATER, T_WATER);
+  }
+
+  // Dirt roads, three blocks wide, a little wobbly. Over water they become bridges.
+  const bridges: { c0: number; r0: number; c1: number; r1: number }[] = [];
+  const road = (pts: [number, number][], w = 1) => {
+    for (let k = 0; k + 1 < pts.length; k++) {
+      const [c0, r0] = pts[k];
+      const [c1, r1] = pts[k + 1];
+      const n = Math.max(Math.abs(c1 - c0), Math.abs(r1 - r0)) * 2;
+      for (let i = 0; i <= n; i++) {
+        const c = Math.round(c0 + ((c1 - c0) * i) / n);
+        const r = Math.round(r0 + ((r1 - r0) * i) / n);
+        for (let dr = -w; dr <= w; dr++)
+          for (let dc = -w; dc <= w; dc++) {
+            const l = at(c + dc, r + dr);
+            if (wet(l)) set(c + dc, r + dr, L_BRIDGE, T_FLOOR);
+            else if (l !== L_BRIDGE && l !== L_PLAZA && l !== L_RUIN && l < L_MOUNTAIN && l !== L_FALL) set(c + dc, r + dr, L_PATH, T_FLOOR);
+          }
+      }
     }
   };
-  const village = { c: 52, r: 54 };
-  path(village.c, village.r, 140, 50); // east, over the river
-  path(village.c, village.r, village.c, 100); // south
-  path(village.c, 96, 100, 104); // along the south to the lake shore
-  path(village.c, village.r, 12, 54); // west to the hills
-  path(village.c, village.r, village.c, 22); // north, up to the mountain trail
-  path(village.c, 30, 80, 24); // the trail along the foot of the mountains
-  path(108, 50, 112, 80); // east bank down to the lake
-  // Bridges as straight decks (2026-10-11): a slanted path leaves a stair-stepped bridge, so each one is
-  // squared off to the box round it, over the water only.
+  const SQ = { c: 46, r: 34 }; // the village square
+  const ROAD_E = 34; // the east road's row (over the stone bridge)
+  road([[SQ.c + 2, SQ.r - 4], [CAVE - 1, 23], [CAVE, edge[CAVE] + 3]]); // up to the ruins and the cave
+  road([[SQ.c + 6, ROAD_E], [FALL - 6, ROAD_E], [FALL + 6, ROAD_E], [83, ROAD_E]], 0); // east over the river (two wide, the bridge deck)
+  road([[SQ.c + 6, ROAD_E + 1], [FALL - 6, ROAD_E + 1], [FALL + 6, ROAD_E + 1], [83, ROAD_E + 1]], 0);
+  road([[SQ.c, SQ.r + 4], [SQ.c - 1, 46], [SQ.c - 1, 62], [SQ.c + 3, 70]]); // south, over the stream
+  road([[SQ.c - 6, SQ.r + 1], [34, 38], [27, 41]]); // west to the beach
+  road([[60, 46], [SQ.c, 46]], 0); // a lane east, to the woods by the river
+  road([[60, 47], [SQ.c, 47]], 0);
+  // Square up each bridge to the box round it (a slanted road over water leaves stair steps).
   {
     const seen = new Set<number>();
     for (let r = 0; r < R; r++)
       for (let c = 0; c < C; c++) {
         if (at(c, r) !== L_BRIDGE || seen.has(idx(c, r))) continue;
         const todo = [[c, r]];
-        let c0 = c, c1 = c, r0 = r, r1 = r;
+        const b = { c0: c, c1: c, r0: r, r1: r };
         seen.add(idx(c, r));
         while (todo.length) {
           const [x, y] = todo.pop()!;
-          c0 = Math.min(c0, x); c1 = Math.max(c1, x); r0 = Math.min(r0, y); r1 = Math.max(r1, y);
+          b.c0 = Math.min(b.c0, x); b.c1 = Math.max(b.c1, x); b.r0 = Math.min(b.r0, y); b.r1 = Math.max(b.r1, y);
           for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
             const k = idx(x + dx, y + dy);
             if (at(x + dx, y + dy) === L_BRIDGE && !seen.has(k)) { seen.add(k); todo.push([x + dx, y + dy]); }
           }
         }
-        for (let y = r0; y <= r1; y++)
-          for (let x = c0; x <= c1; x++) if (at(x, y) === L_WATER || at(x, y) === L_DEEP) set(x, y, L_BRIDGE, T_FLOOR);
+        for (let y = b.r0; y <= b.r1; y++) for (let x = b.c0; x <= b.c1; x++) if (wet(at(x, y))) set(x, y, L_BRIDGE, T_FLOOR);
+        bridges.push(b);
       }
   }
-  // The square.
-  for (let r = village.r - 8; r <= village.r + 8; r++)
-    for (let c = village.c - 10; c <= village.c + 10; c++) {
-      const d = Math.hypot((c - village.c) / 10.5, (r - village.r) / 8.5);
-      if (d <= 1) set(c, r, L_PLAZA, T_FLOOR);
+  for (const b of bridges) {
+    // Water to its left or right: the road crosses a stream running east-west (the wooden bridge);
+    // otherwise it crosses the river east-west (the stone arch bridge).
+    const midR = Math.floor((b.r0 + b.r1) / 2);
+    const across = !(wet(at(b.c0 - 1, midR)) || wet(at(b.c1 + 1, midR)));
+    if (across) {
+      // Its railings: solid along the top and bottom edges past the deck.
+      for (let c = b.c0; c <= b.c1; c++) for (const r of [b.r0 - 1, b.r1 + 1]) if (wet(at(c, r))) set(c, r, at(c, r), T_WALL);
+      props.push({ kind: "bridge", x: ((b.c0 + b.c1 + 1) / 2) * BLOCK, y: (b.r1 + 1) * BLOCK + 10, v: 1 });
+    } else props.push({ kind: "woodbridge", x: ((b.c0 + b.c1 + 1) / 2) * BLOCK, y: (b.r1 + 1) * BLOCK + 8, v: 1 });
+  }
+
+  // The village square: round cobbles.
+  for (let r = SQ.r - 7; r <= SQ.r + 7; r++)
+    for (let c = SQ.c - 9; c <= SQ.c + 9; c++) if (Math.hypot((c + 0.5 - SQ.c) / 8.5, (r + 0.5 - SQ.r) / 6.2) <= 1 && !wet(at(c, r))) set(c, r, L_PLAZA, T_FLOOR);
+
+  // The ruins in front of the cave: worn stone flags with grass coming through.
+  for (let r = edge[CAVE]; r <= edge[CAVE] + 7; r++)
+    for (let c = CAVE - 9; c <= CAVE + 9; c++) {
+      const d = Math.hypot((c + 0.5 - CAVE) / 9.5, (r - edge[CAVE]) / 7.5);
+      if (d <= 1 && (d < 0.7 || rand() < 0.6) && at(c, r) < L_MOUNTAIN && !wet(at(c, r))) set(c, r, L_RUIN, T_FLOOR);
     }
 
-  const portal = { x: px(village.c), y: px(village.r - 5) };
-  const spawn = { x: px(village.c), y: px(village.r + 4) };
+  // The cave: the way down to the dungeon, set into the cliff. The portal is its mouth.
+  props.push({ kind: "cave", x: px(CAVE), y: edge[CAVE] * BLOCK + 6, v: 0 });
+  const portal = { x: px(CAVE), y: (edge[CAVE] + 0.6) * BLOCK };
+  const spawn = { x: px(SQ.c), y: px(SQ.r + 3) };
+  for (let c = CAVE - 2; c <= CAVE + 2; c++) for (let r = edge[CAVE] - 3; r < edge[CAVE]; r++) set(c, r, L_CLIFF, T_WALL);
+  for (let r = edge[CAVE]; r <= edge[CAVE] + 2; r++) for (let c = CAVE - 3; c <= CAVE + 3; c++) claim(c, r);
+  // Old pillars and broken walls round the ruins.
+  for (const [c, r] of [[CAVE - 7, edge[CAVE] + 2], [CAVE + 7, edge[CAVE] + 2], [CAVE - 6, edge[CAVE] + 6], [CAVE + 6, edge[CAVE] + 6]]) { place("pillar", c, r, [1, 1]); claim(c, r); }
+  place("wall", CAVE - 12, edge[CAVE] + 3, [3, 1]);
+  place("wall", CAVE + 12, edge[CAVE] + 4, [3, 1]);
+  place("banner", CAVE - 3, edge[CAVE] + 1, [1, 1], 4);
+  place("banner", CAVE + 3, edge[CAVE] + 1, [1, 1], -4);
 
-  // Houses around the square: solid walls, the door side open onto a short path.
-  const houses: [number, number][] = [
-    [34, 40], [44, 38], [64, 38], [72, 42],
-    [32, 62], [72, 62], [36, 76], [66, 76], [80, 52],
+  // Around the square: the well in the middle, lanterns, banners, carts, crates and a signpost.
+  place("well_a", SQ.c, SQ.r, [2, 1], BLOCK / 2);
+  const lamps: [number, number][] = [[SQ.c - 7, SQ.r - 4], [SQ.c + 7, SQ.r - 4], [SQ.c - 7, SQ.r + 4], [SQ.c + 7, SQ.r + 4]];
+  for (const [c, r] of lamps) place("lantern", c, r, [1, 1], -6);
+  place("banner", SQ.c - 3, SQ.r - 6, [1, 1]);
+  place("banner", SQ.c + 4, SQ.r - 6, [1, 1]);
+  place("cart_a", SQ.c + 4, SQ.r + 5, [2, 1]);
+  place("crate_a", SQ.c - 5, SQ.r + 5, [1, 1]);
+  place("crate_b", SQ.c - 4, SQ.r + 6, [1, 1]);
+  place("sack", SQ.c - 6, SQ.r + 6, [1, 1]);
+  place("firewood", SQ.c + 7, SQ.r - 1, [1, 1]);
+  place("signboard", SQ.c + 2, SQ.r - 5, [1, 1]);
+  place("signbarrel", SQ.c - 9, SQ.r + 1, [1, 1]);
+  place("haycart", 80, 40, [2, 1]);
+
+  // The sheep pasture east of the river: a fenced field (gate on the road side) with sheep wandering in it.
+  const pen = { c0: 84, r0: 22, c1: 95, r1: 46 };
+  for (let c = pen.c0; c <= pen.c1; c++)
+    for (let r = pen.r0; r <= pen.r1; r++) {
+      if (c > pen.c0 && c < pen.c1 && r > pen.r0 && r < pen.r1) {
+        if (at(c, r) === L_GRASS) look[idx(c, r)] = L_MEADOW;
+        continue;
+      }
+      const gate = c === pen.c0 && (r === ROAD_E || r === ROAD_E + 1);
+      if (gate) { set(c, r, L_PATH, T_FLOOR); continue; }
+      set(c, r, at(c, r) === L_PATH ? L_MEADOW : at(c, r), T_FENCE);
+      claim(c, r);
+      const side = c === pen.c0 || c === pen.c1;
+      props.push({ kind: side ? "post" : ["fence_a", "fence_b", "fence_e", "fence_g"][(c * 7 + r) % 4], x: px(c), y: (r + 1) * BLOCK - 1, v: 0 });
+    }
+  for (let i = 0; i < 9; i++) {
+    const c = pen.c0 + 3 + Math.floor(rand() * (pen.c1 - pen.c0 - 5));
+    const r = pen.r0 + 3 + Math.floor(rand() * (pen.r1 - pen.r0 - 5));
+    props.push({ kind: `sheep_${"abcdef"[i % 6]}`, x: px(c), y: (r + 1) * BLOCK, v: 2 }); // v 2: walks about (client)
+  }
+  place("scarecrow", pen.c0 - 3, 28, [1, 1]);
+
+  // Buildings (2026-10-11, the user's building sheet): a castle in the north-west, cottages round the square,
+  // a market stall, a windmill by the pasture and a fishing dock with a water wheel on the lake.
+  // `w` x `h` blocks round the foot are solid; the picture (`tw` x `th` blocks) is kept clear of trees.
+  const building = (kind: string, c: number, r: number, w: number, h: number, tw: number, th: number) => {
+    place(kind, c, r, [w, h]);
+    for (let dr = -th; dr <= 1; dr++) for (let dc = -Math.ceil(tw / 2); dc <= Math.ceil(tw / 2); dc++) claim(c + dc, r + dr);
+  };
+  building("castle", 14, 27, 9, 4, 10, 11);
+  building("house", 34, 30, 5, 3, 6, 6);
+  building("house", 58, 44, 5, 3, 6, 6);
+  building("house", 38, 47, 5, 3, 6, 6);
+  building("market", 57, 29, 6, 2, 7, 4);
+  building("windmill", 82, 54, 3, 3, 6, 7);
+  building("dock", 22, 38, 6, 3, 7, 6);
+
+  // The woods: a thick belt round the edges (solid, so nobody walks off), groves, and a few lone trees.
+  const tree = (c: number, r: number, kind?: string) => {
+    const k = kind ?? (rand() < 0.35 ? "pine" : ["oak_a", "oak_b", "oak_c"][Math.floor(rand() * 3)]);
+    place(k, c, r, [1, 1], Math.round((rand() - 0.5) * 8));
+    for (let dr = -1; dr <= 1; dr++) for (let dc = -1; dc <= 1; dc++) claim(c + dc, r + dr);
+  };
+  for (let r = 0; r < R; r++)
+    for (let c = 0; c < C; c++) {
+      if (!(c < 3 || c > C - 4 || r > R - 4)) continue;
+      if (at(c, r) >= L_MOUNTAIN) continue;
+      if (!wet(at(c, r)) && (c + r) % 2 === 0) {
+        const k = rand() < 0.4 ? "pine" : ["oak_a", "oak_b", "oak_c"][Math.floor(rand() * 3)];
+        props.push({ kind: k, x: px(c) + Math.round((rand() - 0.5) * 8), y: (r + 1) * BLOCK - 1, v: 0 });
+      }
+      tiles[idx(c, r)] = T_WALL;
+      claim(c, r);
+    }
+  const groves: [number, number, number][] = [
+    [30, 18, 5], [12, 64, 8], [28, 66, 6], [62, 60, 7], [91, 66, 6], [66, 20, 4], [92, 14, 4], [36, 52, 3],
   ];
-  houses.forEach(([c, r], i) => {
-    // A house is 7 blocks wide and 5 deep; (c, r) is its door.
-    for (let dr = -4; dr <= 0; dr++) for (let dc = -3; dc <= 3; dc++) set(c + dc, r + dr, at(c + dc, r + dr) === L_PATH ? L_GRASS : at(c + dc, r + dr), T_WALL);
-    path(c, r + 1, village.c + Math.sign(c - village.c) * 4, r + Math.sign(village.r - r) * 2 + 1, 0);
-    props.push({ kind: "house", x: px(c), y: (r + 1) * BLOCK, v: i % 4 });
-  });
+  for (const [gc, gr, rad] of groves)
+    for (let k = 0; k < rad * rad * 5; k++) {
+      const a = rand() * Math.PI * 2;
+      const d = Math.sqrt(rand()) * rad;
+      const c = Math.round(gc + Math.cos(a) * d);
+      const r = Math.round(gr + Math.sin(a) * d * 0.8);
+      if (clear(c, r, 1)) tree(c, r);
+    }
+  for (let k = 0; k < 1500; k++) {
+    const c = 3 + Math.floor(rand() * (C - 6));
+    const r = 3 + Math.floor(rand() * (R - 6));
+    if (Math.hypot(c - SQ.c, r - SQ.r) < 14 || !clear(c, r, 2)) continue;
+    if (rand() < 0.3) tree(c, r);
+  }
+  // Trees along the top of the cliff (out of reach, for the look of it).
+  for (let c = 1; c < C - 1; c += 2) {
+    if (Math.abs(c - CAVE) < 4 || Math.abs(c - FALL) < 3) continue;
+    const r = edge[c] - 3 - (c % 3 === 0 ? 1 : 0);
+    if (r >= 1 && at(c, r) === L_MOUNTAIN) props.push({ kind: rand() < 0.5 ? "pine" : "oak_b", x: px(c) + Math.round((rand() - 0.5) * 10), y: (r + 1) * BLOCK, v: 0 });
+  }
 
-  // Farm fields south-west of the square, fenced in.
-  const farm = { c0: 18, r0: 82, c1: 40, r1: 96 };
-  for (let r = farm.r0; r <= farm.r1; r++)
-    for (let c = farm.c0; c <= farm.c1; c++) {
-      const edge = r === farm.r0 || r === farm.r1 || c === farm.c0 || c === farm.c1;
-      const gate = r === farm.r0 && (c === 29 || c === 30);
-      if (edge && !gate) set(c, r, L_GRASS, T_FENCE);
-      else if (!edge) {
-        set(c, r, L_FARM, T_FLOOR);
-        if (r % 2 === 0 && c % 2 === 1 && c > farm.c0 + 1 && c < farm.c1 - 1) props.push({ kind: "crop", x: px(c), y: (r + 1) * BLOCK - 2, v: (c + r) % 3 });
-      }
-    }
-  path(29, farm.r0 - 1, village.c, 84, 0);
-  // A windmill beside the fields (2026-10-11, the user's building sheet).
-  props.push({ kind: "windmill", x: px(44), y: (89 + 1) * BLOCK, v: 0 });
-  for (let r = 87; r <= 89; r++) for (let c = 43; c <= 45; c++) set(c, r, at(c, r), T_WALL);
-  // And one on the grass near where heroes start (2026-10-11): the nearest clear 3x3 patch outside the square.
-  {
-    let best: [number, number] | undefined;
-    let bestD = Infinity;
-    for (let r = village.r - 16; r <= village.r + 22; r++)
-      for (let c = village.c - 22; c <= village.c + 22; c++) {
-        const d = Math.hypot(c - village.c, r - (village.r + 4));
-        if (d < 12 || d >= bestD) continue;
-        let ok = true;
-        for (let dr = -4; dr <= 1 && ok; dr++)
-          for (let dc = -2; dc <= 2 && ok; dc++) {
-            const l = at(c + dc, r + dr);
-            if ((l !== L_GRASS && l !== L_GRASS2 && l !== L_FLOWERS) || tiles[idx(c + dc, r + dr)] !== T_FLOOR) ok = false;
-          }
-        if (ok) { best = [c, r]; bestD = d; }
-      }
-    if (best) {
-      const [c, r] = best;
-      props.push({ kind: "windmill", x: px(c), y: (r + 1) * BLOCK, v: 1 });
-      for (let dr = -2; dr <= 0; dr++) for (let dc = -1; dc <= 1; dc++) set(c + dc, r + dr, at(c + dc, r + dr), T_WALL);
-    }
-  }
-  // A market stall and a well in the square, lamps around it.
-  props.push({ kind: "well", x: px(village.c - 6), y: px(village.r + 2), v: 0 });
-  set(village.c - 6, village.r + 2, L_PLAZA, T_WALL);
-  props.push({ kind: "stall", x: px(village.c + 6), y: px(village.r + 3), v: 0 });
-  for (let dc = 5; dc <= 7; dc++) set(village.c + dc, village.r + 3, L_PLAZA, T_WALL);
-  for (const [dc, dr] of [[-9, -3], [9, -3], [-9, 4], [9, 4], [-3, -8], [3, -8]]) {
-    props.push({ kind: "lamp", x: px(village.c + dc), y: px(village.r + dr), v: 0 });
-    set(village.c + dc, village.r + dr, L_PLAZA, T_WALL);
-  }
-  // Lamps along the paths (2026-10-11): one beside the path every few blocks, on the grass, lit at night.
-  const lamps: [number, number][] = [];
+  // Lanterns along the roads, lit at night.
   for (let r = 1; r < R - 1; r++)
     for (let c = 1; c < C - 1; c++) {
       if (at(c, r) !== L_PATH) continue;
       for (const [dc, dr] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
         const lc = c + dc;
         const lr = r + dr;
-        const l = at(lc, lr);
-        if ((l !== L_GRASS && l !== L_GRASS2) || tiles[idx(lc, lr)] !== T_FLOOR) continue;
-        if (Math.hypot(lc - village.c, lr - village.r) < 13) continue; // the square has its own
-        if (lamps.some(([oc, or]) => Math.hypot(oc - lc, or - lr) < 10)) continue;
+        if (!clear(lc, lr, 0) || Math.hypot(lc - SQ.c, lr - SQ.r) < 11) continue;
+        if (lamps.some(([oc, or]) => Math.hypot(oc - lc, or - lr) < 11)) continue;
         lamps.push([lc, lr]);
-        set(lc, lr, l, T_WALL);
-        props.push({ kind: "lamp", x: px(lc), y: px(lr) + 6, v: 1 });
+        place("lampbanner", lc, lr, [1, 1]);
+        claim(lc, lr);
         break;
       }
     }
-  props.push({ kind: "sign", x: px(village.c + 3), y: px(village.r - 4), v: 0 });
-  props.push({ kind: "boat", x: px(lake.c - 6), y: px(lake.r + 2), v: 0 });
 
-  // Trees: forest on the edges, blossoms near the village, pines under the mountains. Only the trunk is solid.
-  const free = (c: number, r: number, pad: number) => {
-    for (let dr = -pad; dr <= pad; dr++)
-      for (let dc = -pad; dc <= pad; dc++) {
-        const l = at(c + dc, r + dr);
-        if (tiles[idx(Math.max(0, Math.min(C - 1, c + dc)), Math.max(0, Math.min(R - 1, r + dr)))] !== T_FLOOR) return false;
-        if (l !== L_GRASS && l !== L_GRASS2 && l !== L_FLOWERS) return false;
-      }
-    return true;
-  };
-  const nearVillage = (c: number, r: number) => Math.hypot(c - village.c, (r - village.r) * 1.2) < 30;
-  for (let tries = 0; tries < 9000; tries++) {
-    const c = 2 + Math.floor(rand() * (C - 4));
-    const r = 2 + Math.floor(rand() * (R - 4));
-    if (!free(c, r, 2)) continue; // more room between trees (2026-10-11, user: too crowded)
-    const edgeForest = c > C - 16 || r > R - 10 || c < leftEdge(r) + 9 || r < mountainEdge(c) + 7 || (c > 120 && r < 70);
-    const p = nearVillage(c, r) ? 0.03 : edgeForest ? 0.55 : 0.06;
-    if (rand() > p) continue;
-    const kind: PropKind = r < mountainEdge(c) + 9 || c > 132 ? "pine" : nearVillage(c, r) || rand() < 0.22 ? "blossom" : "tree";
-    set(c, r, at(c, r), T_WALL);
-    props.push({ kind, x: px(c), y: (r + 1) * BLOCK - 3, v: Math.floor(rand() * 3) });
-  }
-  // A solid line of forest round the right and bottom edges, so nobody walks off the map.
-  for (let r = 0; r < R; r++)
-    for (let c = 0; c < C; c++) {
-      if (c < C - 2 && r < R - 2) continue;
-      if (at(c, r) >= L_WATER && at(c, r) !== L_SAND) {
-        set(c, r, at(c, r), T_WALL);
-        continue;
-      }
-      set(c, r, L_GRASS2, T_WALL);
-      if ((c + r) % 2 === 0) props.push({ kind: "pine", x: px(c), y: (r + 1) * BLOCK, v: (c * 7 + r) % 3 });
-    }
-  // Flowers, bushes and rocks to dress the meadow (only rocks are solid).
-  for (let i = 0; i < 2600; i++) {
-    const c = Math.floor(rand() * C);
-    const r = Math.floor(rand() * R);
+  // Little things on the ground: bushes, rocks, stumps and logs (solid), flowers, tufts and reeds (not).
+  const SMALL = ["flower_cream", "flower_d", "flower_gold", "flower_pink", "flower_white", "flower_yellow", "flowers_b", "flowers_c", "flowers_d", "flowers_e", "grass_a", "grass_b", "grass_c", "clover", "clover_b", "clover_c", "clovers"];
+  const SOLID = ["rock_a", "rock_c", "rocks", "boulder", "stump_a", "stump_b", "stump_c", "log", "mosslog", "bush_big"];
+  const SOFT = ["bush_a", "bush_b", "bush_c", "bush_d", "bush_e", "bush_rose", "bush_white", "fern", "sapling", "deadbush", "mushroom", "twigs", "branch", "stickrock", "rock_b"];
+  for (let k = 0; k < 3000; k++) {
+    const c = 3 + Math.floor(rand() * (C - 6));
+    const r = 3 + Math.floor(rand() * (R - 6));
     const l = at(c, r);
-    if ((l !== L_GRASS && l !== L_GRASS2) || tiles[idx(c, r)] !== T_FLOOR) continue;
+    const shore = [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dc, dr]) => wet(at(c + dc, r + dr)));
+    if (shore && (l === L_GRASS || l === L_MEADOW || l === L_SAND) && tileAt(c, r) === T_FLOOR && !used.has(idx(c, r))) {
+      if (rand() < 0.35) props.push({ kind: rand() < 0.5 ? "reeds_a" : "reeds_b", x: px(c) + Math.round((rand() - 0.5) * 12), y: (r + 1) * BLOCK - Math.floor(rand() * 8), v: 0 });
+      continue;
+    }
+    if (!clear(c, r, 0) || Math.hypot(c - SQ.c, r - SQ.r) < 10 || Math.hypot(portal.x / BLOCK - c, portal.y / BLOCK - r) < 4) continue;
     const roll = rand();
-    if (roll < 0.7) {
-      // A patch of flowers.
-      for (let k = 0; k < 6; k++) {
-        const fc = c + Math.floor(rand() * 4) - 2;
-        const fr = r + Math.floor(rand() * 3) - 1;
-        if ((at(fc, fr) === L_GRASS || at(fc, fr) === L_GRASS2) && tiles[idx(Math.max(0, Math.min(C - 1, fc)), Math.max(0, Math.min(R - 1, fr)))] === T_FLOOR) look[idx(fc, fr)] = L_FLOWERS;
-      }
-    } else if (roll < 0.8) props.push({ kind: "bush", x: px(c), y: (r + 1) * BLOCK - 4, v: Math.floor(rand() * 2) });
+    if (roll < 0.62) props.push({ kind: SMALL[Math.floor(rand() * SMALL.length)], x: px(c) + Math.round((rand() - 0.5) * 14), y: (r + 1) * BLOCK - Math.floor(rand() * 10), v: 0 });
     else if (roll < 0.86) {
-      props.push({ kind: "rock", x: px(c), y: (r + 1) * BLOCK - 4, v: Math.floor(rand() * 2) });
-      tiles[idx(c, r)] = T_WALL;
-    } else if (roll < 0.88) props.push({ kind: "log", x: px(c), y: (r + 1) * BLOCK - 4, v: 0 });
+      if (!clear(c, r, 1)) continue;
+      props.push({ kind: SOFT[Math.floor(rand() * SOFT.length)], x: px(c), y: (r + 1) * BLOCK - 2, v: 0 });
+      claim(c, r);
+    } else if (roll < 0.94) {
+      if (!clear(c, r, 1)) continue;
+      place(SOLID[Math.floor(rand() * SOLID.length)], c, r, [1, 1]);
+      claim(c, r);
+    }
   }
-  // Keep the square, the portal and the paths clear.
-  props.splice(0, props.length, ...props.filter((p) => p.kind === "house" || p.kind === "lamp" || p.kind === "well" || p.kind === "stall" || p.kind === "sign" || Math.hypot(p.x - portal.x, p.y - portal.y) > 60));
-
+  props.sort((a, b) => a.y - b.y);
   return { name: "OPEN WORLD", theme: THEME, tiles, look, props, spawns: { 1: [spawn], 2: [spawn] }, cols: C, rows: R, ox: 0, oy: 0, spawn, portal };
 }
 

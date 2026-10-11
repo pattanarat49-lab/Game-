@@ -533,6 +533,7 @@ export class Home {
     const { el, close } = this.screen("CHOOSE A MODE");
     const online = this.act.online;
     const modes: { title: string; tag: string; text: string; solo?: StageId; online?: StageId }[] = [
+      { title: "OPEN WORLD", tag: "WALK · CHAT · DUEL", text: "A valley under the cliffs: a village square, a river and waterfall, a lake and a sheep pasture. The cave in the cliff leads down to the dungeon.", solo: "world", online: "world" },
       { title: "PvP ARENA", tag: "1 VS 1 · ONLINE", text: "Fight another player in the boxing ring. First to 3 knockouts wins.", online: "pvp" },
       { title: "TRAINING", tag: "UP TO 4 PLAYERS VS BOT", text: "Team up with friends against one strong bot. Pick its hero and difficulty.", solo: "pve", online: "pve" },
       { title: "CLASSIC 3v3", tag: "RED VS BLUE", text: "3 heroes a side on maps with walls, tall grass and water. Bots fill empty slots. 3 lives each.", solo: "classic", online: "classic" },

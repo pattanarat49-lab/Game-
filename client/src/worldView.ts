@@ -3,8 +3,9 @@
 
 import Phaser from "phaser";
 import { BLOCK } from "../../shared/maps";
-import { ABYSS, ABYSS_ART, D_POOL, DUNGEON, GLITCH, HEAVEN, L_DEEP, L_WATER, OPEN_WORLD, PORTAL_RADIUS } from "../../shared/world";
-import { CHUNK, dungeonChunk, propCanvas, worldChunk } from "./worldArt";
+import { ABYSS, ABYSS_ART, D_POOL, DUNGEON, GLITCH, HEAVEN, OPEN_WORLD, PORTAL_RADIUS } from "../../shared/world";
+import { CHUNK, dungeonChunk } from "./worldArt";
+import { OwWorld } from "./owWorld";
 import { WorldUi } from "./worldUi";
 import { playSanctuaryIntro } from "./cutscene";
 
@@ -54,9 +55,7 @@ export class WorldView {
   /** The night: a dark sheet over the view with the lamps' light cut out of it, and their warm glow on top. */
   private dark?: Phaser.GameObjects.RenderTexture;
   private glows: Phaser.GameObjects.Image[] = [];
-  private portalImg?: Phaser.GameObjects.Image;
-  private windmills: Phaser.GameObjects.Image[] = [];
-  private lampImgs: Phaser.GameObjects.Image[] = [];
+  private ow?: OwWorld;
   private lamps: { x: number; y: number }[] = [];
   private wasNight = false;
   ui?: WorldUi;
@@ -87,43 +86,26 @@ export class WorldView {
         scene.load.start();
       }
     }
-    // The ground, in squares.
-    for (let cy = 0; !picture && cy * CHUNK < h; cy++)
+    // The ground, in squares (the dungeon's). The Open World draws its own (owWorld.ts).
+    for (let cy = 0; !picture && stage !== "world" && cy * CHUNK < h; cy++)
       for (let cx = 0; cx * CHUNK < w; cx++) {
         const key = `${stage}_chunk_${cx}_${cy}`;
-        if (!scene.textures.exists(key)) scene.textures.addCanvas(key, stage === "world" ? worldChunk(cx, cy) : dungeonChunk(cx, cy, DUNGEON));
+        if (!scene.textures.exists(key)) scene.textures.addCanvas(key, dungeonChunk(cx, cy, DUNGEON));
         scene.add.image(cx * CHUNK, cy * CHUNK, key).setOrigin(0).setDepth(-10);
       }
     if (stage === "world") {
-      // Trees, houses and the rest stand in front of or behind heroes by how far down the map they are.
-      for (const p of OPEN_WORLD.props) {
-        if (p.kind === "lamp") {
-          // Stone lamps with a flickering lantern (client/art/props/lamp_N.png, drawn by scripts/worldprops/lamp.py).
-          this.lampImgs.push(scene.add.image(p.x, p.y + 2, "lamp_0").setOrigin(0.5, 1).setScale(3).setDepth(p.y));
-          continue;
-        }
-        if (p.kind === "windmill") {
-          // Windmills turn their sails (client/art/props/windmill_N.png, drawn by scripts/worldprops/windmill.py).
-          this.windmills.push(scene.add.image(p.x, p.y + 3, "windmill_0").setOrigin(0.5, 1).setScale(3).setDepth(p.y));
-          continue;
-        }
-        const key = `prop_${p.kind}_${p.v}`;
-        if (!scene.textures.exists(key)) scene.textures.addCanvas(key, propCanvas(p.kind, p.v));
-        const flat = p.kind === "crop" || p.kind === "boat";
-        scene.add.image(p.x, p.y, key).setOrigin(0.5, 1).setDepth(flat ? -4 : p.y);
-      }
-      // Lamps light up at night: the light cut out of the dark, and a warm glow round each lamp head.
+      // The new Open World (2026-10-11): the user's tiles and props, moving water, the cave to the dungeon.
+      this.ow = new OwWorld(scene);
+      // Lanterns light up at night: the light cut out of the dark, and a warm glow round each lantern.
       lightTexture(scene, "night_hole", LAMP_LIGHT, "rgba(255,255,255,1)");
       lightTexture(scene, "night_own", OWN_LIGHT, "rgba(255,255,255,0.8)");
       lightTexture(scene, "lamp_glow", 40, "rgba(255,200,110,0.55)");
-      this.lamps = OPEN_WORLD.props.filter((p) => p.kind === "lamp").map((p) => ({ x: p.x, y: p.y + 2 - 16 * 3 })); // the lantern
-      for (const l of this.lamps) this.glows.push(scene.add.image(l.x, l.y, "lamp_glow").setBlendMode(Phaser.BlendModes.ADD).setDepth(4001).setAlpha(0));
+      this.lamps = this.ow.lamps;
+      for (const l of this.lamps) this.glows.push(scene.add.image(l.x, l.y, "lamp_glow").setBlendMode(Phaser.BlendModes.ADD).setDepth(4001).setAlpha(0).setScale(0.7));
       this.wasNight = nightAmount() > 0.5;
-      // The dungeon portal: the user's 16-frame stone well with a blue swirl (client/art/props/portal_N.png).
-      this.portalImg = scene.add.image(OPEN_WORLD.portal.x, OPEN_WORLD.portal.y, "portal_0").setOrigin(0.5, 0.63).setScale(1.1).setDepth(-3.5);
     }
-    this.floorFx = scene.add.graphics().setDepth(-3);
-    this.fx = scene.add.graphics().setDepth(stage === "world" ? OPEN_WORLD.portal.y + 1 : 900);
+    this.floorFx = scene.add.graphics().setDepth(stage === "world" ? OPEN_WORLD.portal.y - 36 : -3); // the world: just over the cave picture (its glowing mouth)
+    this.fx = scene.add.graphics().setDepth(stage === "world" ? 4500 : 900);
 
     // Messages from the room.
     room.onMessage("chat", (m: { id: string; name: string; text: string }) => {
@@ -214,36 +196,23 @@ export class WorldView {
         this.bubbles.delete(id);
         continue;
       }
-      b.text.setPosition(Math.round(at.x), Math.round(at.y - (this.stage === "world" ? 62 : 42))); // heroes are drawn bigger in the Open World
+      b.text.setPosition(Math.round(at.x), Math.round(at.y - 42));
     }
 
     if (this.stage === "world") {
       this.drawNight(me ? this.bodyOf(myId) ?? me : undefined);
       const { x, y } = OPEN_WORLD.portal;
-      this.portalImg?.setTexture(`portal_${Math.floor(now / 100) % 16}`);
-      this.lampImgs.forEach((l, i) => l.setTexture(`lamp_${(Math.floor(now / 160) + i * 3) % 8}`));
-      for (const w of this.windmills) w.setTexture(`windmill_${Math.floor(now / 140) % 12}`);
+      this.ow?.update(now, this.scene.game.loop.delta);
+      // The cave mouth glows: the way down to the dungeon.
+      const pulse = 0.5 + 0.5 * Math.sin(now / 400);
+      floor.fillStyle(0x3ac8ff, 0.1 + 0.08 * pulse).fillEllipse(x, y - 4, 70, 30);
+      floor.fillStyle(0x9ae8ff, 0.12 + 0.1 * pulse).fillEllipse(x, y - 6, 38, 14);
       // Heroes who pressed READY at the portal get a green tick.
       state.players.forEach((p: any, id: string) => {
         if (!p.ready || p.owner) return;
         const b = this.bodyOf(id) ?? p;
-        g.lineStyle(2, 0x7dff8a, 1).lineBetween(b.x - 4, b.y - 70, b.x - 1, b.y - 67).lineBetween(b.x - 1, b.y - 67, b.x + 5, b.y - 74);
+        g.lineStyle(2, 0x7dff8a, 1).lineBetween(b.x - 4, b.y - 46, b.x - 1, b.y - 43).lineBetween(b.x - 1, b.y - 43, b.x + 5, b.y - 50);
       });
-      // Glints on the water near us.
-      const view = this.scene.cameras.main.worldView;
-      const c0 = Math.max(0, Math.floor(view.x / BLOCK));
-      const c1 = Math.min(OPEN_WORLD.cols - 1, Math.ceil(view.right / BLOCK));
-      const r0 = Math.max(0, Math.floor(view.y / BLOCK));
-      const r1 = Math.min(OPEN_WORLD.rows - 1, Math.ceil(view.bottom / BLOCK));
-      const tick = Math.floor(now / 350);
-      for (let r = r0; r <= r1; r++)
-        for (let c = c0; c <= c1; c++) {
-          const l = OPEN_WORLD.look[r * OPEN_WORLD.cols + c];
-          if (l !== L_WATER && l !== L_DEEP) continue;
-          const h = ((c * 73856093) ^ (r * 19349663) ^ (tick * 83492791)) >>> 0;
-          if (h % 7 !== 0) continue;
-          floor.fillStyle(0xd8f0ff, 0.8).fillRect(c * BLOCK + (h % 15) + 2, r * BLOCK + ((h >> 4) % 15) + 2, 4, 1);
-        }
       // The portal panel, while we stand at the portal.
       if (me && this.ui) {
         let here = 0;
@@ -322,7 +291,7 @@ export class WorldView {
     rt.fill(NIGHT_COLOR, NIGHT_DARK * night);
     for (const l of this.lamps) {
       if (l.x < x0 - LAMP_LIGHT || l.y < y0 - LAMP_LIGHT || l.x > x0 + w + LAMP_LIGHT || l.y > y0 + h + LAMP_LIGHT) continue;
-      rt.erase("night_hole", l.x - x0 - LAMP_LIGHT, l.y + 40 - y0 - LAMP_LIGHT); // light falls round the foot of the post
+      rt.erase("night_hole", l.x - x0 - LAMP_LIGHT, l.y + 14 - y0 - LAMP_LIGHT); // light falls round the foot of the post
     }
     if (me) rt.erase("night_own", me.x - x0 - OWN_LIGHT, me.y - 12 - y0 - OWN_LIGHT);
   }
