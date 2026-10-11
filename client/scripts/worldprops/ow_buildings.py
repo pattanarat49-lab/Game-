@@ -18,6 +18,6 @@ B = {
 for name, (box, side, want) in B.items():
     full = cut(SHEET, box, cell=1.0, colors=64)
     cell = (full.height if side == "h" else full.width) / want
-    img = cut(SHEET, box, cell=cell, colors=48)
+    img = cut(SHEET, box, cell=cell, colors=48, tol=24, sep=16)
     img.save(f"art/props/ow_{name}.png")
     print(name, img.size)

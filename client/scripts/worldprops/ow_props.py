@@ -9,7 +9,7 @@ from collections import deque
 SEP = np.array([27, 41, 51])  # the sheet's dark lines between panels
 
 
-def cut(src, box, cell=1.0, colors=32, tol=46, **_):
+def cut(src, box, cell=1.0, colors=32, tol=46, sep=34, **_):
     """Cut one thing off its panel: the panel colour (the commonest colour round the box edge) and the sheet's
     dark lines are flooded away from the edges, then one colour per cell, colours reduced."""
     im = np.asarray(Image.open(src).convert("RGB")).astype(int)
@@ -19,7 +19,7 @@ def cut(src, box, cell=1.0, colors=32, tol=46, **_):
     ring = np.concatenate([a[:3].reshape(-1, 3), a[-3:].reshape(-1, 3), a[:, :3].reshape(-1, 3), a[:, -3:].reshape(-1, 3)])
     ring = ring[np.abs(ring - SEP).sum(1) > 30]
     panel = np.median(ring, 0) if len(ring) else SEP
-    near = (np.abs(a - panel).sum(2) <= tol) | (np.abs(a - SEP).sum(2) <= 34)
+    near = (np.abs(a - panel).sum(2) <= tol) | (np.abs(a - SEP).sum(2) <= sep)
     seen = np.zeros((h, w), bool)
     q = deque([(y, x) for y in range(h) for x in (0, w - 1)] + [(y, x) for x in range(w) for y in (0, h - 1)])
     while q:
@@ -70,7 +70,51 @@ def cut(src, box, cell=1.0, colors=32, tol=46, **_):
     res = np.zeros((H, W, 4), np.uint8)
     res[..., :3] = np.asarray(rgb)
     res[..., 3] = out[..., 3]
-    return Image.fromarray(res, "RGBA")
+    return tidy(res)
+
+
+def tidy(res):
+    """Close the edges (2026-10-11, user: the buildings and sheep looked chipped): fill see-through holes
+    inside the shape, drop lone stray pixels, and draw a 1-pixel dark outline round the whole thing."""
+    a = np.pad(res, ((1, 1), (1, 1), (0, 0)))
+    h, w = a.shape[:2]
+    solid = a[..., 3] > 0
+    # see-through pixels not reachable from the border are holes: fill them from their neighbours
+    out = np.zeros((h, w), bool)
+    q = deque([(y, x) for y in range(h) for x in (0, w - 1)] + [(y, x) for x in range(w) for y in (0, h - 1)])
+    while q:
+        y, x = q.popleft()
+        if y < 0 or x < 0 or y >= h or x >= w or out[y, x] or solid[y, x]:
+            continue
+        out[y, x] = True
+        q.extend(((y + 1, x), (y - 1, x), (y, x + 1), (y, x - 1)))
+    holes = ~out & ~solid
+    for _ in range(8):
+        ys, xs = np.where(holes)
+        if not len(ys):
+            break
+        for y, x in zip(ys, xs):
+            nb = [a[yy, xx, :3] for yy, xx in ((y + 1, x), (y - 1, x), (y, x + 1), (y, x - 1)) if 0 <= yy < h and 0 <= xx < w and a[yy, xx, 3] > 0]
+            if nb:
+                a[y, x, :3] = np.median(nb, 0)
+                a[y, x, 3] = 255
+                holes[y, x] = False
+    solid = a[..., 3] > 0
+    # lone pixels sticking out (fewer than 2 solid neighbours) go
+    n4 = np.zeros((h, w), int)
+    n4[1:] += solid[:-1]; n4[:-1] += solid[1:]; n4[:, 1:] += solid[:, :-1]; n4[:, :-1] += solid[:, 1:]
+    a[solid & (n4 < 2), 3] = 0
+    solid = a[..., 3] > 0
+    # the outline: every see-through pixel touching the shape, a very dark shade of what it touches
+    edge = np.zeros((h, w), bool)
+    edge[1:] |= solid[:-1]; edge[:-1] |= solid[1:]; edge[:, 1:] |= solid[:, :-1]; edge[:, :-1] |= solid[:, 1:]
+    edge &= ~solid
+    for y, x in zip(*np.where(edge)):
+        nb = [a[yy, xx, :3].astype(int) for yy, xx in ((y + 1, x), (y - 1, x), (y, x + 1), (y, x - 1)) if 0 <= yy < h and 0 <= xx < w and solid[yy, xx]]
+        c = np.mean(nb, 0) * 0.3 + np.array([14, 12, 18]) * 0.7
+        a[y, x, :3] = c
+        a[y, x, 3] = 255
+    return Image.fromarray(a.astype(np.uint8), "RGBA")
 
 SHEET = "art/openworld/tileset-sheet.png"
 CELL = 4.05

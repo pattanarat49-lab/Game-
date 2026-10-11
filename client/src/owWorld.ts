@@ -66,6 +66,32 @@ interface Sheep {
   wait: number;
 }
 
+/** Where the windmill's hub is on its picture, from the bottom centre (art pixels; printed by ow_windmill.py). */
+const SAILS_HUB: [number, number] = [4.7, -165.6];
+
+/** Cloud shadows: soft round patches of shade, a picture that repeats every CLOUD_PX art pixels both ways. */
+function cloudTexture(scene: Phaser.Scene) {
+  if (scene.textures.exists("ow_clouds")) return;
+  const N = 128; // drawn in 2x2 blocks, so the shade has a pixel-art edge
+  const can = document.createElement("canvas");
+  can.width = can.height = N;
+  const ctx = can.getContext("2d")!;
+  const img = ctx.createImageData(N, N);
+  // a few waves that all repeat across the picture, so the tiling never shows a seam
+  const waves: [number, number, number, number][] = [];
+  for (let i = 0; i < 7; i++) waves.push([1 + Math.floor(hash(i, 1, 70) * 3), Math.floor(hash(i, 2, 71) * 5) - 2, hash(i, 3, 72) * 6.28, 1 / (1 + i * 0.35)]);
+  for (let y = 0; y < N; y += 2)
+    for (let x = 0; x < N; x += 2) {
+      let v = 0;
+      for (const [fx, fy, ph, w] of waves) v += Math.sin(((fx * x + fy * y) / N) * Math.PI * 2 + ph) * w + Math.cos(((fy * x - fx * y) / N) * Math.PI * 2 + ph * 1.7) * w * 0.6;
+      const a = v > 1.35 ? 1 : v > 1.05 ? 0.5 : 0;
+      for (let j = 0; j < 2; j++)
+        for (let i = 0; i < 2; i++) img.data.set([12, 20, 44, Math.round(a * 255)], ((y + j) * N + x + i) * 4);
+    }
+  ctx.putImageData(img, 0, 0);
+  scene.textures.addCanvas("ow_clouds", can);
+}
+
 /** Light points of the lanterns (for the night), from the bottom of each lantern picture, in art pixels. */
 const LAMP_HEAD: Record<string, [number, number]> = { lantern: [17, -26], lampbanner: [9, -18] };
 
@@ -79,6 +105,8 @@ export class OwWorld {
   private water: Phaser.GameObjects.TileSprite[] = [];
   private falls: Phaser.GameObjects.Image[] = [];
   private sheep: Sheep[] = [];
+  private sails: Phaser.GameObjects.Image[] = [];
+  private clouds?: Phaser.GameObjects.TileSprite;
   private nextRipple = 0;
   /** Where the lanterns glow at night (world pixels). */
   lamps: { x: number; y: number }[] = [];
@@ -121,10 +149,17 @@ export class OwWorld {
       const img = scene.add.image(p.x, p.y, key).setOrigin(0.5, 1).setScale(ART);
       img.setDepth(FLAT.test(p.kind) ? (p.kind.includes("bridge") ? -8 : -7) : p.y);
       if (p.kind === "cave") img.setDepth(p.y - 30);
+      if (p.kind === "windmill") {
+        // The sails turn (client/scripts/worldprops/ow_windmill.py cut them off the user's windmill sheet).
+        this.sails.push(scene.add.image(p.x + SAILS_HUB[0] * ART, p.y + SAILS_HUB[1] * ART, "ow_windmill_sails").setScale(ART).setDepth(p.y + 0.5));
+      }
       if (p.v === 2) this.sheep.push({ img, home: { x: p.x, y: p.y }, to: { x: p.x, y: p.y }, wait: Math.random() * 3000 });
       const head = LAMP_HEAD[p.kind];
       if (head) this.lamps.push({ x: p.x + head[0] * ART, y: p.y + head[1] * ART });
     }
+    // Cloud shadows drifting over everything (2026-10-11, user request).
+    cloudTexture(scene);
+    this.clouds = scene.add.tileSprite(0, 0, w, h, "ow_clouds").setOrigin(0).setTileScale(6).setDepth(3990).setAlpha(0.24);
     this.update(0, 16);
   }
 
@@ -176,6 +211,8 @@ export class OwWorld {
     g1.setTilePosition(t * 7, t * 3).setAlpha(0.55 + 0.45 * Math.sin(t * 1.3));
     g2.setTilePosition(-t * 5 + 90, t * 4.5 + 60).setAlpha(0.55 - 0.45 * Math.sin(t * 1.3));
     for (const f of this.falls) f.setTexture(`owfall_${Math.floor(now / 90) % 6}`);
+    for (const sl of this.sails) sl.setRotation(t * 0.6);
+    this.clouds?.setTilePosition(-t * 2.2, -t * 0.9);
     // Sheep wander about their spot in the pasture, stopping to graze.
     for (const s of this.sheep) {
       if (s.wait > 0) {
