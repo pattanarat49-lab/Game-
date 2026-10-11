@@ -27,6 +27,7 @@ import {
   OPEN_WORLD,
   PropKind,
 } from "../../shared/world";
+import { PROP_SPRITES } from "./worldProps.data";
 
 /** The same pseudo-random numbers for the same spot, so the ground looks the same every time. */
 function hash(x: number, y: number, k = 0): number {
@@ -239,7 +240,189 @@ export function worldChunk(cx: number, cy: number): HTMLCanvasElement {
       if (col >= OPEN_WORLD.cols || row >= OPEN_WORLD.rows) continue;
       paintWorldBlock(ctx, col, row, c * BLOCK, r * BLOCK);
     }
+  paintNatural(ctx, cx, cy);
   return canvas;
+}
+
+// ---- Natural ground (2026-10-11, the user's reference picture): grass, sand, dirt and water drawn in big
+// pixels with soft, ragged edges between them: a dark rim and a lip on the grass, a shadow on the sand under
+// it, and round the water a cyan shore, a white wave line and a ring of wet orange sand.
+
+/** One art pixel is this many screen pixels (a block is 7 of them). */
+const ART = 3;
+const PER_BLOCK = BLOCK / ART;
+const NAT_WATER = 1;
+const NAT_SAND = 2;
+const NAT_DIRT = 3;
+const NAT_GRASS = 4;
+
+/** Which natural ground a map block is (0: not natural ground: plaza, bridge, farm, mountain). */
+function naturalOf(l: number): number {
+  if (l === L_WATER || l === L_DEEP) return NAT_WATER;
+  if (l === L_SAND) return NAT_SAND;
+  if (l === L_PATH) return NAT_DIRT;
+  if (l === L_GRASS || l === L_GRASS2 || l === L_FLOWERS) return NAT_GRASS;
+  return 0;
+}
+
+/** Smooth wobble (in blocks) that bends the edges between kinds of ground. */
+function wobble(x: number, y: number, k: number): number {
+  return 0.3 * Math.sin(x * 0.29 + k + Math.sin(y * 0.21 + k * 2)) + 0.17 * Math.sin(y * 0.53 - x * 0.37 + k * 3);
+}
+
+const rgb = (hex: number): [number, number, number] => [(hex >> 16) & 255, (hex >> 8) & 255, hex & 255];
+const NAT = {
+  // Colours from the user's tileset sheets (2026-10-11): bright lime grass, golden sand, deep sea blue.
+  grass: rgb(0x86c652),
+  grassLip: rgb(0x5aa848),
+  grassRim: rgb(0x3f8a3c),
+  tuft: rgb(0xb8e070),
+  tuft2: rgb(0x6aae44),
+  sand: rgb(0xf8d088),
+  sandShadow: rgb(0xe2b46c),
+  sandSpeck: rgb(0xecc072),
+  pebble: rgb(0xb0a8a0),
+  wet: rgb(0xeebd6c),
+  wetLight: rgb(0xf8e4b0),
+  dirt: rgb(0xa8704c),
+  dirtLight: rgb(0xb8805a),
+  dirtRim: rgb(0x7e5038),
+  dirtSpeck: rgb(0x8e5c42),
+  foam: rgb(0xf4fbff),
+  shore: rgb(0x3cc4f0),
+  shore2: rgb(0x10a8e8),
+  water: rgb(0x0a80ec),
+  deep: rgb(0x0870d8),
+  glint: rgb(0x6cc8f8),
+};
+
+/** The spots (in blocks, round an art pixel) that vote on its kind of ground. */
+const RING: [number, number][] = [[0, 0], ...Array.from({ length: 8 }, (_, i): [number, number] => [0.62 * Math.cos((i * Math.PI) / 4), 0.62 * Math.sin((i * Math.PI) / 4)])];
+
+/** Paints the natural ground of one chunk over its blocks (plaza, bridges, fields and rock keep their own look). */
+function paintNatural(ctx: CanvasRenderingContext2D, cx: number, cy: number) {
+  const m = OPEN_WORLD;
+  const n = CHUNK / ART; // art pixels across a chunk
+  const M = 4; // margin, so the edge bands match across chunks
+  const W = n + M * 2;
+  const ax0 = cx * n - M;
+  const ay0 = cy * n - M;
+  const lookAt = (c: number, r: number) => (c < 0 || r < 0 || c >= m.cols || r >= m.rows ? -1 : m.look[r * m.cols + c]);
+  // The kind of ground of every art pixel, its edges pushed about by the wobble and a little grit.
+  const kind = new Uint8Array(W * W);
+  const deep = new Uint8Array(W * W);
+  for (let j = 0; j < W; j++)
+    for (let i = 0; i < W; i++) {
+      const ax = ax0 + i;
+      const ay = ay0 + j;
+      const oc = Math.floor(ax / PER_BLOCK);
+      const or = Math.floor(ay / PER_BLOCK);
+      const own = naturalOf(lookAt(oc, or));
+      if (!own) continue;
+      // Rounded edges: the kind most of a small ring of nearby spots agree on (moved about by the wobble).
+      const fx = (ax + 0.5) / PER_BLOCK + wobble(ax / PER_BLOCK, ay / PER_BLOCK, 1) + (hash(ax, ay, 7) - 0.5) * 0.18;
+      const fy = (ay + 0.5) / PER_BLOCK + wobble(ay / PER_BLOCK, ax / PER_BLOCK, 4) + (hash(ax, ay, 8) - 0.5) * 0.18;
+      const votes = [0, 0, 0, 0, 0];
+      let deepVotes = 0;
+      for (const [ox, oy] of RING) {
+        const l = lookAt(Math.floor(fx + ox), Math.floor(fy + oy));
+        const k = naturalOf(l) || own;
+        votes[k] += ox === 0 && oy === 0 ? 1.5 : 1;
+        if (l === L_DEEP) deepVotes++;
+      }
+      let best = own;
+      for (let k = 1; k < votes.length; k++) if (votes[k] > votes[best]) best = k;
+      kind[j * W + i] = best;
+      deep[j * W + i] = deepVotes >= 6 ? 1 : 0;
+    }
+  const kAt = (i: number, j: number) => (i < 0 || j < 0 || i >= W || j >= W ? 0 : kind[j * W + i]);
+  /** How far (in art pixels, up to `max`) to the nearest pixel that is not this kind (0 ground counts as other). */
+  const distOut = (i: number, j: number, k: number, max: number) => {
+    for (let d = 1; d <= max; d++)
+      for (let t = -d; t <= d; t++)
+        if (kAt(i + t, j - d) !== k || kAt(i + t, j + d) !== k || kAt(i - d, j + t) !== k || kAt(i + d, j + t) !== k) return d;
+    return max + 1;
+  };
+  const near = (i: number, j: number, k: number, max: number) => {
+    for (let d = 1; d <= max; d++)
+      for (let t = -d; t <= d; t++)
+        if (kAt(i + t, j - d) === k || kAt(i + t, j + d) === k || kAt(i - d, j + t) === k || kAt(i + d, j + t) === k) return d;
+    return max + 1;
+  };
+  const img = ctx.getImageData(0, 0, CHUNK, CHUNK);
+  const px = img.data;
+  const put = (i: number, j: number, c: [number, number, number]) => {
+    const x0 = (i - M) * ART;
+    const y0 = (j - M) * ART;
+    for (let y = y0; y < y0 + ART; y++)
+      for (let x = x0; x < x0 + ART; x++) {
+        const o = (y * CHUNK + x) * 4;
+        px[o] = c[0];
+        px[o + 1] = c[1];
+        px[o + 2] = c[2];
+        px[o + 3] = 255;
+      }
+  };
+  for (let j = M; j < M + n; j++)
+    for (let i = M; i < M + n; i++) {
+      const k = kind[j * W + i];
+      if (!k) continue;
+      const ax = ax0 + i;
+      const ay = ay0 + j;
+      const h = hash(ax, ay, 3);
+      let c: [number, number, number];
+      if (k === NAT_WATER) {
+        const d = distOut(i, j, NAT_WATER, 3);
+        if (d === 1) c = NAT.foam;
+        else if (d === 2) c = NAT.shore;
+        else if (d === 3) c = (ax + ay) % 2 ? NAT.shore2 : NAT.shore;
+        else {
+          c = deep[j * W + i] ? NAT.deep : NAT.water;
+          // Little wave lines: a short zigzag every so often.
+          const wr = Math.floor(ay / 6);
+          const wc = Math.floor((ax + wr * 5) / 11);
+          if (hash(wc, wr, 21) < 0.32) {
+            const t = (ax + wr * 5) % 11;
+            if (t < 5 && ay % 6 === (t === 0 || t === 4 ? 1 : 0)) c = NAT.glint; // a shallow arc, ends down
+          }
+        }
+      } else if (k === NAT_GRASS) {
+        const d = distOut(i, j, NAT_GRASS, 2);
+        const below = kAt(i, j + 1) !== NAT_GRASS || kAt(i, j + 2) !== NAT_GRASS;
+        const look = lookAt(Math.floor(ax / PER_BLOCK), Math.floor(ay / PER_BLOCK));
+        if (d === 1) c = NAT.grassRim;
+        else if (below) c = NAT.grassLip;
+        else {
+          c = NAT.grass;
+          // Little bright tufts, a V of three pixels.
+          const tc = Math.floor(ax / 5);
+          const tr = Math.floor(ay / 4);
+          const th = hash(tc, tr, 11);
+          if (th < 0.16) {
+            const tx = tc * 5 + 1 + Math.floor(hash(tc, tr, 12) * 3);
+            const ty = tr * 4 + 1;
+            if ((ay === ty && (ax === tx - 1 || ax === tx + 1)) || (ay === ty + 1 && ax === tx)) c = th < 0.08 ? NAT.tuft : NAT.tuft2;
+          }
+          if (look === L_FLOWERS && h < 0.07) c = h < 0.025 ? [255, 255, 255] : h < 0.045 ? [255, 214, 74] : [255, 138, 200];
+        }
+      } else {
+        // Sand and dirt: a shadow under the grass lip, then the water's wet ring, then grit.
+        const sand = k === NAT_SAND;
+        const shadow = kAt(i, j - 1) === NAT_GRASS || kAt(i, j - 2) === NAT_GRASS;
+        const toWater = near(i, j, NAT_WATER, 3);
+        const toGrass = near(i, j, NAT_GRASS, 1);
+        if (toWater === 1) c = NAT.wetLight;
+        else if (toWater <= 3) c = (ax + ay) % 2 === 0 || toWater === 2 ? NAT.wet : NAT.wetLight;
+        else if (shadow) c = sand ? NAT.sandShadow : NAT.dirtRim;
+        else if (!sand && toGrass === 1) c = NAT.dirtRim;
+        else if (h < 0.025) c = NAT.pebble;
+        else if (h < 0.07) c = sand ? NAT.sandSpeck : NAT.dirtSpeck;
+        else if (!sand && h > 0.93) c = NAT.dirtLight;
+        else c = sand ? NAT.sand : NAT.dirt;
+      }
+      put(i, j, c);
+    }
+  ctx.putImageData(img, 0, 0);
 }
 
 /**
@@ -666,7 +849,41 @@ function log(): HTMLCanvasElement {
 }
 
 /** The picture for a prop (made once per kind and variant). */
+/** A prop picture cut from the user's tileset sheet (worldProps.data.ts), drawn at its own pixel size. */
+function spriteCanvas(name: string): HTMLCanvasElement {
+  const s = PROP_SPRITES[name];
+  const [c, ctx] = canvasOf(s.w * s.scale, s.h * s.scale);
+  for (let y = 0; y < s.h; y++)
+    for (let x = 0; x < s.w; x++) {
+      const ch = s.px[y * s.w + x];
+      if (ch === ".") continue;
+      ctx.fillStyle = `#${s.pal[SPRITE_CHARS.indexOf(ch)]}`;
+      ctx.fillRect(x * s.scale, y * s.scale, s.scale, s.scale);
+    }
+  return c;
+}
+const SPRITE_CHARS = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+
+/** Which sheet picture each prop uses (2026-10-11); sign, crops and the boat are still painted in code. */
+function sheetSprite(kind: PropKind, v: number): string | undefined {
+  switch (kind) {
+    case "tree": return `tree${v % 3}`;
+    case "blossom": return "blossom0";
+    case "pine": return `pine${v % 2}`;
+    case "house": return `house${v % 4}`;
+    case "bush": return `bush${(v * 2 + 1) % 4}`;
+    case "rock": return `rock${v % 2}`;
+    case "stall": return "stall0";
+    case "lamp": return "lamp0";
+    case "well": return "well0";
+    case "log": return "log0";
+  }
+  return undefined;
+}
+
 export function propCanvas(kind: PropKind, v: number): HTMLCanvasElement {
+  const sheet = sheetSprite(kind, v);
+  if (sheet) return spriteCanvas(sheet);
   switch (kind) {
     case "tree":
       return tree(v, ["#2e7a32", "#3a9038", "#4aa844", "#62c052"]);

@@ -6,7 +6,42 @@ import { BLOCK } from "../../shared/maps";
 import { ABYSS, ABYSS_ART, D_POOL, DUNGEON, GLITCH, HEAVEN, L_DEEP, L_WATER, OPEN_WORLD, PORTAL_RADIUS } from "../../shared/world";
 import { CHUNK, dungeonChunk, propCanvas, worldChunk } from "./worldArt";
 import { WorldUi } from "./worldUi";
+import { PROP_SPRITES } from "./worldProps.data";
 import { playSanctuaryIntro } from "./cutscene";
+
+/** Day and night (2026-10-11): ten minutes of day, then ten of night, the same for everyone (by the clock). */
+const DAY_NIGHT = 1200;
+const NIGHT_START = 600;
+const DUSK = 45; // seconds the light takes to fade either way
+const NIGHT_COLOR = 0x081030;
+const NIGHT_DARK = 0.72;
+const LAMP_LIGHT = 92; // radius of the light round a lamp
+const OWN_LIGHT = 54; // a little light round your own hero
+
+/** How dark it is now: 0 in the day, 1 at night, in between at dusk and dawn. */
+export function nightAmount(now = Date.now()): number {
+  const t = (now / 1000) % DAY_NIGHT;
+  const ease = (x: number) => x * x * (3 - 2 * x);
+  if (t < NIGHT_START) return 0;
+  if (t < NIGHT_START + DUSK) return ease((t - NIGHT_START) / DUSK);
+  if (t > DAY_NIGHT - DUSK) return ease((DAY_NIGHT - t) / DUSK);
+  return 1;
+}
+
+/** A soft round light (white in the middle, fading out), used to cut light out of the dark and to glow. */
+function lightTexture(scene: Phaser.Scene, key: string, r: number, color: string) {
+  if (scene.textures.exists(key)) return;
+  const c = document.createElement("canvas");
+  c.width = c.height = r * 2;
+  const ctx = c.getContext("2d")!;
+  const g = ctx.createRadialGradient(r, r, 0, r, r, r);
+  g.addColorStop(0, color);
+  g.addColorStop(0.45, color.replace(/[\d.]+\)$/, "0.75)"));
+  g.addColorStop(1, color.replace(/[\d.]+\)$/, "0)"));
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, r * 2, r * 2);
+  scene.textures.addCanvas(key, c);
+}
 
 interface Bubble {
   text: Phaser.GameObjects.Text;
@@ -17,6 +52,11 @@ export class WorldView {
   private fx: Phaser.GameObjects.Graphics;
   private floorFx: Phaser.GameObjects.Graphics;
   private bubbles = new Map<string, Bubble>();
+  /** The night: a dark sheet over the view with the lamps' light cut out of it, and their warm glow on top. */
+  private dark?: Phaser.GameObjects.RenderTexture;
+  private glows: Phaser.GameObjects.Image[] = [];
+  private lamps: { x: number; y: number }[] = [];
+  private wasNight = false;
   ui?: WorldUi;
   /** True while the chat box has the keyboard. */
   typing = false;
@@ -60,6 +100,14 @@ export class WorldView {
         const flat = p.kind === "crop" || p.kind === "boat";
         scene.add.image(p.x, p.y, key).setOrigin(0.5, 1).setDepth(flat ? -4 : p.y);
       }
+      // Lamps light up at night: the light cut out of the dark, and a warm glow round each lamp head.
+      lightTexture(scene, "night_hole", LAMP_LIGHT, "rgba(255,255,255,1)");
+      lightTexture(scene, "night_own", OWN_LIGHT, "rgba(255,255,255,0.8)");
+      lightTexture(scene, "lamp_glow", 40, "rgba(255,200,110,0.55)");
+      const lampTall = PROP_SPRITES.lamp0.h * PROP_SPRITES.lamp0.scale;
+      this.lamps = OPEN_WORLD.props.filter((p) => p.kind === "lamp").map((p) => ({ x: p.x, y: p.y - lampTall + 12 })); // the lamp head
+      for (const l of this.lamps) this.glows.push(scene.add.image(l.x, l.y, "lamp_glow").setBlendMode(Phaser.BlendModes.ADD).setDepth(4001).setAlpha(0));
+      this.wasNight = nightAmount() > 0.5;
     }
     this.floorFx = scene.add.graphics().setDepth(-3);
     this.fx = scene.add.graphics().setDepth(stage === "world" ? OPEN_WORLD.portal.y + 1 : 900);
@@ -157,6 +205,7 @@ export class WorldView {
     }
 
     if (this.stage === "world") {
+      this.drawNight(me ? this.bodyOf(myId) ?? me : undefined);
       // The dungeon portal: a stone ring with a blue swirl.
       const { x, y } = OPEN_WORLD.portal;
       floor.fillStyle(0x6a6a72, 1).fillEllipse(x, y + 4, PORTAL_RADIUS * 2 + 8, PORTAL_RADIUS + 6);
@@ -245,9 +294,43 @@ export class WorldView {
     }
   }
 
+  /** Darken the view by the time of day, with light round the lamps (and a little round us). */
+  private drawNight(me?: { x: number; y: number }) {
+    const night = nightAmount();
+    const isNight = night > 0.5;
+    if (isNight !== this.wasNight) {
+      this.wasNight = isNight;
+      this.ui?.toast(isNight ? "Night falls. The lamps are lit." : "The sun is up.");
+    }
+    for (const g of this.glows) g.setAlpha(night * (0.75 + 0.08 * Math.sin(this.scene.time.now / 260 + g.x)));
+    const view = this.scene.cameras.main.worldView;
+    if (night <= 0.01) {
+      this.dark?.setVisible(false);
+      return;
+    }
+    const w = Math.ceil(view.width) + 4;
+    const h = Math.ceil(view.height) + 4;
+    if (!this.dark || this.dark.width !== w || this.dark.height !== h) {
+      this.dark?.destroy();
+      this.dark = this.scene.add.renderTexture(0, 0, w, h).setOrigin(0).setDepth(4000);
+    }
+    const x0 = Math.floor(view.x) - 2;
+    const y0 = Math.floor(view.y) - 2;
+    const rt = this.dark.setVisible(true).setPosition(x0, y0);
+    rt.clear();
+    rt.fill(NIGHT_COLOR, NIGHT_DARK * night);
+    for (const l of this.lamps) {
+      if (l.x < x0 - LAMP_LIGHT || l.y < y0 - LAMP_LIGHT || l.x > x0 + w + LAMP_LIGHT || l.y > y0 + h + LAMP_LIGHT) continue;
+      rt.erase("night_hole", l.x - x0 - LAMP_LIGHT, l.y + 40 - y0 - LAMP_LIGHT); // light falls round the foot of the post
+    }
+    if (me) rt.erase("night_own", me.x - x0 - OWN_LIGHT, me.y - 12 - y0 - OWN_LIGHT);
+  }
+
   destroy() {
     for (const b of this.bubbles.values()) b.text.destroy();
     this.bubbles.clear();
+    this.dark?.destroy();
+    this.dark = undefined;
     this.ui?.destroy();
     this.ui = undefined;
   }

@@ -186,6 +186,24 @@ function buildWorld(): OpenMap {
     props.push({ kind: "lamp", x: px(village.c + dc), y: px(village.r + dr), v: 0 });
     set(village.c + dc, village.r + dr, L_PLAZA, T_WALL);
   }
+  // Lamps along the paths (2026-10-11): one beside the path every few blocks, on the grass, lit at night.
+  const lamps: [number, number][] = [];
+  for (let r = 1; r < R - 1; r++)
+    for (let c = 1; c < C - 1; c++) {
+      if (at(c, r) !== L_PATH) continue;
+      for (const [dc, dr] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const lc = c + dc;
+        const lr = r + dr;
+        const l = at(lc, lr);
+        if ((l !== L_GRASS && l !== L_GRASS2) || tiles[idx(lc, lr)] !== T_FLOOR) continue;
+        if (Math.hypot(lc - village.c, lr - village.r) < 13) continue; // the square has its own
+        if (lamps.some(([oc, or]) => Math.hypot(oc - lc, or - lr) < 10)) continue;
+        lamps.push([lc, lr]);
+        set(lc, lr, l, T_WALL);
+        props.push({ kind: "lamp", x: px(lc), y: px(lr) + 6, v: 1 });
+        break;
+      }
+    }
   props.push({ kind: "sign", x: px(village.c + 3), y: px(village.r - 4), v: 0 });
   props.push({ kind: "boat", x: px(lake.c - 6), y: px(lake.r + 2), v: 0 });
 
