@@ -864,6 +864,14 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
     return this.move(x, y, Math.cos(aim) * len, Math.sin(aim) * len, PLAYER_RADIUS);
   }
 
+  /** How far a shot or beam from x,y along angle gets before a wall (walls stop everything fired, user request 2026-10-11). */
+  private shotReach(x: number, y: number, angle: number, len: number): number {
+    const c = Math.cos(angle);
+    const sn = Math.sin(angle);
+    for (let d = 6; d < len; d += 4) if (this.blocked(x + c * d, y + sn * d)) return Math.max(0, d - 4);
+    return len;
+  }
+
   private blocked(x: number, y: number) {
     return hitsRock(x, y, this.area);
   }
@@ -973,7 +981,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
   /** PvE Squad player select: anyone can change the bot's hero and difficulty. */
   setBot(hero?: string, level?: number) {
     const s = this.state;
-    if ((s.stage !== "pve" && s.stage !== "classic") || s.phase !== "select") return;
+    if ((s.stage !== "pve" && s.stage !== "classic" && s.stage !== "royale") || s.phase !== "select") return;
     if (hero !== undefined && (HERO_IDS as string[]).includes(hero)) s.botHero = hero;
     if (level !== undefined && Number.isInteger(level) && level >= 0 && level < BOT_LEVELS.length) s.botLevel = level;
   }
@@ -1846,12 +1854,14 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
         brain.target = undefined;
         break;
       }
-      case "lane":
-        this.fxArea(id, this.laneTest(p.x, p.y, aim, st.len, st.width), st, { x: p.x, y: p.y }, aim);
-        this.fxLaneZone(id, st.look ?? "beam", st.color, p.x, p.y, aim, st.len, st.width, 0.55);
-        if (st.knock || st.dmg) this.cutBulletsInLane(id, p.x, p.y, aim, st.len, st.width);
+      case "lane": {
+        const len = this.shotReach(p.x, p.y, aim, st.len); // a beam stops at the first wall, and so does its picture
+        this.fxArea(id, this.laneTest(p.x, p.y, aim, len, st.width), st, { x: p.x, y: p.y }, aim);
+        this.fxLaneZone(id, st.look ?? "beam", st.color, p.x, p.y, aim, len, st.width, 0.55);
+        if (st.knock || st.dmg) this.cutBulletsInLane(id, p.x, p.y, aim, len, st.width);
         if (st.look === "pinkbeam") this.queenBeam(id, p, st, aim);
         break;
+      }
       case "ring":
         if (st.look === "pull") {
           // UNIVERSAL PULL: everything in the ring is yanked right up to him.
@@ -2131,7 +2141,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
     const len = t ? Math.min(s2.radius, Math.hypot(t.x - p.x, t.y - p.y) + 40) : s2.radius * (0.5 + Math.random() * 0.5);
     const end = this.passThrough(p.x, p.y, a, len);
     const d = Math.hypot(end.x - p.x, end.y - p.y);
-    if (d > 1) this.lineHit(id, p.x, p.y, Math.atan2(end.y - p.y, end.x - p.x), d, 26, s2.damage);
+    if (d > 1) this.lineHit(id, p.x, p.y, Math.atan2(end.y - p.y, end.x - p.x), d, 26, s2.damage, 0, 0, true);
     [p.x, p.y] = [end.x, end.y];
     p.warp = (p.warp + 1) % 256;
     brain.target = undefined;
@@ -3712,7 +3722,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
         // Dash straight ahead (through walls and rocks, user request 2026-10-11), cutting through everything on the way.
         const end = this.passThrough(p.x, p.y, p.aim, skill.radius);
         const len = Math.hypot(end.x - p.x, end.y - p.y);
-        this.lineHit(id, p.x, p.y, p.aim, len, skill.width ?? 24, skill.damage);
+        this.lineHit(id, p.x, p.y, p.aim, len, skill.width ?? 24, skill.damage, 0, 0, true);
         p.x = end.x;
         p.y = end.y;
         p.warp = (p.warp + 1) % 256; // the client jumps with us
@@ -3725,7 +3735,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
         // It goes straight through walls and rocks (user request 2026-10-08), landing on the farthest open spot.
         const end = this.passThrough(p.x, p.y, p.aim, skill.radius);
         const len = Math.hypot(end.x - p.x, end.y - p.y);
-        const hits = this.lineHit(id, p.x, p.y, p.aim, len, skill.width ?? 26, skill.damage);
+        const hits = this.lineHit(id, p.x, p.y, p.aim, len, skill.width ?? 26, skill.damage, 0, 0, true);
         p.x = end.x;
         p.y = end.y;
         p.warp = (p.warp + 1) % 256;
@@ -3748,7 +3758,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
         const end = this.passThrough(p.x, p.y, p.aim, skill.radius);
         const len = Math.hypot(end.x - p.x, end.y - p.y);
         const width = skill.width ?? 70;
-        this.lineHit(id, sx, sy, p.aim, len, width, skill.damage);
+        this.lineHit(id, sx, sy, p.aim, len, width, skill.damage, 0, 0, true);
         p.x = end.x;
         p.y = end.y;
         p.warp = (p.warp + 1) % 256;
@@ -3808,7 +3818,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
         const zone = this.addZone("shadow", p.x, p.y, 10, (skill.duration ?? 3) + 0.1, { owner: id, every: Infinity, damage: 0 });
         brain.shadow = { x: p.x, y: p.y, zone, left: skill.duration ?? 3 };
         const end = this.passThrough(p.x, p.y, p.aim, skill.radius);
-        this.lineHit(id, p.x, p.y, p.aim, Math.hypot(end.x - p.x, end.y - p.y), skill.width ?? 24, skill.damage);
+        this.lineHit(id, p.x, p.y, p.aim, Math.hypot(end.x - p.x, end.y - p.y), skill.width ?? 24, skill.damage, 0, 0, true);
         p.x = end.x;
         p.y = end.y;
         p.warp = (p.warp + 1) % 256;
@@ -4094,7 +4104,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
         const end = this.passThrough(p.x, p.y, p.aim, skill.radius);
         const len = Math.hypot(end.x - p.x, end.y - p.y);
         const w = skill.width ?? 28;
-        this.lineHit(id, p.x, p.y, p.aim, len, w, skill.damage);
+        this.lineHit(id, p.x, p.y, p.aim, len, w, skill.damage, 0, 0, true);
         const zid = this.addZone("firetrail", p.x, p.y, 4, skill.duration ?? 3, { owner: id, every: 0.5, damage: skill.damage * 0.4 });
         this.zoneBrains.get(zid)!.lane = { x: p.x, y: p.y, angle: p.aim, len, width: w };
         for (let d = 0; d <= len; d += 22) {
@@ -4126,7 +4136,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
         // PIERCING CHARGE: spear first down a lane; everything in it is thrown far back.
         const end = this.passThrough(p.x, p.y, p.aim, skill.radius);
         const len = Math.hypot(end.x - p.x, end.y - p.y);
-        this.lineHit(id, p.x, p.y, p.aim, len, skill.width ?? 30, skill.damage, 0, 2.5);
+        this.lineHit(id, p.x, p.y, p.aim, len, skill.width ?? 30, skill.damage, 0, 2.5, true);
         this.addZone("lancetrail", (p.x + end.x) / 2, (p.y + end.y) / 2, len / 2, 0.35, { owner: id, every: Infinity, damage: 0 });
         p.x = end.x;
         p.y = end.y;
@@ -4169,7 +4179,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
         // LIGHTNING DASH: the Sword God's lunge, cutting the whole lane, then a full spin where he lands.
         const end = this.passThrough(p.x, p.y, p.aim, skill.radius);
         const len = Math.hypot(end.x - p.x, end.y - p.y);
-        this.lineHit(id, p.x, p.y, p.aim, len, skill.width ?? 26, skill.damage);
+        this.lineHit(id, p.x, p.y, p.aim, len, skill.width ?? 26, skill.damage, 0, 0, true);
         p.x = end.x;
         p.y = end.y;
         p.warp = (p.warp + 1) % 256;
@@ -4430,7 +4440,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
         // RIDER KICK: leap along the aim, kicking through everything and stunning it.
         const end = this.passThrough(p.x, p.y, p.aim, skill.radius);
         const len = Math.hypot(end.x - p.x, end.y - p.y);
-        this.lineHit(id, p.x, p.y, p.aim, len, skill.width ?? 30, skill.damage, skill.duration ?? 2);
+        this.lineHit(id, p.x, p.y, p.aim, len, skill.width ?? 30, skill.damage, skill.duration ?? 2, 0, true);
         p.x = end.x;
         p.y = end.y;
         p.warp = (p.warp + 1) % 256;
@@ -4581,7 +4591,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       const pushed = this.move(x, y, cos * 24, sin * 24, PLAYER_RADIUS);
       return Math.hypot(pushed.x - x, pushed.y - y) < 12;
     };
-    const len = skill.radius;
+    const len = this.shotReach(p.x, p.y, aim, skill.radius); // the punches stop at a wall
     const half = (skill.width ?? 40) / 2;
     const inLane = (tx: number, ty: number, r: number) => {
       const along = (tx - p.x) * cos + (ty - p.y) * sin;
@@ -4645,8 +4655,9 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
   }
 
   /** Hit everything in a wide straight line (Deku's 100% SMASH). */
-  private lineHit(owner: string, x: number, y: number, angle: number, length: number, width: number, damage: number, stun = 0, knock = 0): number {
+  private lineHit(owner: string, x: number, y: number, angle: number, length: number, width: number, damage: number, stun = 0, knock = 0, through = false): number {
     let hits = 0;
+    if (!through) length = this.shotReach(x, y, angle, length); // beams stop at walls; dashes (`through`) do not
     const cos = Math.cos(angle);
     const sin = Math.sin(angle);
     const inLine = (tx: number, ty: number, r: number) => {
@@ -4927,7 +4938,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
           if (brain.slow) this.slowAround(brain.owner, z.x, z.y, z.radius, brain.slow);
         } else if (brain.lane) {
           const l = brain.lane;
-          this.lineHit(brain.owner, l.x, l.y, l.angle, l.len, l.width, brain.damage);
+          this.lineHit(brain.owner, l.x, l.y, l.angle, l.len, l.width, brain.damage, 0, 0, true);
         } else if (z.kind === "hurricane") {
           this.sweep(brain.owner, z.x, z.y, 0, z.radius, Math.PI * 2, brain.damage);
         } else if (z.kind === "asgard" || z.kind === "city") {
@@ -6179,7 +6190,7 @@ export class RiftSim<P extends SimPlayer, E extends SimEnemy, B extends SimBulle
       b.y += b.vy * dt;
       brain.life -= dt;
       // Sword waves and missiles fly over rocks; bullets do not.
-      const blocked = b.kind !== "wave" && b.kind !== "godslash" && b.kind !== "missile" && !brain.bounce && this.blocked(b.x, b.y);
+      const blocked = b.kind !== "godslash" && !brain.bounce && this.blocked(b.x, b.y); // every shot stops at walls (2026-10-11)
       if (brain.life <= 0 || b.x < 0 || b.y < 0 || b.x > this.W || b.y > this.H || blocked) {
         if (brain.blast > 0) this.sweep(brain.owner ?? "", b.x, b.y, 0, brain.blast, Math.PI * 2, brain.damage);
         this.endBullet(id);

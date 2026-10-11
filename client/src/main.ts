@@ -94,6 +94,7 @@ function backToMenu() {
   }
   game.destroy(true);
   game = undefined;
+  document.getElementById("spec-bar")?.remove(); // the spectate bar lives outside the game canvas
   backButton.classList.add("hidden");
   errorText.textContent = "";
   menu.classList.remove("hidden");

@@ -37,6 +37,7 @@ import {
   stageOf,
   ringStage,
   areaOf,
+  hitsRock,
   CLASSIC_LIVES,
   selectStage,
   EMPTY_INPUT,
@@ -147,7 +148,14 @@ interface Effect {
   life: number;
   /** Stays on this player as they move (GATLING PUNCH). */
   follow?: PlayerView;
+  /** A dash's trail: goes through walls (everything else fired stops at the first wall). */
+  through?: boolean;
+  /** The full length before walls cut it short. */
+  range0?: number;
 }
+
+/** Effects fired out from the hero: drawn only up to the first wall (user request 2026-10-11). */
+const WALL_CUT_FX = new Set<Effect["kind"]>(["jab", "line", "gatling", "bluelaser", "purple", "kick", "tkick"]);
 
 /**
  * Weapons that stay in the hands of a hero drawn from hand-made art (which otherwise hides the weapon sprite):
@@ -208,8 +216,8 @@ const CLASSIC_ZOOM = 1.4;
 const WORLD_ZOOM = 1.2; // the Open World: a wider view, heroes small against the map
 /** Classic 3v3: Red and Blue. */
 const TEAM_MARKERS: Record<number, number> = { 1: 0xff3a4a, 2: 0x3a8aff };
-/** Skills whose lane goes through walls and rocks (they hit everything in it, or dash through): the aim guide says so. */
-const PIERCE_KINDS = new Set<string>(["line", "jab", "rush", "purple", "thunderdash", "seventh", "bluelaser", "shadowstep", "leap", "charge", "godrush", "flamedash", "lancecharge", "cross", "kick", "wave", "barrage", "gatling", "eyebeam", "onepunch"]);
+/** Dash skills: they go through walls and rocks (everything fired stops at walls): the aim guide says so. */
+const PIERCE_KINDS = new Set<string>(["rush", "thunderdash", "seventh", "shadowstep", "leap", "godrush", "flamedash", "lancecharge", "kick"]);
 
 interface EnemyView {
   sprite: Phaser.GameObjects.Image;
@@ -1115,7 +1123,7 @@ export class GameScene extends Phaser.Scene {
         if (!p.owner && !p.dead && (royale || p.team === me.team)) mates.push(id); // Battle Royale: watch anyone still in
       });
     }
-    if (!mates.length) {
+    if (!mates.length || this.registry.get("leaving")) {
       this.specBar?.remove();
       this.specBar = undefined;
       return undefined;
@@ -1124,6 +1132,7 @@ export class GameScene extends Phaser.Scene {
     const id = mates[this.specIndex];
     if (!this.specBar) {
       const bar = document.createElement("div");
+      bar.id = "spec-bar";
       bar.style.cssText =
         "position:fixed;left:50%;bottom:18px;transform:translateX(-50%);z-index:30;display:flex;align-items:center;gap:10px;padding:8px 10px;" +
         "background:rgba(10,12,28,0.85);border:3px solid #4a5a8a;border-radius:8px;font:10px 'Press Start 2P',monospace;color:#fff;";
@@ -1143,10 +1152,12 @@ export class GameScene extends Phaser.Scene {
       bar.append(btn("\u25C0", -1), name, btn("\u25B6", 1));
       document.body.append(bar);
       this.specBar = bar;
-      this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      const drop = () => {
         this.specBar?.remove();
         this.specBar = undefined;
-      });
+      };
+      this.events.once(Phaser.Scenes.Events.SHUTDOWN, drop);
+      this.events.once(Phaser.Scenes.Events.DESTROY, drop);
     }
     const label = `SPECTATING ${state.players.get(id)?.name ?? ""}`;
     const span = this.specBar.querySelector<HTMLElement>(".spec-name")!;
@@ -1583,8 +1594,9 @@ export class GameScene extends Phaser.Scene {
           const sin = Math.sin(aim);
           const ex = body.x;
           const ey = body.y - 13 * k;
-          const tx = ex + cos * eb.radius;
-          const ty = ey + 8 + sin * eb.radius;
+          const reach = this.wallCut(body.x, body.y, aim, eb.radius); // the beams stop at walls
+          const tx = ex + cos * reach;
+          const ty = ey + 8 + sin * reach;
           const flick = 0.75 + Math.random() * 0.25;
           view.bar.lineStyle(eb.width ?? 10, 0xff2a1a, 0.35 * flick).lineBetween(ex, ey, tx, ty);
           view.bar.lineStyle(3, 0xff5a3a, flick).lineBetween(ex - 2, ey, tx, ty);
@@ -1912,7 +1924,7 @@ export class GameScene extends Phaser.Scene {
         break;
       case "shadowstep":
         // We are already at the end of the dash (or back at the shadow): a dark streak along the cut.
-        this.effects.push({ kind: "line", x: x - Math.cos(aim) * skill.radius, y: y - Math.sin(aim) * skill.radius, aim, range: skill.radius, arc: 8, age: 0, life: 0.25 });
+        this.effects.push({ kind: "line", x: x - Math.cos(aim) * skill.radius, y: y - Math.sin(aim) * skill.radius, aim, range: skill.radius, arc: 8, age: 0, through: true, life: 0.25 });
         break;
       case "shuriken":
       case "leafstorm":
@@ -1923,7 +1935,7 @@ export class GameScene extends Phaser.Scene {
         cam.flash(100, 255, 240, 170);
         break;
       case "shieldcharge":
-        this.effects.push({ kind: "line", x: x - Math.cos(aim) * skill.radius * 0.6, y: y - Math.sin(aim) * skill.radius * 0.6, aim, range: skill.radius * 0.6, arc: skill.width ?? 30, age: 0, life: 0.3 });
+        this.effects.push({ kind: "line", x: x - Math.cos(aim) * skill.radius * 0.6, y: y - Math.sin(aim) * skill.radius * 0.6, aim, range: skill.radius * 0.6, arc: skill.width ?? 30, age: 0, through: true, life: 0.3 });
         cam.shake(150, 0.008);
         break;
       case "tree":
@@ -1981,7 +1993,7 @@ export class GameScene extends Phaser.Scene {
         cam.shake(120, 0.008);
         break;
       case "lancecharge":
-        this.effects.push({ kind: "line", x: x - Math.cos(aim) * skill.radius, y: y - Math.sin(aim) * skill.radius, aim, range: skill.radius, arc: skill.width ?? 28, age: 0, life: 0.3 });
+        this.effects.push({ kind: "line", x: x - Math.cos(aim) * skill.radius, y: y - Math.sin(aim) * skill.radius, aim, range: skill.radius, arc: skill.width ?? 28, age: 0, through: true, life: 0.3 });
         cam.shake(120, 0.008);
         break;
       case "charge": {
@@ -2071,7 +2083,7 @@ export class GameScene extends Phaser.Scene {
         break;
       case "kick":
         // We already landed: draw the flying kick back along the path.
-        this.effects.push({ kind: "kick", x: x - Math.cos(aim) * skill.radius, y: y - Math.sin(aim) * skill.radius, aim, range: skill.radius, arc: skill.width ?? 30, age: 0, life: 0.4 });
+        this.effects.push({ kind: "kick", x: x - Math.cos(aim) * skill.radius, y: y - Math.sin(aim) * skill.radius, aim, range: skill.radius, arc: skill.width ?? 30, age: 0, through: true, life: 0.4 });
         cam.shake(200, 0.012);
         this.sparks.explode(16, x, y);
         break;
@@ -2090,7 +2102,7 @@ export class GameScene extends Phaser.Scene {
         break;
       case "godrush":
         // LIGHTNING DASH: a silver streak back along the lunge, then the spin cut where he landed.
-        this.effects.push({ kind: "line", x: x - Math.cos(aim) * skill.radius, y: y - Math.sin(aim) * skill.radius, aim, range: skill.radius, arc: 10, age: 0, life: 0.3 });
+        this.effects.push({ kind: "line", x: x - Math.cos(aim) * skill.radius, y: y - Math.sin(aim) * skill.radius, aim, range: skill.radius, arc: 10, age: 0, through: true, life: 0.3 });
         this.effects.push({ kind: "sword", x, y, aim, range: 66, arc: Math.PI * 2, age: 0, life: 0.3 });
         cam.shake(150, 0.008);
         break;
@@ -2211,6 +2223,7 @@ export class GameScene extends Phaser.Scene {
         e.x = e.follow.body.x;
         e.y = e.follow.body.y - 5;
       }
+      if (WALL_CUT_FX.has(e.kind) && !e.through) e.range = this.wallCut(e.x, e.y + 5, e.aim, (e.range0 ??= e.range));
       if (e.kind === "flame") {
         // Flamethrower: a flickering cone of fire.
         for (let i = 0; i < 12; i++) {
@@ -2961,6 +2974,17 @@ export class GameScene extends Phaser.Scene {
   private guideWallMark(g: Phaser.GameObjects.Graphics, ex: number, ey: number) {
     const k = 5 * this.guidePx();
     g.lineStyle(3 * this.guidePx(), 0xff4a3a, 1).lineBetween(ex - k, ey - k, ex + k, ey + k).lineBetween(ex - k, ey + k, ex + k, ey - k);
+  }
+
+  /** How far something fired from x,y along angle gets before the first wall, rock or the ring's ropes. */
+  private wallCut(x: number, y: number, angle: number, len: number): number {
+    const state = this.room?.state;
+    if (!state) return len;
+    const area = areaOf(state.stage, state.map ?? 0);
+    const c = Math.cos(angle);
+    const s = Math.sin(angle);
+    for (let d = 6; d < len; d += 4) if (hitsRock(x + c * d, y + s * d, area)) return Math.max(0, d - 4);
+    return len;
   }
 
   /** One screen pixel in world units, so the guides look the same thickness at every zoom. */
