@@ -20,6 +20,7 @@ import {
 import { MAP_TEX } from "./mapTex.data";
 import { GRASS16 } from "./grass16.data";
 import { SAND16, WATER16 } from "./beach16.data";
+import { BUSH16 } from "./bush16.data";
 
 function seeded(seed: number) {
   let s = seed;
@@ -486,6 +487,37 @@ function tileField(
   return d;
 }
 
+/** The user's 16x16 tiles laid side by side (3 screen px per art pixel), a random tile in each cell: for dense
+ * ground like tall grass, where the tile edges vanish in the blades. */
+function tileGrid(
+  set: TileSet,
+  W: number,
+  H: number,
+  seed: number,
+): Uint8ClampedArray {
+  const P = 3;
+  const raw = atob(set.d);
+  const d = new Uint8ClampedArray(W * H * 4);
+  const rand = seeded(seed);
+  const S = 16 * P;
+  for (let ty = 0; ty < H; ty += S)
+    for (let tx = 0; tx < W; tx += S) {
+      const n = Math.floor(rand() * set.n);
+      for (let y = ty; y < Math.min(H, ty + S); y++)
+        for (let x = tx; x < Math.min(W, tx + S); x++) {
+          const k =
+            n * 768 +
+            (Math.floor((y - ty) / P) * 16 + Math.floor((x - tx) / P)) * 3;
+          const i = (y * W + x) * 4;
+          d[i] = raw.charCodeAt(k);
+          d[i + 1] = raw.charCodeAt(k + 1);
+          d[i + 2] = raw.charCodeAt(k + 2);
+          d[i + 3] = 255;
+        }
+    }
+  return d;
+}
+
 /** Copies the blocks `want(c, r)` of a tile field onto the canvas, each pixel times `shade(c, r)`. */
 function stampBlocks(
   ctx: CanvasRenderingContext2D,
@@ -620,9 +652,38 @@ function paintRich(
   // 4. Tall grass: a carpet of blades, darker at the roots, lighter at the tips.
   const bush = rgb(t.bush);
   const bushDark = rgb(t.bushDark);
+  if (tiledWater) {
+    // The island: the user's 16x16 tall-grass tiles, blade tips poking over the top edge, a shadow along the bottom.
+    const field = tileGrid(BUSH16, W, H, 37);
+    stampBlocks(
+      ctx,
+      field,
+      m,
+      b,
+      (c, r) => at(c, r) === T_BUSH,
+      () => 1.3,
+    );
+    for (let r = 0; r < m.rows; r++)
+      for (let c = 0; c < m.cols; c++) {
+        if (at(c, r) !== T_BUSH) continue;
+        const x = c * b;
+        const y = r * b;
+        if (at(c, r - 1) !== T_BUSH)
+          for (let px = x; px < x + b; px += 3) {
+            const h = Math.floor(rand() * 3) * 3;
+            if (!h) continue;
+            ctx.fillStyle = css(rand() < 0.5 ? [46, 112, 52] : [84, 164, 70]);
+            ctx.fillRect(px, y - h, 3, h);
+          }
+        if (at(c, r + 1) !== T_BUSH) {
+          ctx.fillStyle = "rgba(0,0,0,0.3)";
+          ctx.fillRect(x, y + b, b, 3);
+        }
+      }
+  }
   for (let r = 0; r < m.rows; r++)
     for (let c = 0; c < m.cols; c++) {
-      if (at(c, r) !== T_BUSH) continue;
+      if (tiledWater || at(c, r) !== T_BUSH) continue;
       const x = ox + c * b;
       const y = oy + r * b;
       const top = at(c, r - 1) === T_BUSH ? 0 : 3;
