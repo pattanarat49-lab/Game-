@@ -125,8 +125,10 @@ function buildWorld(): OpenMap {
   const riverX = (r: number) => FALL + 3.2 * Math.sin((r - edge[FALL]) / 8) + 1.6 * Math.sin(r / 3.9);
   const riverHalf = (r: number) => 1.9 + 0.35 * Math.sin(r / 6);
   for (let r = 0; r < R; r++) {
-    const cx = r < edge[FALL] ? FALL + 0.5 : riverX(r);
-    const half = r < edge[FALL] ? 1.4 : riverHalf(r);
+    // Under the waterfall the river leaves exactly as wide and straight as the fall, then starts to wind.
+    const k = Math.max(0, Math.min(1, (r - edge[FALL]) / 10));
+    const cx = FALL + 0.5 + k * (riverX(r) - FALL - 0.5);
+    const half = 1.5 + k * (riverHalf(r) - 1.5);
     for (let c = Math.floor(cx - half - 1); c <= Math.ceil(cx + half); c++) {
       const d = Math.abs(c + 0.5 - cx);
       if (d > half) continue;
@@ -271,7 +273,7 @@ function buildWorld(): OpenMap {
     const r = pen.r0 + 3 + Math.floor(rand() * (pen.r1 - pen.r0 - 5));
     props.push({ kind: `sheep_${"abcdef"[i % 6]}`, x: px(c), y: (r + 1) * BLOCK, v: 2 }); // v 2: walks about (client)
   }
-  place("scarecrow", pen.c0 - 3, 28, [1, 1]);
+  place("scarecrow", pen.c0 + 3, pen.r0 + 3, [1, 1]); // in the pasture (it stood in the river before)
 
   // Buildings (2026-10-11, the user's building sheet): a castle in the north-west, cottages round the square,
   // a market stall, a windmill by the pasture and a fishing dock with a water wheel on the lake.

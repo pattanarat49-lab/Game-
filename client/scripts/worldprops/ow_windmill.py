@@ -14,7 +14,7 @@ F = [S[y:y + Q, x:x + Q] for y in (0, Q) for x in (0, Q)]
 BG = np.median(np.concatenate([f[:6].reshape(-1, 3) for f in F]), 0)
 HUB = (323, 180)  # (x, y) in the first picture
 REACH = 198
-CELL = 2.52  # sheet pixels per art pixel (the windmill about 7 tiles tall, as before)
+CELL = 2.52 / 2  # sheet pixels per prop pixel (props are kept at twice the tiles' density; about 7 tiles tall)
 
 
 def sailish(a):

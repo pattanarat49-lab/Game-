@@ -4,7 +4,7 @@ way as the other props (ow_props.cut) at a size that suits 32x32 tiles, into art
 Run from client/, then `node scripts/embed-hero-art.mjs`."""
 import sys
 sys.path.insert(0, __file__.rsplit("/", 1)[0])
-from ow_props import cut
+from ow_props import DENSITY, cut
 
 SHEET = "art/openworld/buildings-sheet.png"
 # name: (box on the sheet, which side to size by, art pixels)
@@ -17,7 +17,7 @@ B = {
 }
 for name, (box, side, want) in B.items():
     full = cut(SHEET, box, cell=1.0, colors=64)
-    cell = (full.height if side == "h" else full.width) / want
+    cell = (full.height if side == "h" else full.width) / (want * DENSITY)
     img = cut(SHEET, box, cell=cell, colors=48, tol=24, sep=16)
     img.save(f"art/props/ow_{name}.png")
     print(name, img.size)

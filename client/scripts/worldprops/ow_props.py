@@ -9,7 +9,7 @@ from collections import deque
 SEP = np.array([27, 41, 51])  # the sheet's dark lines between panels
 
 
-def cut(src, box, cell=1.0, colors=32, tol=46, sep=34, **_):
+def cut(src, box, cell=1.0, colors=32, tol=28, sep=34, **_):
     """Cut one thing off its panel: the panel colour (the commonest colour round the box edge) and the sheet's
     dark lines are flooded away from the edges, then one colour per cell, colours reduced."""
     im = np.asarray(Image.open(src).convert("RGB")).astype(int)
@@ -162,20 +162,28 @@ SIZE = {
     "sheep_a": ("w", 34), "sheep_b": ("w", 34), "sheep_c": ("w", 34), "sheep_d": ("w", 28), "sheep_e": ("w", 22), "sheep_f": ("w", 24),
 }
 
+# How close to the panel colour counts as panel (2026-10-11): kept tight, as the dark leaves and outlines are
+# near the teal panel and a loose match ate holes into trees and bushes; a few panels need it looser.
+# Props are kept at twice the tiles' pixel density (2026-10-11, user: edges looked chipped when shrunk to
+# the tile grid); the game draws them at half size (owWorld PROP_SCALE).
+DENSITY = 2
+TOL = {"stump_b": 60}
+
 if __name__ == "__main__":
     src = np.asarray(Image.open(SHEET).convert("RGB")).astype(int)
     for name, (x0, y0, x1, y1) in B.items():
         bg = tuple(int(v) for v in src[y0 + 3, x0 + 3])
         box = (x0 + 2, y0 + 2, x1 - 2, y1 - 2)
-        full = cut(SHEET, box, cell=1.0, colors=64)  # the size of the thing itself
+        tol = TOL.get(name, 28)
+        full = cut(SHEET, box, cell=1.0, colors=64, tol=tol)  # the size of the thing itself
         side, want = SIZE.get(name, ("h", 18))  # flowers and grass tufts: about half a tile
-        cell = (full.height if side == "h" else full.width) / want
-        img = cut(SHEET, box, cell=cell, colors=32)
+        cell = (full.height if side == "h" else full.width) / (want * DENSITY)
+        img = cut(SHEET, box, cell=cell, colors=32, tol=tol)
         img.save(f"art/props/ow_{name}.png")
         print(name, img.size)
 
 # Fences (2026-10-11): the teal panel shows through the gaps between the rails, so clear it there too.
-for f in glob.glob("art/props/ow_fence_*.png") + ["art/props/ow_gate.png", "art/props/ow_frame.png"]:
+for f in glob.glob("art/props/ow_fence_*.png") + ["art/props/ow_gate.png", "art/props/ow_frame.png", "art/props/ow_stump_b.png", "art/props/ow_stump_c.png"]:
     a = np.asarray(Image.open(f).convert("RGBA")).copy()
     r, g, b = (a[..., i].astype(int) for i in range(3))
     teal = (g > r + 12) & (b > r + 12) & (g + b < 220)

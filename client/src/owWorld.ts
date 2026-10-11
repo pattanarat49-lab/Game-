@@ -66,30 +66,50 @@ interface Sheep {
   wait: number;
 }
 
-/** Where the windmill's hub is on its picture, from the bottom centre (art pixels; printed by ow_windmill.py). */
-const SAILS_HUB: [number, number] = [4.7, -165.6];
+/** Props are drawn at twice the tiles' pixel density (scripts/worldprops DENSITY), so at half the tile scale. */
+const PROP_SCALE = ART / 2;
 
-/** Cloud shadows: soft round patches of shade, a picture that repeats every CLOUD_PX art pixels both ways. */
+/** Where the windmill's hub is on its picture, from the bottom centre (prop pixels; printed by ow_windmill.py). */
+const SAILS_HUB: [number, number] = [9.3, -330.1];
+
+/** Cloud shadows (2026-10-11, made softer on the user's word): billowy patches of shade with soft edges,
+ * from layered noise that repeats across the picture (so the tiling never shows a seam), drawn smooth. */
 function cloudTexture(scene: Phaser.Scene) {
   if (scene.textures.exists("ow_clouds")) return;
-  const N = 128; // drawn in 2x2 blocks, so the shade has a pixel-art edge
+  const N = 256;
+  // value noise on a grid of `g` cells that wraps round the picture
+  const layer = (g: number, seed: number) => (x: number, y: number) => {
+    const fx = (x / N) * g;
+    const fy = (y / N) * g;
+    const ix = Math.floor(fx);
+    const iy = Math.floor(fy);
+    const tx = fx - ix;
+    const ty = fy - iy;
+    const sx = tx * tx * (3 - 2 * tx);
+    const sy = ty * ty * (3 - 2 * ty);
+    const v = (a: number, b: number) => hash(((a % g) + g) % g, ((b % g) + g) % g, seed);
+    const top = v(ix, iy) + (v(ix + 1, iy) - v(ix, iy)) * sx;
+    const bottom = v(ix, iy + 1) + (v(ix + 1, iy + 1) - v(ix, iy + 1)) * sx;
+    return top + (bottom - top) * sy;
+  };
+  const octaves = [layer(3, 81), layer(6, 82), layer(12, 83), layer(24, 84), layer(48, 85)];
+  const weights = [0.5, 0.25, 0.13, 0.08, 0.04];
   const can = document.createElement("canvas");
   can.width = can.height = N;
   const ctx = can.getContext("2d")!;
   const img = ctx.createImageData(N, N);
-  // a few waves that all repeat across the picture, so the tiling never shows a seam
-  const waves: [number, number, number, number][] = [];
-  for (let i = 0; i < 7; i++) waves.push([1 + Math.floor(hash(i, 1, 70) * 3), Math.floor(hash(i, 2, 71) * 5) - 2, hash(i, 3, 72) * 6.28, 1 / (1 + i * 0.35)]);
-  for (let y = 0; y < N; y += 2)
-    for (let x = 0; x < N; x += 2) {
+  for (let y = 0; y < N; y++)
+    for (let x = 0; x < N; x++) {
       let v = 0;
-      for (const [fx, fy, ph, w] of waves) v += Math.sin(((fx * x + fy * y) / N) * Math.PI * 2 + ph) * w + Math.cos(((fy * x - fx * y) / N) * Math.PI * 2 + ph * 1.7) * w * 0.6;
-      const a = v > 1.35 ? 1 : v > 1.05 ? 0.5 : 0;
-      for (let j = 0; j < 2; j++)
-        for (let i = 0; i < 2; i++) img.data.set([12, 20, 44, Math.round(a * 255)], ((y + j) * N + x + i) * 4);
+      for (let i = 0; i < octaves.length; i++) v += octaves[i](x, y) * weights[i];
+      // thick in the middle of a cloud, fading off at its edge; clear sky between clouds
+      const t = Math.max(0, Math.min(1, (v - 0.52) / 0.16));
+      const a = t * t * (3 - 2 * t);
+      img.data.set([16, 26, 48, Math.round(a * 255)], (y * N + x) * 4);
     }
   ctx.putImageData(img, 0, 0);
   scene.textures.addCanvas("ow_clouds", can);
+  scene.textures.get("ow_clouds").setFilter(Phaser.Textures.FilterMode.LINEAR); // soft, not blocky
 }
 
 /** Light points of the lanterns (for the night), from the bottom of each lantern picture, in art pixels. */
@@ -146,12 +166,12 @@ export class OwWorld {
     for (const p of m.props) {
       const key = `ow_${p.kind}`;
       if (!scene.textures.exists(key)) continue;
-      const img = scene.add.image(p.x, p.y, key).setOrigin(0.5, 1).setScale(ART);
+      const img = scene.add.image(p.x, p.y, key).setOrigin(0.5, 1).setScale(PROP_SCALE);
       img.setDepth(FLAT.test(p.kind) ? (p.kind.includes("bridge") ? -8 : -7) : p.y);
       if (p.kind === "cave") img.setDepth(p.y - 30);
       if (p.kind === "windmill") {
         // The sails turn (client/scripts/worldprops/ow_windmill.py cut them off the user's windmill sheet).
-        this.sails.push(scene.add.image(p.x + SAILS_HUB[0] * ART, p.y + SAILS_HUB[1] * ART, "ow_windmill_sails").setScale(ART).setDepth(p.y + 0.5));
+        this.sails.push(scene.add.image(p.x + SAILS_HUB[0] * PROP_SCALE, p.y + SAILS_HUB[1] * PROP_SCALE, "ow_windmill_sails").setScale(PROP_SCALE).setDepth(p.y + 0.5));
       }
       if (p.v === 2) this.sheep.push({ img, home: { x: p.x, y: p.y }, to: { x: p.x, y: p.y }, wait: Math.random() * 3000 });
       const head = LAMP_HEAD[p.kind];
@@ -159,7 +179,7 @@ export class OwWorld {
     }
     // Cloud shadows drifting over everything (2026-10-11, user request).
     cloudTexture(scene);
-    this.clouds = scene.add.tileSprite(0, 0, w, h, "ow_clouds").setOrigin(0).setTileScale(6).setDepth(3990).setAlpha(0.24);
+    this.clouds = scene.add.tileSprite(0, 0, w, h, "ow_clouds").setOrigin(0).setTileScale(5).setDepth(3990).setAlpha(0.3);
     this.update(0, 16);
   }
 
@@ -212,7 +232,7 @@ export class OwWorld {
     g2.setTilePosition(-t * 5 + 90, t * 4.5 + 60).setAlpha(0.55 - 0.45 * Math.sin(t * 1.3));
     for (const f of this.falls) f.setTexture(`owfall_${Math.floor(now / 90) % 6}`);
     for (const sl of this.sails) sl.setRotation(t * 0.6);
-    this.clouds?.setTilePosition(-t * 2.2, -t * 0.9);
+    this.clouds?.setTilePosition(-t * 1.6, -t * 0.6); // a slow breeze from the west
     // Sheep wander about their spot in the pasture, stopping to graze.
     for (const s of this.sheep) {
       if (s.wait > 0) {
