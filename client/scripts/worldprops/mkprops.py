@@ -24,7 +24,7 @@ SPRITES = {
     "windmill0": (B, [150, 278, 310, 482], 5, 16, None),
     "lamp0": (None, [357, 904, 381, 987], 4.2, 7, None),
     "well0": (None, [1397, 636, 1446, 700], 3, 10, None),
-    "log0": (None, [1191, 431, 1254, 477], 3, 7, None),
+    "log0": (None, [1191, 431, 1254, 477], 5.5, 6, None),
 }
 
 def reroof(im, hue):
