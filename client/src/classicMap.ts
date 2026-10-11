@@ -18,6 +18,7 @@ import {
   T_WATER,
 } from "../../shared/maps";
 import { MAP_TEX } from "./mapTex.data";
+import { drawRoyaleIsland } from "./royaleArt";
 
 function seeded(seed: number) {
   let s = seed;
@@ -172,37 +173,9 @@ export function drawMapThumb(m: ClassicMap, b = 3): HTMLCanvasElement {
 
 /** Battle Royale: the whole island at full size (the sea round it is part of the map). */
 export function drawRoyaleGround(m: ClassicMap): HTMLCanvasElement {
-  const canvas = document.createElement("canvas");
-  canvas.width = m.cols * BLOCK;
-  canvas.height = m.rows * BLOCK;
+  // Pixel art after the user's island tileset (2026-10-11): see royaleArt.ts.
+  const canvas = drawRoyaleIsland(m);
   const ctx = canvas.getContext("2d")!;
-  paintMap(ctx, m, 0, 0, BLOCK, false, "meadow"); // the island is a grassy meadow, not paving
-  // Sand along the shore: floor blocks next to the sea get a lighter, speckled edge.
-  const at = (c: number, r: number) => (c < 0 || r < 0 || c >= m.cols || r >= m.rows ? T_WATER : m.tiles[r * m.cols + c]);
-  const rand = seeded(5);
-  for (let r = 0; r < m.rows; r++)
-    for (let c = 0; c < m.cols; c++) {
-      if (at(c, r) === T_WATER) continue;
-      let shore = false;
-      for (let dr = -2; dr <= 2 && !shore; dr++) for (let dc = -2; dc <= 2; dc++) if (Math.hypot(dc, dr) <= 2.2 && at(c + dc, r + dr) === T_WATER && Math.hypot(c + dc - m.cols / 2, r + dr - m.rows / 2) > m.cols / 2 - 6) shore = true;
-      if (!shore || at(c, r) !== 0) continue;
-      ctx.fillStyle = (c + r) % 2 ? "#ead9a0" : "#e2d096";
-      ctx.fillRect(c * BLOCK, r * BLOCK, BLOCK, BLOCK);
-      ctx.fillStyle = "#c8b47a";
-      for (let i = 0; i < 3; i++) ctx.fillRect(c * BLOCK + Math.floor(rand() * (BLOCK - 2)), r * BLOCK + Math.floor(rand() * (BLOCK - 2)), 2, 2);
-    }
-  // Foam where the sea meets the island.
-  ctx.fillStyle = "rgba(255,255,255,0.55)";
-  for (let r = 0; r < m.rows; r++)
-    for (let c = 0; c < m.cols; c++) {
-      if (at(c, r) !== T_WATER) continue;
-      const x = c * BLOCK;
-      const y = r * BLOCK;
-      if (at(c, r - 1) !== T_WATER) ctx.fillRect(x, y + 2, BLOCK, 2);
-      if (at(c, r + 1) !== T_WATER) ctx.fillRect(x, y + BLOCK - 4, BLOCK, 2);
-      if (at(c - 1, r) !== T_WATER) ctx.fillRect(x + 2, y, 2, BLOCK);
-      if (at(c + 1, r) !== T_WATER) ctx.fillRect(x + BLOCK - 4, y, 2, BLOCK);
-    }
   // Heal pads: a round stone slab with a green cross.
   for (const h of (m as ClassicMap & { heals?: { x: number; y: number }[] }).heals ?? []) {
     ctx.fillStyle = "#8a8e86";
