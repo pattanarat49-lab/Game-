@@ -1,4 +1,4 @@
-// The home screen (2026-10-06): the user's picture (stained-glass hall since 2026-10-08) with the favourite hero on a pedestal,
+// The home screen (2026-10-06): the user's sky-island picture (stained glass 2026-10-08 to 2026-10-12) with the favourite hero on a pedestal,
 // the profile box, and DUNGEON (the Open World until 2026-10-11) / START GAME / CHARACTER. START GAME opens the mode list (every mode
 // then picks heroes on the PvP-style select screen); CHARACTER opens the hero gallery by class, where
 // one hero can be made the favourite.
@@ -20,7 +20,9 @@ export interface HomeActions {
   owned(): number; // heroes the player has (all of them when nothing is locked)
   spins(): number;
   openSlot(): void;
-  /** DUNGEON (2026-10-11, replaces the Open World): the Ancient Knight's dungeon. */
+  /** OPEN WORLD (the sky-island picture's left button, back 2026-10-12). */
+  openWorld(): void;
+  /** The Ancient Knight's dungeon (in the DUNGEON list under START GAME). */
   dungeon(): void;
   /** Into the Sunken Temple (Cthulhu), once the stone tablet has been found. */
   abyss(): void;
@@ -47,7 +49,7 @@ const CSS = `
 #home-stage > img.bg { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; image-rendering: auto; }
 #menu { padding: 0 !important; overflow: hidden !important; background: #120c10 !important; display: block !important; }
 #menu.hidden { display: none !important; }
-#menu::before { content: ""; position: absolute; inset: -20px; background: url(home-bg.jpg) center / cover; filter: blur(12px); }
+#menu::before { content: ""; position: absolute; inset: -20px; background: url(home-sky.jpg) center / cover; filter: blur(12px); }
 .hm-hit { position: absolute; border-radius: 14px; cursor: pointer; background: transparent; border: 0; padding: 0; transition: box-shadow .15s, transform .1s; }
 .hm-hit:hover { box-shadow: 0 0 0 4px rgba(255, 230, 120, 0.7), 0 0 30px rgba(255, 220, 100, 0.6); }
 .hm-hit:active { transform: scale(0.97); }
@@ -62,8 +64,6 @@ const CSS = `
 #hm-godknight { left: 1185px; top: 290px; width: 140px; height: 144px; border-radius: 50%; }
 #hm-godknight:hover { box-shadow: 0 0 0 4px rgba(255, 220, 120, 0.7), 0 0 40px rgba(255, 210, 90, 0.8); }
 #hm-cthulhu:hover { box-shadow: 0 0 0 4px rgba(120, 255, 160, 0.6), 0 0 40px rgba(80, 255, 140, 0.7); }
-/* 2026-10-08 (user request): nothing stands in the middle of the stained-glass hall any more. */
-#hm-ped, #hm-hero, #hm-heroname, #hm-title, #hm-mastery { display: none !important; }
 /* The three main buttons (2026-10-08): drawn here now that the stained-glass picture has none of its own. */
 .hm-main { position: absolute; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; cursor: pointer; padding: 0;
   font-family: "Press Start 2P", monospace; color: #ffe9a8; text-shadow: 0 3px 0 #000, 0 0 10px rgba(255, 190, 80, 0.7);
@@ -116,7 +116,7 @@ const CSS = `
 #home-error { position: absolute; left: 0; right: 0; bottom: 30px; text-align: center; color: #ff6a5a; font-size: 18px; text-shadow: 0 2px 0 #000; pointer-events: none; }
 
 .hm-screen { position: fixed; inset: 0; z-index: 15; display: flex; flex-direction: column; align-items: center; overflow-y: auto; padding: 14px; box-sizing: border-box; gap: 12px;
-  background: linear-gradient(rgba(10, 16, 40, 0.86), rgba(10, 16, 40, 0.94)), url(home-bg.jpg) center / cover; color: #fff; font-family: "Press Start 2P", monospace; }
+  background: linear-gradient(rgba(10, 16, 40, 0.86), rgba(10, 16, 40, 0.94)), url(home-sky.jpg) center / cover; color: #fff; font-family: "Press Start 2P", monospace; }
 .hm-top { width: min(100%, 1100px); display: flex; align-items: center; gap: 10px; }
 .hm-top h2 { flex: 1; margin: 0; font-size: clamp(14px, 2.6vw, 24px); color: #ffd23f; font-weight: normal; text-shadow: 0 3px 0 #8a5a12; text-align: center; }
 .hm-back { font: inherit; font-size: 11px; padding: 9px 12px; color: #fff; background: #2a3458; border: 3px solid #5a6aa0; border-radius: 6px; cursor: pointer; }
@@ -189,6 +189,10 @@ const CSS = `
 #hm-titles { left: 38px; width: 146px; height: 54px; padding: 0; font-size: 15px; }
 #hm-setting.hm-fr { right: 10px; top: 10px; padding: 2px 6px; font-size: 12px; gap: 10px; border-width: 10px !important; border-image-width: 10px !important; }
 #hm-setting svg { width: 18px; height: 18px; }
+/* 2026-10-12 (user request): the sky-island picture is back, with its own three buttons; ours are clear hit boxes over them. */
+.hm-main.hm-fr, #hm-start.hm-fr { border: 0 !important; border-image: none !important; background: none !important; border-radius: 14px !important; }
+.hm-main .tx { visibility: hidden; }
+.hm-main:hover { filter: none; box-shadow: 0 0 0 4px rgba(255, 230, 120, 0.7), 0 0 30px rgba(255, 220, 100, 0.6) !important; }
 #hm-party { position: absolute; right: 10px; top: 66px; z-index: 4; font-family: "Press Start 2P", monospace; font-size: 12px; padding: 8px 10px; color: #fff;
   background: #1a0e08; cursor: pointer; border: 10px solid transparent; border-image: url(frame-dark.png) 18 fill / 10px stretch; min-width: 110px; }
 `;
@@ -215,7 +219,7 @@ export class Home {
     const stage = document.createElement("div");
     stage.id = "home-stage";
     stage.innerHTML = `
-      <img class="bg" src="home-bg.jpg" alt="" />
+      <img class="bg" src="home-sky.jpg" alt="" />
       <div id="hm-ped"></div>
       <div id="hm-hero"></div>
       <div id="hm-title"></div>
@@ -231,9 +235,9 @@ export class Home {
         <button type="button" id="hm-titles" class="hm-fr">\u2726 TITLE \u2726</button>
         <div id="hm-drop"></div>
       </div>
-      <button type="button" class="hm-main hm-fr" id="hm-world" style="left:390px;top:612px;width:290px;height:104px"><span class="tx">DUNGEON</span></button>
-      <button type="button" class="hm-main hm-fr" id="hm-start" aria-label="Start game" style="left:692px;top:586px;width:472px;height:142px"><span class="tx">\u2726 START GAME \u2726</span></button>
-      <button type="button" class="hm-main hm-fr" id="hm-char" style="left:1172px;top:612px;width:292px;height:104px"><span class="tx">CHARACTER</span></button>
+      <button type="button" class="hm-main hm-fr" id="hm-world" aria-label="Open World" style="left:455px;top:635px;width:240px;height:125px"><span class="tx">OPEN WORLD</span></button>
+      <button type="button" class="hm-main hm-fr" id="hm-start" aria-label="Start game" style="left:710px;top:600px;width:425px;height:155px"><span class="tx">\u2726 START GAME \u2726</span></button>
+      <button type="button" class="hm-main hm-fr" id="hm-char" aria-label="Character" style="left:1155px;top:635px;width:250px;height:125px"><span class="tx">CHARACTER</span></button>
       <div id="home-error"></div>
       <div id="hm-note"></div>`;
     root.append(stage);
@@ -270,7 +274,7 @@ export class Home {
     this.drop = stage.querySelector("#hm-drop")!;
     this.error = stage.querySelector("#home-error")!;
 
-    stage.querySelector("#hm-world")!.addEventListener("click", () => this.showDungeons());
+    stage.querySelector("#hm-world")!.addEventListener("click", () => this.act.openWorld());
     stage.querySelector("#hm-start")!.addEventListener("click", () => this.showModes());
     stage.querySelector("#hm-char")!.addEventListener("click", () => this.showCharacters());
     this.spinBtn.addEventListener("click", () => act.openSlot());
@@ -541,6 +545,22 @@ export class Home {
     ];
     const grid = document.createElement("div");
     grid.className = "hm-modes";
+    {
+      // DUNGEON: every boss room (on the home screen's left button from 2026-10-11 until the sky picture came back).
+      const card = document.createElement("div");
+      card.className = "hm-mode";
+      card.innerHTML = `<h3>DUNGEON</h3><div class="tag">BOSS ROOMS</div><p>Ancient Ruins, the Sunken Temple, the Celestial Sanctum and The Rift.</p><div class="btns"></div>`;
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "solo";
+      b.textContent = "CHOOSE";
+      b.addEventListener("click", () => {
+        close();
+        this.showDungeons();
+      });
+      card.querySelector(".btns")!.append(b);
+      grid.append(card);
+    }
     for (const m of modes) {
       if (!online && !m.solo) continue;
       if (!online && m.title === "TRAINING") continue; // the same as Bot Duel without other players

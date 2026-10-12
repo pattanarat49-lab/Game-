@@ -55,6 +55,7 @@ const home = new Home(menu, {
       }
     }, 300);
   },
+  openWorld: () => void startGame("world", soloOnly, ""),
   dungeon: () => void startGame("dungeon", soloOnly, ""),
   abyssOpen: () => cthulhuUnlocked(),
   heaven: () => void startGame("heaven", soloOnly, ""),
